@@ -1,0 +1,119 @@
+# ============================================================
+# Window Management (ctrl + opt + <key>) — BSP tiling
+# ============================================================
+
+# -- Focus windows --
+ctrl + alt - h : yabai -m window --focus west
+ctrl + alt - j : yabai -m window --focus south
+ctrl + alt - k : yabai -m window --focus north
+ctrl + alt - l : yabai -m window --focus east
+
+# -- Swap windows --
+ctrl + alt + shift - h : yabai -m window --swap west
+ctrl + alt + shift - j : yabai -m window --swap south
+ctrl + alt + shift - k : yabai -m window --swap north
+ctrl + alt + shift - l : yabai -m window --swap east
+
+# -- Warp (move window into another split) --
+ctrl + alt - left  : yabai -m window --warp west
+ctrl + alt - right : yabai -m window --warp east
+ctrl + alt - up    : yabai -m window --warp north
+ctrl + alt - down  : yabai -m window --warp south
+
+# -- Resize splits --
+ctrl + alt + cmd - h : yabai -m window --ratio rel:-0.05
+ctrl + alt + cmd - l : yabai -m window --ratio rel:0.05
+
+# -- Fullscreen --
+ctrl + alt - return : yabai -m window --toggle zoom-fullscreen
+
+# -- Toggle split direction --
+ctrl + alt - s : yabai -m window --toggle split
+
+# -- Balance tree --
+ctrl + alt - b : yabai -m space --balance
+
+# -- Rotate tree --
+ctrl + alt - o : yabai -m space --rotate 90
+
+# -- Mirror tree --
+ctrl + alt - x : yabai -m space --mirror x-axis
+ctrl + alt - y : yabai -m space --mirror y-axis
+
+# -- Toggle float + center --
+ctrl + alt - f : yabai -m window --toggle float; \
+                yabai -m window --grid 6:6:1:1:4:4
+
+# ============================================================
+# Space management
+# ============================================================
+
+ctrl + alt + shift - 1 : yabai -m window --space 1
+ctrl + alt + shift - 2 : yabai -m window --space 2
+ctrl + alt + shift - 3 : yabai -m window --space 3
+ctrl + alt + shift - 4 : yabai -m window --space 4
+ctrl + alt + shift - 5 : yabai -m window --space 5
+
+# -- Move window to new desktop --
+ctrl + alt - n : app=$(yabai -m query --windows --window | jq -r '.app') && \
+                 yabai -m space --create && \
+                 idx=$(yabai -m query --spaces --display | jq 'map(select(."is-visible" == false)) | last | .index') && \
+                 yabai -m window --space "$idx" && \
+                 yabai -m space --focus "$idx" && \
+                 yabai -m space --label "$app"
+
+# -- Focus desktop --
+alt + shift - 1 : yabai -m space --focus 1
+alt + shift - 2 : yabai -m space --focus 2
+alt + shift - 3 : yabai -m space --focus 3
+alt + shift - 4 : yabai -m space --focus 4
+alt + shift - 5 : yabai -m space --focus 5
+alt + shift - 6 : yabai -m space --focus 6
+alt + shift - 7 : yabai -m space --focus 7
+alt + shift - 8 : yabai -m space --focus 8
+alt + shift - 9 : yabai -m space --focus 9
+
+# ============================================================
+# Window close / minimize
+# ============================================================
+
+ctrl + alt - w : yabai -m window --close
+ctrl + alt - z : yabai -m window --minimize
+
+# ============================================================
+# App Focus/Cycle (opt + <key>)
+# Not running        → launch the app
+# Not focused        → focus its most recent window
+# Focused, 1 window  → toggle off (focus previous window)
+# Focused, N windows → cycle to the next window
+# ============================================================
+
+# ============================================================
+# Restart yabai + skhd
+# ============================================================
+
+alt - r : yabai --restart-service; skhd --restart-service
+
+# ============================================================
+
+alt - 0x32 : ~/.config/skhd/focus_app.sh "Ghostty"
+alt - 1    : ~/.config/skhd/focus_app.sh "@browser"
+alt - 2    : ~/.config/skhd/focus_app.sh "@editor"
+alt - 3    : ~/.config/skhd/focus_app.sh "Microsoft Teams"
+alt - 4    : ~/.config/skhd/focus_app.sh "Slack"
+
+# ============================================================
+# Window border marking (fn + 0-4) — Catppuccin colors
+# ============================================================
+
+fn - 0 : ~/.config/borders/mark_window.sh clear
+fn - 1 : ~/.config/borders/mark_window.sh red
+fn - 2 : ~/.config/borders/mark_window.sh green
+fn - 3 : ~/.config/borders/mark_window.sh blue
+fn - 4 : ~/.config/borders/mark_window.sh yellow
+
+# ============================================================
+# Which-key cheat sheet (opt + /)
+# ============================================================
+
+alt - 0x2C : ~/.config/skhd/show_keys.sh
