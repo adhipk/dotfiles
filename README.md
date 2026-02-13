@@ -46,9 +46,14 @@ This will:
 
 ### Window Border Marking (fn)
 - `fn + 1` - Mark window with red border
-- `fn + 2` - Mark window with green border
-- `fn + 3` - Mark window with blue border
-- `fn + 4` - Mark window with yellow border
+- `fn + 2` - Mark window with peach border
+- `fn + 3` - Mark window with yellow border
+- `fn + 4` - Mark window with green border
+- `fn + 5` - Mark window with teal border
+- `fn + 6` - Mark window with sky blue border
+- `fn + 7` - Mark window with blue border
+- `fn + 8` - Mark window with mauve (purple) border
+- `fn + 9` - Mark window with pink border
 - `fn + 0` - Clear border marking
 
 ### App Focus (alt)

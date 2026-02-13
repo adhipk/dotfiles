@@ -42,10 +42,23 @@ export COLOR_ROSEWATER="f5e0dc"
 export COLOR_ACTIVE_BORDER="7287fd"
 
 # Border-specific colors in 0xAARRGGBB format (for JankyBorders)
-export BORDER_COLOR_RED="0xff${COLOR_RED}"
-export BORDER_COLOR_GREEN="0xff${COLOR_GREEN}"
-export BORDER_COLOR_BLUE="0xff${COLOR_BLUE}"
-export BORDER_COLOR_YELLOW="0xff${COLOR_YELLOW}"
+# 9 distinct colors for window marking
+export BORDER_COLOR_1="0xff${COLOR_RED}"        # Red
+export BORDER_COLOR_2="0xff${COLOR_PEACH}"      # Peach/Orange
+export BORDER_COLOR_3="0xff${COLOR_YELLOW}"     # Yellow
+export BORDER_COLOR_4="0xff${COLOR_GREEN}"      # Green
+export BORDER_COLOR_5="0xff${COLOR_TEAL}"       # Teal/Cyan
+export BORDER_COLOR_6="0xff${COLOR_SKY}"        # Sky Blue
+export BORDER_COLOR_7="0xff${COLOR_BLUE}"       # Blue
+export BORDER_COLOR_8="0xff${COLOR_MAUVE}"      # Mauve/Purple
+export BORDER_COLOR_9="0xff${COLOR_PINK}"       # Pink
+
+# Legacy names for backward compatibility
+export BORDER_COLOR_RED="$BORDER_COLOR_1"
+export BORDER_COLOR_GREEN="$BORDER_COLOR_4"
+export BORDER_COLOR_BLUE="$BORDER_COLOR_7"
+export BORDER_COLOR_YELLOW="$BORDER_COLOR_3"
+
 export BORDER_COLOR_BASE="0xff${COLOR_BASE}"
 export BORDER_COLOR_ACTIVE="0xff${COLOR_ACTIVE_BORDER}"
 export BORDER_COLOR_INACTIVE="0xff${COLOR_BASE}"
@@ -81,10 +94,15 @@ export COLORS_JSON=$(cat <<EOF
   "rosewater": "$COLOR_ROSEWATER",
   "active_border": "$COLOR_ACTIVE_BORDER",
   "border": {
-    "red": "$BORDER_COLOR_RED",
-    "green": "$BORDER_COLOR_GREEN",
-    "blue": "$BORDER_COLOR_BLUE",
-    "yellow": "$BORDER_COLOR_YELLOW",
+    "1": "$BORDER_COLOR_1",
+    "2": "$BORDER_COLOR_2",
+    "3": "$BORDER_COLOR_3",
+    "4": "$BORDER_COLOR_4",
+    "5": "$BORDER_COLOR_5",
+    "6": "$BORDER_COLOR_6",
+    "7": "$BORDER_COLOR_7",
+    "8": "$BORDER_COLOR_8",
+    "9": "$BORDER_COLOR_9",
     "base": "$BORDER_COLOR_BASE",
     "active": "$BORDER_COLOR_ACTIVE",
     "inactive": "$BORDER_COLOR_INACTIVE"

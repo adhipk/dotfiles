@@ -103,14 +103,20 @@ alt - 3    : ~/.config/skhd/focus_app.sh "Microsoft Teams"
 alt - 4    : ~/.config/skhd/focus_app.sh "Slack"
 
 # ============================================================
-# Window border marking (fn + 0-4) — Catppuccin colors
+# Window border marking (fn + 0-9) — Catppuccin colors
+# 1=red, 2=peach, 3=yellow, 4=green, 5=teal, 6=sky, 7=blue, 8=mauve, 9=pink
 # ============================================================
 
 fn - 0 : ~/.config/borders/mark_window.sh clear
-fn - 1 : ~/.config/borders/mark_window.sh red
-fn - 2 : ~/.config/borders/mark_window.sh green
-fn - 3 : ~/.config/borders/mark_window.sh blue
-fn - 4 : ~/.config/borders/mark_window.sh yellow
+fn - 1 : ~/.config/borders/mark_window.sh 1
+fn - 2 : ~/.config/borders/mark_window.sh 2
+fn - 3 : ~/.config/borders/mark_window.sh 3
+fn - 4 : ~/.config/borders/mark_window.sh 4
+fn - 5 : ~/.config/borders/mark_window.sh 5
+fn - 6 : ~/.config/borders/mark_window.sh 6
+fn - 7 : ~/.config/borders/mark_window.sh 7
+fn - 8 : ~/.config/borders/mark_window.sh 8
+fn - 9 : ~/.config/borders/mark_window.sh 9
 
 # ============================================================
 # Which-key cheat sheet (opt + /)
