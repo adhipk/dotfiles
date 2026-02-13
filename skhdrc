@@ -66,6 +66,9 @@ ctrl + alt - n : app=$(yabai -m query --windows --window | jq -r '.app') && \
                  yabai -m space --focus "$idx" && \
                  yabai -m space --label "$app"
 
+# -- Close all empty desktops --
+alt - k : ~/.config/yabai/close_empty_spaces.sh
+
 # -- Focus desktop --
 alt + shift - 1 : yabai -m space --focus 1
 alt + shift - 2 : yabai -m space --focus 2

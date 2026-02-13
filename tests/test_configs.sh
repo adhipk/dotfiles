@@ -120,6 +120,9 @@ assert_contains "$SKHDRC" "ctrl + alt - l.*focus east" "Focus right (l) works"
 assert_contains "$SKHDRC" "alt - tab.*focus" "Alt+tab cycles windows forward"
 assert_contains "$SKHDRC" "shift + alt - tab.*focus" "Shift+alt+tab cycles windows backward"
 
+# Test space management shortcuts
+assert_contains "$SKHDRC" "alt - k.*close_empty_spaces.sh" "Alt+k closes empty spaces"
+
 # Test reload shortcut
 assert_contains "$SKHDRC" "alt - r.*restart-service" "Reload shortcut exists"
 

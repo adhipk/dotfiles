@@ -19,12 +19,14 @@ if [ -f "$HOME/.skhdrc" ] || [ -f "$HOME/.yabairc" ] || [ -d "$HOME/.config/bord
     [ -f "$HOME/.yabairc" ] && mv "$HOME/.yabairc" "$BACKUP_DIR/"
     [ -d "$HOME/.config/borders" ] && mv "$HOME/.config/borders" "$BACKUP_DIR/"
     [ -d "$HOME/.config/skhd" ] && mv "$HOME/.config/skhd" "$BACKUP_DIR/"
+    [ -d "$HOME/.config/yabai" ] && mv "$HOME/.config/yabai" "$BACKUP_DIR/"
 fi
 
 # Create necessary directories
 echo "Creating directories..."
 mkdir -p "$HOME/.config/borders"
 mkdir -p "$HOME/.config/skhd"
+mkdir -p "$HOME/.config/yabai"
 
 # Create symlinks
 echo "Creating symlinks..."
@@ -44,10 +46,18 @@ for script in "$DOTFILES_DIR/config/skhd"/*; do
     fi
 done
 
+# yabai scripts
+for script in "$DOTFILES_DIR/config/yabai"/*; do
+    if [ -f "$script" ]; then
+        ln -sf "$script" "$HOME/.config/yabai/$(basename "$script")"
+    fi
+done
+
 # Make scripts executable
 echo "Making scripts executable..."
 chmod +x "$DOTFILES_DIR/config/borders"/*.sh
 chmod +x "$DOTFILES_DIR/config/skhd"/*.sh
+chmod +x "$DOTFILES_DIR/config/yabai"/*.sh 2>/dev/null || true
 chmod +x "$DOTFILES_DIR/colorschemes"/*.sh
 
 # Create initial window_colors.json if it doesn't exist

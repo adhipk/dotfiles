@@ -131,6 +131,17 @@ for script in focus_app.sh show_keys.sh whichkey; do
 done
 
 echo ""
+echo "Testing yabai helper scripts..."
+if [ -L "$HOME/.config/yabai/close_empty_spaces.sh" ]; then
+    assert_symlink_valid "$HOME/.config/yabai/close_empty_spaces.sh" "close_empty_spaces.sh is valid symlink"
+elif [ -f "$HOME/.config/yabai/close_empty_spaces.sh" ]; then
+    echo "  ⚠ close_empty_spaces.sh exists but is not a symlink"
+else
+    echo "  ✗ close_empty_spaces.sh does not exist"
+    ((FAILED++))
+fi
+
+echo ""
 echo "Testing source files exist in dotfiles..."
 REQUIRED_FILES=(
     "$DOTFILES_DIR/skhdrc"

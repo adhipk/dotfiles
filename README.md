@@ -48,6 +48,9 @@ This will:
 - `alt + tab` - Cycle through windows on current desktop (forward)
 - `shift + alt + tab` - Cycle through windows on current desktop (backward)
 
+### Space Management
+- `alt + k` - Close all empty desktops/spaces
+
 ### Window Border Marking (fn)
 - `fn + 1` - Mark window with red border
 - `fn + 2` - Mark window with peach border
