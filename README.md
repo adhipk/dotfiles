@@ -44,6 +44,10 @@ This will:
 - `f` - Toggle float
 - `w` - Close window
 
+### Window Cycling
+- `alt + tab` - Cycle through windows on current desktop (forward)
+- `shift + alt + tab` - Cycle through windows on current desktop (backward)
+
 ### Window Border Marking (fn)
 - `fn + 1` - Mark window with red border
 - `fn + 2` - Mark window with peach border

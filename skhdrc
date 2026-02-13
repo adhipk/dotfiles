@@ -8,6 +8,10 @@ ctrl + alt - j : yabai -m window --focus south
 ctrl + alt - k : yabai -m window --focus north
 ctrl + alt - l : yabai -m window --focus east
 
+# -- Cycle through windows on current desktop --
+alt - tab : yabai -m window --focus stack.next || yabai -m window --focus next || yabai -m window --focus first
+shift + alt - tab : yabai -m window --focus stack.prev || yabai -m window --focus prev || yabai -m window --focus last
+
 # -- Swap windows --
 ctrl + alt + shift - h : yabai -m window --swap west
 ctrl + alt + shift - j : yabai -m window --swap south

@@ -116,6 +116,10 @@ assert_contains "$SKHDRC" "ctrl + alt - j.*focus south" "Focus down (j) works"
 assert_contains "$SKHDRC" "ctrl + alt - k.*focus north" "Focus up (k) works"
 assert_contains "$SKHDRC" "ctrl + alt - l.*focus east" "Focus right (l) works"
 
+# Test window cycling shortcuts
+assert_contains "$SKHDRC" "alt - tab.*focus" "Alt+tab cycles windows forward"
+assert_contains "$SKHDRC" "shift + alt - tab.*focus" "Shift+alt+tab cycles windows backward"
+
 # Test reload shortcut
 assert_contains "$SKHDRC" "alt - r.*restart-service" "Reload shortcut exists"
 
