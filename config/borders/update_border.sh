@@ -13,7 +13,8 @@ BORDER_WIDTH="5.0"
 WINDOW_ID=$(yabai -m query --windows --window | jq -r '.id')
 
 if [ -z "$WINDOW_ID" ] || [ "$WINDOW_ID" == "null" ]; then
-    # No window focused, do nothing (let borders handle default behavior)
+    # No window focused, use default colors
+    borders active_color="$BORDER_COLOR_ACTIVE" inactive_color="$BORDER_COLOR_INACTIVE" width="$BORDER_WIDTH"
     exit 0
 fi
 
@@ -22,8 +23,13 @@ if [ -f "$COLOR_MAP" ]; then
     COLOR=$(jq -r ".\"$WINDOW_ID\" // \"null\"" "$COLOR_MAP")
 
     if [ "$COLOR" != "null" ]; then
-        # Window is marked with a specific color
-        borders active_color="$COLOR" width="$BORDER_WIDTH"
+        # Window is marked with a specific color - use it
+        borders active_color="$COLOR" inactive_color="$BORDER_COLOR_INACTIVE" width="$BORDER_WIDTH"
+    else
+        # Window is NOT marked - use default active color
+        borders active_color="$BORDER_COLOR_ACTIVE" inactive_color="$BORDER_COLOR_INACTIVE" width="$BORDER_WIDTH"
     fi
-    # If COLOR is null, do nothing - let borders use default active/inactive colors
+else
+    # Color map doesn't exist, use default colors
+    borders active_color="$BORDER_COLOR_ACTIVE" inactive_color="$BORDER_COLOR_INACTIVE" width="$BORDER_WIDTH"
 fi
