@@ -1,0 +1,72 @@
+name: Test Dotfiles
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install dependencies
+      run: |
+        brew install jq
+
+    - name: Check file structure
+      run: |
+        echo "Checking required files exist..."
+        test -f skhdrc
+        test -f yabairc
+        test -f colorschemes/catppuccin-mocha.sh
+        test -f config/borders/mark_window.sh
+        test -f config/borders/update_border.sh
+        test -f install.sh
+        test -f reload_colors.sh
+        test -f Makefile
+
+    - name: Run colorscheme tests
+      run: make test-colorscheme
+
+    - name: Run border script tests
+      run: make test-scripts
+
+    - name: Run config tests
+      run: make test-configs
+
+    - name: Run symlink tests (allowed to warn)
+      run: make test-symlinks || echo "Symlink tests skipped in CI"
+      continue-on-error: true
+
+    - name: Test scripts have no syntax errors
+      run: |
+        bash -n skhdrc
+        bash -n yabairc
+        bash -n install.sh
+        bash -n reload_colors.sh
+        bash -n colorschemes/catppuccin-mocha.sh
+        bash -n config/borders/mark_window.sh
+        bash -n config/borders/update_border.sh
+
+    - name: Test colorscheme can be sourced
+      run: |
+        source colorschemes/catppuccin-mocha.sh
+        test -n "$BORDER_COLOR_1"
+        test -n "$BORDER_COLOR_ACTIVE"
+        echo "Colorscheme loads successfully"
+
+    - name: Test all 9 colors are defined
+      run: |
+        source colorschemes/catppuccin-mocha.sh
+        for i in {1..9}; do
+          var="BORDER_COLOR_$i"
+          if [ -z "${!var}" ]; then
+            echo "Error: $var is not defined"
+            exit 1
+          fi
+          echo "$var = ${!var}"
+        done

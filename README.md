@@ -105,3 +105,55 @@ The border system tracks which windows you've marked with specific colors. When 
 - Padding: 0px top, 3px bottom/left/right
 - No gaps between windows
 - External bar offset: 40px (top)
+
+## Testing
+
+A comprehensive test suite is included to prevent regressions when making changes.
+
+### Running Tests
+
+Run all tests:
+```bash
+make test
+```
+
+Run individual test suites:
+```bash
+make test-colorscheme     # Test color definitions and exports
+make test-scripts         # Test border marking scripts
+make test-configs         # Test skhdrc and yabairc
+make test-symlinks        # Test symlink integrity
+make test-integration     # Test end-to-end integration
+```
+
+Or run test scripts directly:
+```bash
+./tests/run_all_tests.sh              # Run all tests
+./tests/test_colorscheme.sh           # Individual suite
+```
+
+### Test Coverage
+
+The test suite validates:
+- **Colorscheme**: All 9 colors are properly defined, hex values are valid, border format is correct
+- **Scripts**: Border scripts can be executed, source colorscheme correctly, handle JSON operations
+- **Configs**: All keybindings are present, no hardcoded colors, syntax is valid
+- **Symlinks**: All symlinks point to correct locations and targets exist
+- **Integration**: Components work together, services are running, end-to-end color flow
+
+### Continuous Integration
+
+Tests run automatically on push via GitHub Actions. The CI pipeline:
+1. Checks file structure
+2. Validates syntax of all scripts
+3. Runs colorscheme tests
+4. Runs border script tests
+5. Runs config tests
+6. Verifies all 9 colors are defined
+
+### Adding New Tests
+
+When adding features:
+1. Add test cases to appropriate test file in `tests/`
+2. Run `make test` to ensure no regressions
+3. Commit tests alongside feature changes
