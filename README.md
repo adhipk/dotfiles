@@ -141,15 +141,11 @@ The test suite validates:
 - **Symlinks**: All symlinks point to correct locations and targets exist
 - **Integration**: Components work together, services are running, end-to-end color flow
 
-### Continuous Integration
+### Best Practices
 
-Tests run automatically on push via GitHub Actions. The CI pipeline:
-1. Checks file structure
-2. Validates syntax of all scripts
-3. Runs colorscheme tests
-4. Runs border script tests
-5. Runs config tests
-6. Verifies all 9 colors are defined
+- Run `make test` before committing changes
+- All tests should pass before pushing to remote
+- Add tests for new features to prevent regressions
 
 ### Adding New Tests
 
