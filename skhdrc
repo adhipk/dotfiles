@@ -9,8 +9,8 @@ ctrl + alt - k : yabai -m window --focus north
 ctrl + alt - l : yabai -m window --focus east
 
 # -- Cycle through windows on current desktop --
-alt - tab : yabai -m window --focus stack.next || yabai -m window --focus next || yabai -m window --focus first
-shift + alt - tab : yabai -m window --focus stack.prev || yabai -m window --focus prev || yabai -m window --focus last
+alt - tab : yabai -m window --focus stack.next || yabai -m window --focus stack.first
+shift + alt - tab : yabai -m window --focus stack.prev || yabai -m window --focus stack.last
 
 # -- Swap windows --
 ctrl + alt + shift - h : yabai -m window --swap west
@@ -48,9 +48,23 @@ ctrl + alt - y : yabai -m space --mirror y-axis
 ctrl + alt - f : yabai -m window --toggle float; \
                 yabai -m window --grid 6:6:1:1:4:4
 
+# -- Stack windows --
+ctrl + alt - d : yabai -m window --stack west
+ctrl + alt - g : yabai -m space --layout $(yabai -m query --spaces --space | jq -r '.type' | grep -q 'bsp' && echo 'stack' || echo 'bsp')
+
 # ============================================================
 # Space management
 # ============================================================
+
+# -- Move window to different display --
+ctrl + alt + cmd - left  : yabai -m window --display prev; yabai -m display --focus prev; yabai -m window --focus recent
+ctrl + alt + cmd - right : yabai -m window --display next; yabai -m display --focus next; yabai -m window --focus recent
+ctrl + alt + cmd - 0x1E  : yabai -m window --display 1; yabai -m display --focus 1; yabai -m window --focus recent  # hyper+]
+ctrl + alt + cmd - 0x21  : yabai -m window --display 2; yabai -m display --focus 2; yabai -m window --focus recent  # hyper+[
+
+# -- Move entire space to different display --
+ctrl + alt + cmd - up   : yabai -m space --display prev && yabai -m display --focus prev
+ctrl + alt + cmd - down : yabai -m space --display next && yabai -m display --focus next
 
 ctrl + alt + shift - 1 : yabai -m window --space 1
 ctrl + alt + shift - 2 : yabai -m window --space 2
@@ -64,7 +78,8 @@ ctrl + alt - n : app=$(yabai -m query --windows --window | jq -r '.app') && \
                  idx=$(yabai -m query --spaces --display | jq 'map(select(."is-visible" == false)) | last | .index') && \
                  yabai -m window --space "$idx" && \
                  yabai -m space --focus "$idx" && \
-                 yabai -m space --label "$app"
+                 yabai -m space --label "$app" && \
+                 ~/.config/yabai/close_empty_spaces.sh
 
 # -- Close all empty desktops --
 alt - k : ~/.config/yabai/close_empty_spaces.sh
@@ -108,7 +123,7 @@ alt - 1    : ~/.config/skhd/focus_app.sh "@browser"
 alt - 2    : ~/.config/skhd/focus_app.sh "@editor"
 alt - 3    : ~/.config/skhd/focus_app.sh "Microsoft Teams"
 alt - 4    : ~/.config/skhd/focus_app.sh "Slack"
-
+alt - 5    : ~/.config/skhd/focus_app.sh "Obsidian"
 # ============================================================
 # Window border marking (fn + 0-9) — Catppuccin colors
 # 1=red, 2=peach, 3=yellow, 4=green, 5=teal, 6=sky, 7=blue, 8=mauve, 9=pink

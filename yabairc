@@ -47,9 +47,9 @@ yabai -m rule --add title="^skhd keys$"     manage=off
 # ============================================================
 # Border color signals
 # ============================================================
-# Update border color when window focus changes
 yabai -m signal --add event=window_focused action="$HOME/.config/borders/update_border.sh"
-yabai -m signal --add event=window_destroyed action="$HOME/.config/borders/update_border.sh"
+yabai -m signal --add event=window_created action="$HOME/.config/borders/auto_mark.sh && $HOME/.config/borders/update_border.sh"
+yabai -m signal --add event=window_destroyed action="$HOME/.config/borders/cleanup_marks.sh && $HOME/.config/borders/update_border.sh"
 yabai -m signal --add event=application_hidden action="$HOME/.config/borders/update_border.sh"
 
 echo "yabai configuration loaded..."

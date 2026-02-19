@@ -21,6 +21,7 @@ get_color() {
         7) echo "$BORDER_COLOR_7" ;;  # Blue
         8) echo "$BORDER_COLOR_8" ;;  # Mauve
         9) echo "$BORDER_COLOR_9" ;;  # Pink
+        default) echo "$BORDER_COLOR_ACTIVE" ;;  # Default active color
         *)      echo "" ;;
     esac
 }
@@ -41,13 +42,20 @@ get_color_name() {
     esac
 }
 
-# Get current focused window ID
-WINDOW_ID=$(yabai -m query --windows --window | jq -r '.id')
+# Get current focused window info
+WINDOW_INFO=$(yabai -m query --windows --window)
+WINDOW_ID=$(echo "$WINDOW_INFO" | jq -r '.id')
+WINDOW_APP=$(echo "$WINDOW_INFO" | jq -r '.app')
 
 if [ -z "$WINDOW_ID" ] || [ "$WINDOW_ID" == "null" ]; then
     echo "No window focused"
     exit 1
 fi
+
+# Count non-minimized windows of the same app across all spaces
+WINDOW_COUNT=$(yabai -m query --windows | jq --arg app "$WINDOW_APP" '[.[] | select(.app == $app and ."is-minimized" == false)] | length')
+SINGLE_WINDOW=false
+[ "$WINDOW_COUNT" -le 1 ] && SINGLE_WINDOW=true
 
 # Initialize color map file if it doesn't exist
 if [ ! -f "$COLOR_MAP" ]; then
@@ -57,24 +65,27 @@ fi
 # Handle the command
 case "$1" in
     clear)
-        # Remove this window from the color map
-        jq "del(.\"$WINDOW_ID\")" "$COLOR_MAP" > "${COLOR_MAP}.tmp" && mv "${COLOR_MAP}.tmp" "$COLOR_MAP"
         echo "Cleared border for window $WINDOW_ID"
-        # Restore default active color for currently focused window
-        borders active_color="$BORDER_COLOR_ACTIVE" inactive_color="$BORDER_COLOR_INACTIVE" width="$BORDER_WIDTH"
+        borders active_color="$BORDER_COLOR_INACTIVE" inactive_color="$BORDER_COLOR_INACTIVE" width="$BORDER_WIDTH"
+        ;;
+    default)
+        echo "default border for window $WINDOW_ID"
+        jq "del(.\"$WINDOW_ID\")" "$COLOR_MAP" > "${COLOR_MAP}.tmp" && mv "${COLOR_MAP}.tmp" "$COLOR_MAP"
+        borders active_color="$BORDER_COLOR_INACTIVE" inactive_color="$BORDER_COLOR_INACTIVE" width="$BORDER_WIDTH"
         ;;
     [1-9])
-        # Get the color for this option
         COLOR=$(get_color "$1")
         COLOR_NAME=$(get_color_name "$1")
-        # Add/update this window in the color map
         jq ". + {\"$WINDOW_ID\": \"$COLOR\"}" "$COLOR_MAP" > "${COLOR_MAP}.tmp" && mv "${COLOR_MAP}.tmp" "$COLOR_MAP"
         echo "Marked window $WINDOW_ID with $COLOR_NAME border ($COLOR)"
-        # Apply the border immediately
-        borders active_color="$COLOR" width="$BORDER_WIDTH"
+        if [ "$SINGLE_WINDOW" = true ]; then
+            borders active_color="$BORDER_COLOR_INACTIVE" width="$BORDER_WIDTH"
+        else
+            borders active_color="$COLOR" width="$BORDER_WIDTH"
+        fi
         ;;
     *)
-        echo "Usage: $0 {1-9|clear}"
+        echo "Usage: $0 {1-9|clear|default}"
         echo "Colors: 1=red, 2=peach, 3=yellow, 4=green, 5=teal, 6=sky, 7=blue, 8=mauve, 9=pink"
         exit 1
         ;;

@@ -9,27 +9,33 @@ source "$HOME/dotfiles/colorschemes/colors.sh"
 COLOR_MAP="$HOME/.config/borders/window_colors.json"
 BORDER_WIDTH="5.0"
 
-# Get current focused window ID
-WINDOW_ID=$(yabai -m query --windows --window | jq -r '.id')
+# Get current focused window info
+WINDOW_INFO=$(yabai -m query --windows --window)
+WINDOW_ID=$(echo "$WINDOW_INFO" | jq -r '.id')
+WINDOW_APP=$(echo "$WINDOW_INFO" | jq -r '.app')
 
 if [ -z "$WINDOW_ID" ] || [ "$WINDOW_ID" == "null" ]; then
-    # No window focused, use default colors
-    borders active_color="$BORDER_COLOR_ACTIVE" inactive_color="$BORDER_COLOR_INACTIVE" width="$BORDER_WIDTH"
+    borders active_color="$BORDER_COLOR_INACTIVE" inactive_color="$BORDER_COLOR_INACTIVE" width="$BORDER_WIDTH"
     exit 0
 fi
 
-# Check if this window has a color assigned
+# Count non-minimized windows of the same app across all spaces
+WINDOW_COUNT=$(yabai -m query --windows | jq --arg app "$WINDOW_APP" '[.[] | select(.app == $app and ."is-minimized" == false)] | length')
+
+if [ "$WINDOW_COUNT" -le 1 ]; then
+    borders active_color="$BORDER_COLOR_INACTIVE" inactive_color="$BORDER_COLOR_INACTIVE" width="$BORDER_WIDTH"
+    exit 0
+fi
+
+# Multiple windows of the same app — use mark color if assigned, otherwise active color
 if [ -f "$COLOR_MAP" ]; then
     COLOR=$(jq -r ".\"$WINDOW_ID\" // \"null\"" "$COLOR_MAP")
 
     if [ "$COLOR" != "null" ]; then
-        # Window is marked with a specific color - use it
         borders active_color="$COLOR" inactive_color="$BORDER_COLOR_INACTIVE" width="$BORDER_WIDTH"
     else
-        # Window is NOT marked - use default active color
         borders active_color="$BORDER_COLOR_ACTIVE" inactive_color="$BORDER_COLOR_INACTIVE" width="$BORDER_WIDTH"
     fi
 else
-    # Color map doesn't exist, use default colors
     borders active_color="$BORDER_COLOR_ACTIVE" inactive_color="$BORDER_COLOR_INACTIVE" width="$BORDER_WIDTH"
 fi
