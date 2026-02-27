@@ -10,15 +10,17 @@ dotfiles/
 │   ├── catppuccin-mocha.sh
 │   └── colors.sh -> catppuccin-mocha.sh
 ├── config/
-│   ├── borders/          # JankyBorders scripts
-│   │   ├── mark_window.sh
-│   │   └── update_border.sh
-│   └── skhd/            # skhd helper scripts
-│       ├── focus_app.sh
-│       ├── show_keys.sh
-│       └── whichkey
+│   ├── skhd/             # skhd helper scripts
+│   │   ├── focus_app.sh
+│   │   ├── show_keys.sh
+│   │   └── whichkey
+│   └── yazi/             # yazi file manager config
+│       ├── init.lua
+│       └── keymap.toml
 ├── skhdrc               # Keyboard shortcuts
 ├── yabairc              # Window manager config
+├── zshrc                # Zsh shell config
+├── zshrc.secrets.example # Secret env template (not committed live)
 ├── install.sh           # Installation script
 └── reload_colors.sh     # Reload configs after color changes
 ```
@@ -62,18 +64,6 @@ This will:
 - `alt + n` - Create a new space and focus it
 - `alt + shift + ~` - Open a new Ghostty window in the current space
 
-### Window Border Marking (fn)
-- `fn + 1` - Mark window with red border
-- `fn + 2` - Mark window with peach border
-- `fn + 3` - Mark window with yellow border
-- `fn + 4` - Mark window with green border
-- `fn + 5` - Mark window with teal border
-- `fn + 6` - Mark window with sky blue border
-- `fn + 7` - Mark window with blue border
-- `fn + 8` - Mark window with mauve (purple) border
-- `fn + 9` - Mark window with pink border
-- `fn + 0` - Clear border marking
-
 ### App Focus (alt)
 - `alt + backtick` - Ghostty
 - `alt + 1` - Browser
@@ -104,18 +94,24 @@ All colors are defined in `colorschemes/catppuccin-mocha.sh`. This is the single
 
 - [yabai](https://github.com/koekeishiya/yabai) - Tiling window manager
 - [skhd](https://github.com/koekeishiya/skhd) - Hotkey daemon
-- [JankyBorders](https://github.com/FelixKratz/JankyBorders) - Window borders
+- [Yazi](https://github.com/sxyazi/yazi) - Terminal file manager
 - [Catppuccin](https://github.com/catppuccin/catppuccin) - Color scheme
 
+## Shell Secrets
+
+`zshrc` will source `~/.zshrc.secrets` when present. Keep machine-specific values
+and tokens there, and use `zshrc.secrets.example` as the template.
+
+## Yazi Integration
+
+- `zshrc` includes a `y` wrapper that returns you to the directory you exit from.
+- `config/yazi/keymap.toml` includes:
+  - `!` to open an interactive shell in the current directory
+  - `Esc` to close input prompts with one press
+  - `gr` to jump to the current git repo root
+- `config/yazi/init.lua` enables zoxide DB updates from Yazi.
+
 ## Configuration Details
-
-### Border System
-
-The border system tracks which windows you've marked with specific colors. When you focus a marked window, it displays your assigned color. Unmarked windows show the default active/inactive colors.
-
-- Marked windows persist in `~/.config/borders/window_colors.json`
-- Colors are sourced from the central colorscheme
-- Automatic updates on window focus via yabai signals
 
 ### Window Manager
 
@@ -153,11 +149,10 @@ Or run test scripts directly:
 ### Test Coverage
 
 The test suite validates:
-- **Colorscheme**: All 9 colors are properly defined, hex values are valid, border format is correct
-- **Scripts**: Border scripts can be executed, source colorscheme correctly, handle JSON operations
-- **Configs**: All keybindings are present, no hardcoded colors, syntax is valid
+- **Colorscheme**: Color variables are properly defined and exported
+- **Configs**: Core keybindings are present and syntax is valid
 - **Symlinks**: All symlinks point to correct locations and targets exist
-- **Integration**: Components work together, services are running, end-to-end color flow
+- **Integration**: Components work together and core services are running
 
 ### Best Practices
 

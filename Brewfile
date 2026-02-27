@@ -1,9 +1,10 @@
 tap "koekeishiya/formulae"
-tap "felixkratz/formulae"
 
 brew "yabai"
 brew "skhd"
 brew "jq"
-brew "borders"
+brew "yazi"
+brew "zoxide"
+brew "fzf"
 
 cask "ghostty"
