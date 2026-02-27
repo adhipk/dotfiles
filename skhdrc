@@ -81,6 +81,11 @@ ctrl + alt - n : app=$(yabai -m query --windows --window | jq -r '.app') && \
                  yabai -m space --label "$app" && \
                  ~/.config/yabai/close_empty_spaces.sh
 
+# -- Create new desktop and focus it --
+alt - n : yabai -m space --create && \
+          idx=$(yabai -m query --spaces --display | jq 'map(select(."is-visible" == false)) | last | .index') && \
+          yabai -m space --focus "$idx"
+
 # -- Close all empty desktops --
 alt - k : ~/.config/yabai/close_empty_spaces.sh
 
@@ -95,6 +100,9 @@ alt + shift - 7 : yabai -m space --focus 7
 alt + shift - 8 : yabai -m space --focus 8
 alt + shift - 9 : yabai -m space --focus 9
 
+# -- New terminal window in current space --
+alt + shift - 0x32 : ~/.config/skhd/open_terminal_window.sh
+
 # ============================================================
 # Window close / minimize
 # ============================================================
@@ -102,13 +110,6 @@ alt + shift - 9 : yabai -m space --focus 9
 ctrl + alt - w : yabai -m window --close
 ctrl + alt - z : yabai -m window --minimize
 
-# ============================================================
-# App Focus/Cycle (opt + <key>)
-# Not running        → launch the app
-# Not focused        → focus its most recent window
-# Focused, 1 window  → toggle off (focus previous window)
-# Focused, N windows → cycle to the next window
-# ============================================================
 
 # ============================================================
 # Restart yabai + skhd
@@ -118,12 +119,6 @@ alt - r : yabai --restart-service; skhd --restart-service
 
 # ============================================================
 
-alt - 0x32 : ~/.config/skhd/focus_app.sh "Ghostty"
-alt - 1    : ~/.config/skhd/focus_app.sh "@browser"
-alt - 2    : ~/.config/skhd/focus_app.sh "@editor"
-alt - 3    : ~/.config/skhd/focus_app.sh "Microsoft Teams"
-alt - 4    : ~/.config/skhd/focus_app.sh "Slack"
-alt - 5    : ~/.config/skhd/focus_app.sh "Obsidian"
 # ============================================================
 # Window border marking (fn + 0-9) — Catppuccin colors
 # 1=red, 2=peach, 3=yellow, 4=green, 5=teal, 6=sky, 7=blue, 8=mauve, 9=pink

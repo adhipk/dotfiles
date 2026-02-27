@@ -45,6 +45,52 @@ yabai -m rule --add app="^Keychain Access$"  manage=off
 yabai -m rule --add title="^skhd keys$"     manage=off
 
 # ============================================================
+# Fixed Space Order (1-4)
+# 1: Ghostty, Browser
+# 2: Editor
+# 3: Slack, Teams, Outlook
+# 4: Empty (no default apps)
+# ============================================================
+
+# Ensure at least 4 spaces exist on display 1
+SPACE_COUNT=$(yabai -m query --spaces --display 1 | jq 'length')
+if [ "$SPACE_COUNT" -lt 4 ]; then
+  i=$SPACE_COUNT
+  while [ "$i" -lt 4 ]; do
+    yabai -m space --create
+    i=$((i + 1))
+  done
+fi
+
+# Label spaces consistently
+yabai -m space 1 --label "browser"
+yabai -m space 2 --label "editor"
+yabai -m space 3 --label "comms"
+yabai -m space 4 --label "empty"
+
+# App → space assignments
+yabai -m rule --add app="^Ghostty$" space=1
+
+# Browsers (covers @browser)
+yabai -m rule --add app="^Safari$" space=1
+yabai -m rule --add app="^Google Chrome$" space=1
+yabai -m rule --add app="^Arc$" space=1
+yabai -m rule --add app="^Brave Browser$" space=1
+yabai -m rule --add app="^Firefox$" space=1
+
+# Editors (covers @editor)
+yabai -m rule --add app="^Cursor$" space=2
+yabai -m rule --add app="^Visual Studio Code$" space=2
+yabai -m rule --add app="^Zed$" space=2
+yabai -m rule --add app="^Sublime Text$" space=2
+yabai -m rule --add app="^Xcode$" space=2
+
+# Comms
+yabai -m rule --add app="^Slack$" space=3
+yabai -m rule --add app="^Microsoft Teams$" space=3
+yabai -m rule --add app="^Microsoft Outlook$" space=3
+
+# ============================================================
 # Border color signals
 # ============================================================
 yabai -m signal --add event=window_focused action="$HOME/.config/borders/update_border.sh"

@@ -30,6 +30,15 @@ cd ~/dotfiles
 ./install.sh
 ```
 
+### Quick Setup (new Mac)
+
+```bash
+cd ~/dotfiles
+./bootstrap.sh
+```
+
+This installs Homebrew (if needed), installs dependencies from `Brewfile`, and then runs `./install.sh`.
+
 This will:
 - Back up existing configs
 - Create symlinks for all configuration files
@@ -50,6 +59,8 @@ This will:
 
 ### Space Management
 - `alt + k` - Close all empty desktops/spaces
+- `alt + n` - Create a new space and focus it
+- `alt + shift + ~` - Open a new Ghostty window in the current space
 
 ### Window Border Marking (fn)
 - `fn + 1` - Mark window with red border
