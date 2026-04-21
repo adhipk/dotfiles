@@ -1,0 +1,14 @@
+[[mgr.prepend_keymap]]
+on = "!"
+run = 'shell "$SHELL" --block --confirm'
+desc = "Open a shell in the current directory"
+
+[[input.prepend_keymap]]
+on = "<Esc>"
+run = "close"
+desc = "Close input with a single escape"
+
+[[mgr.prepend_keymap]]
+on = ["g", "r"]
+run = 'cd "$(git rev-parse --show-toplevel)"'
+desc = "Jump to git repository root"

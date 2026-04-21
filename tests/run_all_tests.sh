@@ -18,7 +18,6 @@ FAILED_SUITES=()
 # Test suites to run
 TEST_SUITES=(
     "test_colorscheme.sh"
-    "test_border_scripts.sh"
     "test_configs.sh"
     "test_symlinks.sh"
     "test_integration.sh"

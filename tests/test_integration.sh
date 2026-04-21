@@ -49,7 +49,6 @@ echo ""
 echo "Testing required system tools..."
 assert_command_exists "yabai" "yabai is installed"
 assert_command_exists "skhd" "skhd is installed"
-assert_command_exists "borders" "borders (JankyBorders) is installed"
 assert_command_exists "jq" "jq is installed"
 
 echo ""
@@ -72,56 +71,17 @@ else
 fi
 
 echo ""
-echo "Testing border scripts can source colorscheme..."
-
-# Test mark_window.sh
-MARK_SCRIPT="$DOTFILES_DIR/config/borders/mark_window.sh"
-if bash -c "source '$MARK_SCRIPT' 2>&1" | grep -q "No window focused\|Usage:"; then
-    echo "  ✓ mark_window.sh runs (expected to fail without window)"
-    ((PASSED++))
-else
-    ERRORS=$(bash -c "source '$MARK_SCRIPT' 2>&1" | head -5)
-    echo "  ✗ mark_window.sh has unexpected errors"
-    echo "$ERRORS" | sed 's/^/    /'
-    ((FAILED++))
-fi
-
-# Test update_border.sh
-UPDATE_SCRIPT="$DOTFILES_DIR/config/borders/update_border.sh"
-TEMP_OUTPUT=$(mktemp)
-bash "$UPDATE_SCRIPT" > "$TEMP_OUTPUT" 2>&1
-EXIT_CODE=$?
-if [ $EXIT_CODE -eq 0 ]; then
-    echo "  ✓ update_border.sh runs without errors"
-    ((PASSED++))
-else
-    echo "  ✗ update_border.sh exits with error code $EXIT_CODE"
-    cat "$TEMP_OUTPUT" | sed 's/^/    /'
-    ((FAILED++))
-fi
-rm -f "$TEMP_OUTPUT"
-
-echo ""
 echo "Testing reload_colors.sh script..."
 if [ -x "$DOTFILES_DIR/reload_colors.sh" ]; then
     echo "  ✓ reload_colors.sh is executable"
     ((PASSED++))
 
-    # Check it sources colorscheme
-    if grep -q "source.*colorschemes/colors.sh" "$DOTFILES_DIR/reload_colors.sh"; then
-        echo "  ✓ reload_colors.sh sources colorscheme"
+    # Check it restarts services
+    if grep -q "restart-service" "$DOTFILES_DIR/reload_colors.sh"; then
+        echo "  ✓ reload_colors.sh restarts services"
         ((PASSED++))
     else
-        echo "  ✗ reload_colors.sh doesn't source colorscheme"
-        ((FAILED++))
-    fi
-
-    # Check it updates borders
-    if grep -q "borders active_color" "$DOTFILES_DIR/reload_colors.sh"; then
-        echo "  ✓ reload_colors.sh updates borders"
-        ((PASSED++))
-    else
-        echo "  ✗ reload_colors.sh doesn't update borders"
+        echo "  ✗ reload_colors.sh doesn't restart services"
         ((FAILED++))
     fi
 else
@@ -135,12 +95,12 @@ if [ -x "$DOTFILES_DIR/install.sh" ]; then
     echo "  ✓ install.sh is executable"
     ((PASSED++))
 
-    # Check it creates necessary directories
-    if grep -q "mkdir.*config/borders" "$DOTFILES_DIR/install.sh"; then
-        echo "  ✓ install.sh creates border directories"
+    # Check it creates core config directories
+    if grep -q "mkdir.*config/skhd" "$DOTFILES_DIR/install.sh" && grep -q "mkdir.*config/yabai" "$DOTFILES_DIR/install.sh"; then
+        echo "  ✓ install.sh creates core config directories"
         ((PASSED++))
     else
-        echo "  ✗ install.sh doesn't create border directories"
+        echo "  ✗ install.sh doesn't create core config directories"
         ((FAILED++))
     fi
 
@@ -177,12 +137,12 @@ if [ -d "$DOTFILES_DIR/.git" ]; then
         echo "  ✓ .gitignore exists"
         ((PASSED++))
 
-        # Check it ignores window_colors.json
-        if grep -q "window_colors.json" "$DOTFILES_DIR/.gitignore"; then
-            echo "  ✓ .gitignore ignores window_colors.json"
+        # Check it ignores local secrets
+        if grep -q "zshrc.secrets" "$DOTFILES_DIR/.gitignore"; then
+            echo "  ✓ .gitignore ignores local secrets"
             ((PASSED++))
         else
-            echo "  ✗ .gitignore doesn't ignore window_colors.json"
+            echo "  ✗ .gitignore doesn't ignore local secrets"
             ((FAILED++))
         fi
     else
@@ -200,13 +160,12 @@ if [ -f "$DOTFILES_DIR/README.md" ]; then
     echo "  ✓ README.md exists"
     ((PASSED++))
 
-    # Check it documents the 9 colors
-    COLOR_COUNT=$(grep -c "fn + [1-9]" "$DOTFILES_DIR/README.md" || true)
-    if [ "$COLOR_COUNT" -ge 9 ]; then
-        echo "  ✓ README documents all 9 border colors"
+    # Check it documents Yazi integration
+    if grep -q "Yazi" "$DOTFILES_DIR/README.md"; then
+        echo "  ✓ README documents Yazi integration"
         ((PASSED++))
     else
-        echo "  ✗ README doesn't document all 9 colors (found $COLOR_COUNT)"
+        echo "  ✗ README missing Yazi integration docs"
         ((FAILED++))
     fi
 
@@ -248,39 +207,13 @@ else
     echo "  ⚠ skhd is not running"
 fi
 
-if pgrep -f "borders" > /dev/null; then
-    echo "  ✓ borders is running"
-    ((PASSED++))
-else
-    echo "  ⚠ borders is not running"
-fi
-
 echo ""
-echo "Testing end-to-end color flow..."
-# Source colorscheme
-source "$DOTFILES_DIR/colorschemes/colors.sh"
-
-# Check color 1 flows through correctly
-EXPECTED_COLOR_1="0xff${COLOR_RED}"
-if [ "$BORDER_COLOR_1" = "$EXPECTED_COLOR_1" ]; then
-    echo "  ✓ Color 1 (red) flows from base to border format"
+echo "Testing no border integration remains..."
+if ! grep -R "config/borders\\|mark_window.sh\\|update_border.sh" "$DOTFILES_DIR"/{install.sh,skhdrc,yabairc,README.md} > /dev/null 2>&1; then
+    echo "  ✓ Border integration removed from core configs"
     ((PASSED++))
 else
-    echo "  ✗ Color 1 doesn't match"
-    echo "    Expected: $EXPECTED_COLOR_1"
-    echo "    Got: $BORDER_COLOR_1"
-    ((FAILED++))
-fi
-
-# Check active color
-EXPECTED_ACTIVE="0xff${COLOR_ACTIVE_BORDER}"
-if [ "$BORDER_COLOR_ACTIVE" = "$EXPECTED_ACTIVE" ]; then
-    echo "  ✓ Active color flows from base to border format"
-    ((PASSED++))
-else
-    echo "  ✗ Active color doesn't match"
-    echo "    Expected: $EXPECTED_ACTIVE"
-    echo "    Got: $BORDER_COLOR_ACTIVE"
+    echo "  ✗ Border integration references still present"
     ((FAILED++))
 fi
 

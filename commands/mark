@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# 1. Check if an argument was actually provided
+if [ -z "$1" ]; then
+  echo "Usage: mark <text>"
+  exit 1
+fi
+
+# 2. Use quotes around variables to handle spaces/special chars
+# 3. Ensure the directory exists before writing
+mkdir -p ~/notes
+echo "$1" >> ~/notes/marks.md

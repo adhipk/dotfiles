@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# Check if the file exists before trying to read it
+if [ -f "$HOME/notes/marks.md" ]; then
+    cat "$HOME/notes/marks.md"
+else
+    echo "No marks found yet. Go make some!"
+fi

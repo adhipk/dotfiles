@@ -64,12 +64,16 @@ This will:
 - `alt + n` - Create a new space and focus it
 - `alt + shift + ~` - Open a new Ghostty window in the current space
 
-### App Focus (alt)
-- `alt + backtick` - Ghostty
-- `alt + 1` - Browser
-- `alt + 2` - Editor
+### App Focus (alt + number)
+- `alt + backtick` - Ghostty (terminal)
+- `alt + 1` - Browser (smart: detects default browser)
+- `alt + 2` - Editor (smart: Cursor, VS Code, Zed, etc.)
 - `alt + 3` - Microsoft Teams
 - `alt + 4` - Slack
+
+Pressing the same shortcut when the app is focused:
+- Single window: toggles back to previous window
+- Multiple windows: cycles through app windows
 
 ### Other
 - `alt + r` - Restart yabai & skhd

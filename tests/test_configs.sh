@@ -92,24 +92,6 @@ assert_file_exists "$YABAIRC" "yabairc exists"
 echo ""
 echo "Testing skhdrc configuration..."
 
-# Test all border shortcuts exist
-assert_contains "$SKHDRC" "fn - 0.*mark_window.sh clear" "fn+0 clears border"
-assert_contains "$SKHDRC" "fn - 1.*mark_window.sh 1" "fn+1 marks with color 1"
-assert_contains "$SKHDRC" "fn - 2.*mark_window.sh 2" "fn+2 marks with color 2"
-assert_contains "$SKHDRC" "fn - 3.*mark_window.sh 3" "fn+3 marks with color 3"
-assert_contains "$SKHDRC" "fn - 4.*mark_window.sh 4" "fn+4 marks with color 4"
-assert_contains "$SKHDRC" "fn - 5.*mark_window.sh 5" "fn+5 marks with color 5"
-assert_contains "$SKHDRC" "fn - 6.*mark_window.sh 6" "fn+6 marks with color 6"
-assert_contains "$SKHDRC" "fn - 7.*mark_window.sh 7" "fn+7 marks with color 7"
-assert_contains "$SKHDRC" "fn - 8.*mark_window.sh 8" "fn+8 marks with color 8"
-assert_contains "$SKHDRC" "fn - 9.*mark_window.sh 9" "fn+9 marks with color 9"
-
-# Test no old color name shortcuts remain
-assert_not_contains "$SKHDRC" "mark_window.sh red" "No legacy 'red' shortcut"
-assert_not_contains "$SKHDRC" "mark_window.sh green" "No legacy 'green' shortcut"
-assert_not_contains "$SKHDRC" "mark_window.sh blue" "No legacy 'blue' shortcut"
-assert_not_contains "$SKHDRC" "mark_window.sh yellow" "No legacy 'yellow' shortcut"
-
 # Test window management shortcuts
 assert_contains "$SKHDRC" "ctrl + alt - h.*focus west" "Focus left (h) works"
 assert_contains "$SKHDRC" "ctrl + alt - j.*focus south" "Focus down (j) works"
@@ -126,9 +108,8 @@ assert_contains "$SKHDRC" "alt - k.*close_empty_spaces.sh" "Alt+k closes empty s
 # Test reload shortcut
 assert_contains "$SKHDRC" "alt - r.*restart-service" "Reload shortcut exists"
 
-# Test paths use correct locations
-assert_contains "$SKHDRC" "~/.config/borders/mark_window.sh" "Uses correct mark_window.sh path"
-assert_contains "$SKHDRC" "~/.config/skhd/" "Uses correct skhd helper path"
+# Border shortcuts should be removed
+assert_not_contains "$SKHDRC" "mark_window.sh" "No border keybindings remain"
 
 echo ""
 echo "Testing yabairc configuration..."
@@ -145,13 +126,10 @@ assert_contains "$YABAIRC" "bottom_padding" "Bottom padding configured"
 assert_contains "$YABAIRC" "left_padding" "Left padding configured"
 assert_contains "$YABAIRC" "right_padding" "Right padding configured"
 
-# Test border signals are configured
-assert_contains "$YABAIRC" "window_focused.*update_border.sh" "Window focus signal exists"
-assert_contains "$YABAIRC" "window_destroyed.*update_border.sh" "Window destroy signal exists"
-assert_contains "$YABAIRC" "application_hidden.*update_border.sh" "App hidden signal exists"
-
-# Test update_border.sh path is correct
-assert_contains "$YABAIRC" "\$HOME/.config/borders/update_border.sh" "Uses correct update_border.sh path"
+# Border signals should be removed
+assert_not_contains "$YABAIRC" "update_border.sh" "No border signals remain"
+assert_not_contains "$YABAIRC" "auto_mark.sh" "No auto mark signal remains"
+assert_not_contains "$YABAIRC" "cleanup_marks.sh" "No cleanup mark signal remains"
 
 # Test common window rules exist
 assert_contains "$YABAIRC" "System Settings.*manage=off" "System Settings rule exists"
@@ -160,25 +138,9 @@ assert_contains "$YABAIRC" "Calculator.*manage=off" "Calculator rule exists"
 echo ""
 echo "Testing configuration consistency..."
 
-# Count all border shortcuts
-BORDER_SHORTCUTS=$(grep -c "fn - [0-9].*mark_window.sh" "$SKHDRC" || true)
-if [ "$BORDER_SHORTCUTS" -eq 10 ]; then
-    echo "  ✓ All 10 border shortcuts present (fn+0 through fn+9)"
-    ((PASSED++))
-else
-    echo "  ✗ Expected 10 border shortcuts, found $BORDER_SHORTCUTS"
-    ((FAILED++))
-fi
-
-# Check yabai has exactly 3 border update signals
-BORDER_SIGNALS=$(grep -c "update_border.sh" "$YABAIRC" || true)
-if [ "$BORDER_SIGNALS" -eq 3 ]; then
-    echo "  ✓ All 3 border update signals present"
-    ((PASSED++))
-else
-    echo "  ✗ Expected 3 border signals, found $BORDER_SIGNALS"
-    ((FAILED++))
-fi
+# Ensure no border references remain
+assert_not_contains "$SKHDRC" "fn - [0-9].*mark_window.sh" "No fn border mappings remain"
+assert_not_contains "$YABAIRC" "config/borders" "No borders path in yabairc"
 
 echo ""
 echo "Testing no syntax errors..."

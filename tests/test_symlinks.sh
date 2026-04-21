@@ -80,36 +80,21 @@ echo "================================"
 
 echo ""
 echo "Testing top-level config symlinks..."
+assert_symlink_exists "$HOME/.zshrc" ".zshrc is a symlink"
 assert_symlink_exists "$HOME/.skhdrc" ".skhdrc is a symlink"
 assert_symlink_exists "$HOME/.yabairc" ".yabairc is a symlink"
 
 echo ""
 echo "Testing symlink targets are correct..."
+assert_symlink_target "$HOME/.zshrc" "$DOTFILES_DIR/zshrc" ".zshrc points to dotfiles"
 assert_symlink_target "$HOME/.skhdrc" "$DOTFILES_DIR/skhdrc" ".skhdrc points to dotfiles"
 assert_symlink_target "$HOME/.yabairc" "$DOTFILES_DIR/yabairc" ".yabairc points to dotfiles"
 
 echo ""
 echo "Testing symlinks are not broken..."
+assert_symlink_valid "$HOME/.zshrc" ".zshrc target exists"
 assert_symlink_valid "$HOME/.skhdrc" ".skhdrc target exists"
 assert_symlink_valid "$HOME/.yabairc" ".yabairc target exists"
-
-echo ""
-echo "Testing border script symlinks..."
-if [ -L "$HOME/.config/borders/mark_window.sh" ]; then
-    assert_symlink_exists "$HOME/.config/borders/mark_window.sh" "mark_window.sh is a symlink"
-    assert_symlink_target "$HOME/.config/borders/mark_window.sh" "$DOTFILES_DIR/config/borders/mark_window.sh" "mark_window.sh points to dotfiles"
-    assert_symlink_valid "$HOME/.config/borders/mark_window.sh" "mark_window.sh target exists"
-else
-    echo "  ⚠ mark_window.sh is not a symlink (may be direct file)"
-fi
-
-if [ -L "$HOME/.config/borders/update_border.sh" ]; then
-    assert_symlink_exists "$HOME/.config/borders/update_border.sh" "update_border.sh is a symlink"
-    assert_symlink_target "$HOME/.config/borders/update_border.sh" "$DOTFILES_DIR/config/borders/update_border.sh" "update_border.sh points to dotfiles"
-    assert_symlink_valid "$HOME/.config/borders/update_border.sh" "update_border.sh target exists"
-else
-    echo "  ⚠ update_border.sh is not a symlink (may be direct file)"
-fi
 
 echo ""
 echo "Testing colorscheme symlink..."
@@ -142,12 +127,26 @@ else
 fi
 
 echo ""
+echo "Testing yazi config symlinks..."
+for file in init.lua keymap.toml; do
+    if [ -L "$HOME/.config/yazi/$file" ]; then
+        assert_symlink_valid "$HOME/.config/yazi/$file" "$file is valid symlink"
+    elif [ -f "$HOME/.config/yazi/$file" ]; then
+        echo "  ⚠ $file exists but is not a symlink"
+    else
+        echo "  ✗ $file does not exist"
+        ((FAILED++))
+    fi
+done
+
+echo ""
 echo "Testing source files exist in dotfiles..."
 REQUIRED_FILES=(
+    "$DOTFILES_DIR/zshrc"
     "$DOTFILES_DIR/skhdrc"
     "$DOTFILES_DIR/yabairc"
-    "$DOTFILES_DIR/config/borders/mark_window.sh"
-    "$DOTFILES_DIR/config/borders/update_border.sh"
+    "$DOTFILES_DIR/config/yazi/init.lua"
+    "$DOTFILES_DIR/config/yazi/keymap.toml"
     "$DOTFILES_DIR/colorschemes/catppuccin-mocha.sh"
     "$DOTFILES_DIR/colorschemes/colors.sh"
 )

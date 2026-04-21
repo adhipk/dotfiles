@@ -2,5 +2,5 @@
 *.tmp
 *.log
 
-# Ignore state files
-config/borders/window_colors.json
+# Ignore local shell secrets
+zshrc.secrets
