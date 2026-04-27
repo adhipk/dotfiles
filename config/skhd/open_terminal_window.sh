@@ -23,12 +23,15 @@ if [[ -f "$state_file" ]]; then
 fi
 printf '%s\n' "$now_ms" > "$state_file"
 
+# Add a temporary rule to ensure the new window opens on the current space
+yabai -m rule --add app="^${terminal_app}$" space="$current_space" --one-shot
+
 open -na "$terminal_app"
 
-# Wait briefly for the window to exist, then move/focus it in the current space.
+# Wait briefly for the window to exist, then focus it
 win_id=""
 for _ in {1..12}; do
-  win_id=$(yabai -m query --windows | jq -r --arg app "$terminal_app" 'map(select(.app==$app)) | max_by(.id) | .id // empty')
+  win_id=$(yabai -m query --windows | jq -r --arg app "$terminal_app" --argjson space "$current_space" 'map(select(.app==$app and .space==$space)) | max_by(.id) | .id // empty')
   if [[ -n "$win_id" ]]; then
     break
   fi
@@ -36,7 +39,5 @@ for _ in {1..12}; do
 done
 
 if [[ -n "$win_id" ]]; then
-  yabai -m window "$win_id" --space "$current_space" >/dev/null 2>&1 || true
-  yabai -m space --focus "$current_space" >/dev/null 2>&1 || true
   yabai -m window --focus "$win_id" >/dev/null 2>&1 || true
 fi

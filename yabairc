@@ -68,25 +68,26 @@ yabai -m space 3 --label "comms"
 yabai -m space 4 --label "empty"
 
 # App → space assignments
-yabai -m rule --add app="^Ghostty$" space=1
+# Note: Removed space assignments so windows open on the currently focused space
+# yabai -m rule --add app="^Ghostty$" space=1
 
 # Browsers (covers @browser)
-yabai -m rule --add app="^Safari$" space=1
-yabai -m rule --add app="^Google Chrome$" space=1
-yabai -m rule --add app="^Arc$" space=1
-yabai -m rule --add app="^Brave Browser$" space=1
-yabai -m rule --add app="^Firefox$" space=1
+# yabai -m rule --add app="^Safari$" space=1
+# yabai -m rule --add app="^Google Chrome$" space=1
+# yabai -m rule --add app="^Arc$" space=1
+# yabai -m rule --add app="^Brave Browser$" space=1
+# yabai -m rule --add app="^Firefox$" space=1
 
 # Editors (covers @editor)
-yabai -m rule --add app="^Cursor$" space=2
-yabai -m rule --add app="^Visual Studio Code$" space=2
-yabai -m rule --add app="^Zed$" space=2
-yabai -m rule --add app="^Sublime Text$" space=2
-yabai -m rule --add app="^Xcode$" space=2
+# yabai -m rule --add app="^Cursor$" space=2
+# yabai -m rule --add app="^Visual Studio Code$" space=2
+# yabai -m rule --add app="^Zed$" space=2
+# yabai -m rule --add app="^Sublime Text$" space=2
+# yabai -m rule --add app="^Xcode$" space=2
 
 # Comms
-yabai -m rule --add app="^Slack$" space=3
-yabai -m rule --add app="^Microsoft Teams$" space=3
-yabai -m rule --add app="^Microsoft Outlook$" space=3
+# yabai -m rule --add app="^Slack$" space=3
+# yabai -m rule --add app="^Microsoft Teams$" space=3
+# yabai -m rule --add app="^Microsoft Outlook$" space=3
 
 echo "yabai configuration loaded..."
