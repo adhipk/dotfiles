@@ -49,7 +49,7 @@ if [ -z "$APP" ]; then
     exit 0
 fi
 
-# Get visible window IDs for this app
+# Get all non-minimized, non-hidden window IDs for this app (including other displays)
 WINDOWS=$(echo "$ALL_WINDOWS" | jq -r \
     "[.[] | select(.app == \"$APP\" and .\"is-minimized\" == false and .\"is-hidden\" == false)] | sort_by(.id) | .[].id")
 
@@ -100,10 +100,34 @@ if [ "$FOCUSED_APP" = "$APP" ]; then
 fi
 
 # App not focused — focus its most recently active window
-BEST=$(echo "$ALL_WINDOWS" | jq -r \
-    "[.[] | select(.app == \"$APP\" and .\"is-minimized\" == false and .\"is-hidden\" == false)] | sort_by(.\"has-focus\", .\"is-visible\") | last | .id // empty")
+# Prefer windows on current space/display, then fall back to any window
+CURRENT_SPACE=$(yabai -m query --spaces --space | jq -r '.index')
+CURRENT_DISPLAY=$(yabai -m query --displays --display | jq -r '.index')
+BEST=$(echo "$ALL_WINDOWS" | jq -r --arg space "$CURRENT_SPACE" --arg display "$CURRENT_DISPLAY" \
+    "[.[] | select(.app == \"$APP\" and .\"is-minimized\" == false and .\"is-hidden\" == false)] |
+     sort_by(
+       if .space == ($space | tonumber) then 0 else 1 end,
+       if .display == ($display | tonumber) then 0 else 1 end,
+       -.\"has-focus\",
+       -.\"is-visible\"
+     ) |
+     first | .id // empty")
 
 if [ -n "$BEST" ]; then
+    # Get the space and display of the target window
+    TARGET_SPACE=$(echo "$ALL_WINDOWS" | jq -r --arg wid "$BEST" \
+        "[.[] | select(.id == ($wid | tonumber))] | first | .space // empty")
+    TARGET_DISPLAY=$(echo "$ALL_WINDOWS" | jq -r --arg wid "$BEST" \
+        "[.[] | select(.id == ($wid | tonumber))] | first | .display // empty")
+
+    # If window is on a different space, switch to that space first
+    if [ -n "$TARGET_SPACE" ] && [ "$TARGET_SPACE" != "$CURRENT_SPACE" ]; then
+        yabai -m space --focus "$TARGET_SPACE"
+    # Otherwise if on different display (multi-monitor), switch display
+    elif [ -n "$TARGET_DISPLAY" ] && [ "$TARGET_DISPLAY" != "$CURRENT_DISPLAY" ]; then
+        yabai -m display --focus "$TARGET_DISPLAY"
+    fi
+
     yabai -m window --focus "$BEST"
 else
     yabai -m window --focus "$(echo "$WINDOWS" | head -1)"
