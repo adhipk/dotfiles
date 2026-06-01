@@ -50,8 +50,8 @@ if [ -z "$APP" ]; then
 fi
 
 # Get all non-minimized, non-hidden window IDs for this app (including other displays)
-WINDOWS=$(echo "$ALL_WINDOWS" | jq -r \
-    "[.[] | select(.app == \"$APP\" and .\"is-minimized\" == false and .\"is-hidden\" == false)] | sort_by(.id) | .[].id")
+WINDOWS=$(echo "$ALL_WINDOWS" | jq -r --arg app "$APP" \
+    '[.[] | select(.app == $app and ."is-minimized" == false and ."is-hidden" == false)] | sort_by(.id) | .[].id')
 
 if [ -z "$WINDOWS" ]; then
     eval "$LAUNCH_CMD"
@@ -103,22 +103,22 @@ fi
 # Prefer windows on current space/display, then fall back to any window
 CURRENT_SPACE=$(yabai -m query --spaces --space | jq -r '.index')
 CURRENT_DISPLAY=$(yabai -m query --displays --display | jq -r '.index')
-BEST=$(echo "$ALL_WINDOWS" | jq -r --arg space "$CURRENT_SPACE" --arg display "$CURRENT_DISPLAY" \
-    "[.[] | select(.app == \"$APP\" and .\"is-minimized\" == false and .\"is-hidden\" == false)] |
+BEST=$(echo "$ALL_WINDOWS" | jq -r --arg app "$APP" --arg space "$CURRENT_SPACE" --arg display "$CURRENT_DISPLAY" \
+    '[.[] | select(.app == $app and ."is-minimized" == false and ."is-hidden" == false)] |
      sort_by(
        if .space == ($space | tonumber) then 0 else 1 end,
        if .display == ($display | tonumber) then 0 else 1 end,
-       -.\"has-focus\",
-       -.\"is-visible\"
+       if ."has-focus" then 0 else 1 end,
+       if ."is-visible" then 0 else 1 end
      ) |
-     first | .id // empty")
+     first | .id // empty')
 
 if [ -n "$BEST" ]; then
     # Get the space and display of the target window
     TARGET_SPACE=$(echo "$ALL_WINDOWS" | jq -r --arg wid "$BEST" \
-        "[.[] | select(.id == ($wid | tonumber))] | first | .space // empty")
+        '[.[] | select(.id == ($wid | tonumber))] | first | .space // empty')
     TARGET_DISPLAY=$(echo "$ALL_WINDOWS" | jq -r --arg wid "$BEST" \
-        "[.[] | select(.id == ($wid | tonumber))] | first | .display // empty")
+        '[.[] | select(.id == ($wid | tonumber))] | first | .display // empty')
 
     # If window is on a different space, switch to that space first
     if [ -n "$TARGET_SPACE" ] && [ "$TARGET_SPACE" != "$CURRENT_SPACE" ]; then
