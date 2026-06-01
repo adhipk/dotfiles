@@ -102,10 +102,11 @@ Apps are automatically assigned to specific spaces via `yabai -m rule --add` dir
 Organized into sections:
 1. **Window Management** (ctrl+alt) - Focus, swap, warp, resize, fullscreen, float
 2. **Space Management** (alt+n, alt+k, ctrl+alt+shift+numbers) - Create spaces, close empty spaces, move windows
-3. **App Focus** (alt+backtick, alt+1-4) - Smart app switching with cycling
-4. **Window Close/Minimize** (ctrl+alt+w/z)
-5. **Restart Services** (alt+r)
-6. **Help** (alt+/) - Shows keybinding cheat sheet
+3. **Space Bookmarking** (ctrl+alt+1-5 to pin, alt+shift+1-5 to jump) - Dynamic space bookmarking system
+4. **App Focus** (alt+backtick, alt+1-4) - Smart app switching with cycling
+5. **Window Close/Minimize** (ctrl+alt+w/z)
+6. **Restart Services** (alt+r)
+7. **Help** (alt+/) - Shows keybinding cheat sheet
 
 **App Focus Behavior (alt + number):**
 - `alt + backtick` - Ghostty
@@ -118,11 +119,26 @@ When pressed repeatedly:
 - Single window: toggles back to previous window
 - Multiple windows: cycles through app windows
 
+**Space Bookmarking Behavior:**
+Dynamic UUID-based system for pinning and recalling spaces using chord modes:
+- `alt + shift + =` → then `1-5` - Pin current space to bookmark slot (chord mode)
+- `alt + shift + -` → then `1-5` - Unpin bookmark slot (chord mode)
+- `alt + shift + 1-5` - Jump to bookmarked space (direct)
+- `alt + shift + /` - Show all pinned spaces notification
+- Bookmarks persist across space deletions and reboots
+- Storage: `~/.config/yabai/space-bookmarks.json`
+- Visual indicator: Bookmarked spaces show 📌 prefix in label
+
 **Helper Scripts:**
 - `config/skhd/focus_app.sh` - App focus logic
 - `config/skhd/show_keys.sh` - Display keybinding cheat sheet
 - `config/skhd/open_terminal_window.sh` - Opens new Ghostty window in current space (defaults to Ghostty, uses keycode 0x32 for tilde)
 - `config/yabai/close_empty_spaces.sh` - Closes all empty spaces safely (keeps at least one space)
+- `config/yabai/bookmark-space.sh` - Pin current space to bookmark slot (1-5)
+- `config/yabai/unbookmark-space.sh` - Remove bookmark from slot (1-5)
+- `config/yabai/jump-to-bookmark.sh` - Jump to bookmarked space by slot
+- `config/yabai/show-bookmarks.sh` - Show notification with all pinned spaces
+- `config/yabai/list-bookmarks.sh` - Display all current bookmarks (for debugging)
 
 **Keycode Usage:**
 The tilde binding uses keycode `0x32` in skhdrc for reliability across keyboard layouts.

@@ -10,9 +10,9 @@ yabai -m config window_placement             second_child
 
 # padding and gaps
 yabai -m config top_padding                  0
-yabai -m config bottom_padding               3
-yabai -m config left_padding                 3
-yabai -m config right_padding                3
+yabai -m config bottom_padding               0
+yabai -m config left_padding                 0
+yabai -m config right_padding                0
 yabai -m config window_gap                   0
 
 # mouse
@@ -67,27 +67,6 @@ yabai -m space 2 --label "editor"
 yabai -m space 3 --label "comms"
 yabai -m space 4 --label "empty"
 
-# App → space assignments
-# Note: Removed space assignments so windows open on the currently focused space
-# yabai -m rule --add app="^Ghostty$" space=1
-
-# Browsers (covers @browser)
-# yabai -m rule --add app="^Safari$" space=1
-# yabai -m rule --add app="^Google Chrome$" space=1
-# yabai -m rule --add app="^Arc$" space=1
-# yabai -m rule --add app="^Brave Browser$" space=1
-# yabai -m rule --add app="^Firefox$" space=1
-
-# Editors (covers @editor)
-# yabai -m rule --add app="^Cursor$" space=2
-# yabai -m rule --add app="^Visual Studio Code$" space=2
-# yabai -m rule --add app="^Zed$" space=2
-# yabai -m rule --add app="^Sublime Text$" space=2
-# yabai -m rule --add app="^Xcode$" space=2
-
-# Comms
-# yabai -m rule --add app="^Slack$" space=3
-# yabai -m rule --add app="^Microsoft Teams$" space=3
-# yabai -m rule --add app="^Microsoft Outlook$" space=3
+# No space assignments - windows open in current space by default
 
 echo "yabai configuration loaded..."

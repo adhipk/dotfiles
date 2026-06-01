@@ -12,6 +12,13 @@ echo "  ✓ Restarting yabai and skhd..."
 yabai --restart-service
 skhd --restart-service
 
+# Reload tmux configuration if tmux is running
+if command -v tmux &> /dev/null && tmux list-sessions &> /dev/null; then
+    echo "  ✓ Reloading tmux..."
+    tmux source-file ~/.tmux.conf
+    tmux display-message "Config reloaded!"
+fi
+
 echo ""
 echo "✓ All configurations reloaded!"
 echo ""

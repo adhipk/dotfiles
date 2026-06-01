@@ -4,7 +4,7 @@ export PATH="/opt/homebrew/opt/openjdk/bin:$PATH"
 export EDITOR=nvim
 
 # Zsh plugins
-
+source ~/dotfiles/zshrc.commands
 source ~/antigen.zsh
 antigen bundle zsh-users/zsh-autosuggestions
 antigen bundle zsh-users/zsh-completions
@@ -78,11 +78,20 @@ esac
 export TMUX_SESSIONIZER_PATH='/Users/adhipkashyap/tmux-sessionizer'
 export PATH="$TMUX_SESSIONIZER_PATH:$PATH"
 
-bindkey -s ^f "tmux-sessionizer\n"
+bindkey -s '\ef' "tmux-sessionizer-zoxide\n"  # Alt+f (uses zoxide frecency)
+bindkey -s '\ee' "tmux-session-picker\n"      # Alt+e (existing sessions only)
 bindkey -s '\eh' "tmux-sessionizer -s 0\n"
 bindkey -s '\et' "tmux-sessionizer -s 1\n"
 bindkey -s '\en' "tmux-sessionizer -s 2\n"
 bindkey -s '\es' "tmux-sessionizer -s 3\n"
+
+# Tmux aliases
+alias ta='tmux attach -t'
+alias tad='tmux attach -d -t'
+alias ts='tmux new-session -s'
+alias tl='tmux list-sessions'
+alias tksv='tmux kill-server'
+alias tkss='tmux kill-session -t'
 
 
 
@@ -95,7 +104,22 @@ alias roigin="origin"
 
 eval "$(zoxide init zsh)"
 
+# Zoxide tab completion for 'z' command
+_zoxide_z_complete() {
+    local tokens cmd
+    tokens=(${(z)LBUFFER})
+    cmd=${tokens[1]}
+    if [[ "$cmd" == "z" ]]; then
+        _values 'directories' $(zoxide query --list | tail -20)
+    fi
+}
+compdef _zoxide_z_complete z
+
 # Enable Bedrock integration
 export CLAUDE_CODE_USE_BEDROCK=1
 export AWS_REGION=us-west-2
 export AWS_PROFILE=hoag-digital
+
+# Jira setup
+export JIRA_EMAIL='adhip.kashyap@hoag.org'
+export JIRA_API_TOKEN='ATATT3xFfGF0txTj34Z87fX94UqlnFhg0A-a6VRdquWFIOTUYdsOvV9nGduk5mFtz9vjXtW-pr6Ipglpph7rmqzay6KvmyU9WVWKR6FyuWvR1BZneyZMLjJrVpaC6_VMX_hzy8Em41C1W8UBluIqCd6hPC_QdoWDzsptBtH8y9SXbVQQcFikNt0=0CBB0C94'
