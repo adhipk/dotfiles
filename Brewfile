@@ -1,9 +1,9 @@
-tap "koekeishiya/formulae"
+tap "asmvik/formulae"
 
 brew "antigen"
 brew "fswatch"
-brew "yabai"
-brew "skhd"
+brew "asmvik/formulae/yabai"
+brew "asmvik/formulae/skhd"
 brew "jq"
 brew "mise"
 brew "neovim"
