@@ -25,6 +25,7 @@ The install script:
 - Symlinks all config files to home directory
 - Links helper scripts from `config/skhd/` and `config/yabai/` to `~/.config/`
 - Links scripts from `scripts/*.sh` to `~/bin/<name>` (without .sh extension)
+- Removes obsolete `~/bin` symlinks that point into this repository's `scripts/` directory
 - Makes all scripts executable
 
 **Reload configurations after changes:**
@@ -52,6 +53,7 @@ make test
 make test-colorscheme     # Colorscheme definitions and exports
 make test-configs         # skhdrc and yabairc syntax and keybindings
 make test-symlinks        # Symlink integrity
+make test-install         # Disposable installer checks
 make test-integration     # End-to-end integration
 ```
 

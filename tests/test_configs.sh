@@ -93,10 +93,10 @@ echo ""
 echo "Testing skhdrc configuration..."
 
 # Test window management shortcuts
-assert_contains "$SKHDRC" "ctrl + alt - h.*focus west" "Focus left (h) works"
-assert_contains "$SKHDRC" "ctrl + alt - j.*focus south" "Focus down (j) works"
-assert_contains "$SKHDRC" "ctrl + alt - k.*focus north" "Focus up (k) works"
-assert_contains "$SKHDRC" "ctrl + alt - l.*focus east" "Focus right (l) works"
+assert_contains "$SKHDRC" "ctrl + alt - h.*snap_window.sh left" "Snap left (h) works"
+assert_contains "$SKHDRC" "ctrl + alt - k.*snap_window.sh right" "Snap right (k) works"
+assert_contains "$SKHDRC" "ctrl + alt + shift - h.*swap west" "Swap left (h) works"
+assert_contains "$SKHDRC" "ctrl + alt + shift - k.*swap east" "Swap right (k) works"
 
 # Test window cycling shortcuts
 assert_contains "$SKHDRC" "alt - tab.*focus" "Alt+tab cycles windows forward"

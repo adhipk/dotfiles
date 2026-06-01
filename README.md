@@ -49,8 +49,9 @@ This will:
 ## Keyboard Shortcuts
 
 ### Window Management (ctrl + alt)
-- `h/j/k/l` - Focus window (vim directions)
-- `shift + h/j/k/l` - Swap windows
+- `h` / `left` - Snap window left
+- `k` / `right` - Snap window right
+- `shift + h/k/u/j` - Swap window west/east/north/south
 - `return` - Toggle fullscreen
 - `f` - Toggle float
 - `w` - Close window
@@ -138,9 +139,9 @@ make test
 Run individual test suites:
 ```bash
 make test-colorscheme     # Test color definitions and exports
-make test-scripts         # Test border marking scripts
 make test-configs         # Test skhdrc and yabairc
 make test-symlinks        # Test symlink integrity
+make test-install         # Test installer with a disposable home directory
 make test-integration     # Test end-to-end integration
 ```
 

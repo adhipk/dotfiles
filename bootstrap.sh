@@ -3,6 +3,7 @@ set -euo pipefail
 
 DOTFILES_DIR="${DOTFILES_DIR:-$HOME/dotfiles}"
 BREWFILE="$DOTFILES_DIR/Brewfile"
+export DOTFILES_DIR
 
 if [ ! -d "$DOTFILES_DIR" ]; then
   echo "Dotfiles directory not found at $DOTFILES_DIR" >&2
@@ -31,7 +32,7 @@ else
 fi
 
 echo "Installing dotfiles..."
-./install.sh
+"$DOTFILES_DIR/install.sh"
 
 echo ""
 echo "Next steps:"

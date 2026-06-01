@@ -20,6 +20,7 @@ TEST_SUITES=(
     "test_colorscheme.sh"
     "test_configs.sh"
     "test_symlinks.sh"
+    "test_install.sh"
     "test_integration.sh"
 )
 

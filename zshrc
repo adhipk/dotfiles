@@ -1,17 +1,24 @@
 # Minimal zsh configuration
+DOTFILES_DIR="${DOTFILES_DIR:-${${(%):-%N}:A:h}}"
 export PATH="$HOME/.local/bin:$PATH"
 export PATH="/opt/homebrew/opt/openjdk/bin:$PATH"
 export EDITOR=nvim
 
 # Zsh plugins
-source ~/dotfiles/zshrc.commands
-source ~/antigen.zsh
+source "$DOTFILES_DIR/zshrc.commands"
+if [ -f "$HOME/antigen.zsh" ]; then
+    source "$HOME/antigen.zsh"
+elif [ -f /opt/homebrew/share/antigen/antigen.zsh ]; then
+    source /opt/homebrew/share/antigen/antigen.zsh
+else
+    source /usr/local/share/antigen/antigen.zsh
+fi
 antigen bundle zsh-users/zsh-autosuggestions
 antigen bundle zsh-users/zsh-completions
 antigen bundle zsh-users/zsh-syntax-highlighting
 antigen bundle zsh-users/zsh-history-substring-search
 # Starship prompt
-export STARSHIP_CONFIG="$HOME/dotfiles/starship.toml"
+export STARSHIP_CONFIG="$DOTFILES_DIR/starship.toml"
 antigen apply
 eval "$(starship init zsh)"
 bindkey '^[[A' history-substring-search-up # or '\eOA'
@@ -51,7 +58,7 @@ if [[ -n "$YAZI_ID" ]]; then
 	autoload -Uz add-zsh-hook
 	add-zsh-hook zshexit _yazi_cd
 fi
-eval "$(~/.local/bin/mise activate)"
+eval "$(mise activate zsh)"
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
@@ -114,12 +121,3 @@ _zoxide_z_complete() {
     fi
 }
 compdef _zoxide_z_complete z
-
-# Enable Bedrock integration
-export CLAUDE_CODE_USE_BEDROCK=1
-export AWS_REGION=us-west-2
-export AWS_PROFILE=hoag-digital
-
-# Jira setup
-export JIRA_EMAIL='adhip.kashyap@hoag.org'
-export JIRA_API_TOKEN='ATATT3xFfGF0txTj34Z87fX94UqlnFhg0A-a6VRdquWFIOTUYdsOvV9nGduk5mFtz9vjXtW-pr6Ipglpph7rmqzay6KvmyU9WVWKR6FyuWvR1BZneyZMLjJrVpaC6_VMX_hzy8Em41C1W8UBluIqCd6hPC_QdoWDzsptBtH8y9SXbVQQcFikNt0=0CBB0C94'

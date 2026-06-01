@@ -1,4 +1,4 @@
-.PHONY: test test-colorscheme test-configs test-symlinks test-integration install compile sync watch reload clean help
+.PHONY: test test-colorscheme test-configs test-symlinks test-install test-integration install compile sync watch reload clean help
 
 # Default target
 help:
@@ -9,6 +9,7 @@ help:
 	@echo "  make test-colorscheme  - Run colorscheme tests only"
 	@echo "  make test-configs      - Run config file tests only"
 	@echo "  make test-symlinks     - Run symlink integrity tests only"
+	@echo "  make test-install      - Run disposable installer tests only"
 	@echo "  make test-integration  - Run integration tests only"
 	@echo "  make install           - Install dotfiles (create symlinks)"
 	@echo "  make compile           - Alias for install (sync commands)"
@@ -30,6 +31,9 @@ test-configs:
 
 test-symlinks:
 	@./tests/test_symlinks.sh
+
+test-install:
+	@./tests/test_install.sh
 
 test-integration:
 	@./tests/test_integration.sh

@@ -3,15 +3,20 @@
 # Dotfiles installation script
 # This script sets up symlinks for all configuration files
 
-set -e
+set -euo pipefail
 
-DOTFILES_DIR="$HOME/dotfiles"
+DOTFILES_DIR="${DOTFILES_DIR:-$HOME/dotfiles}"
 BACKUP_DIR="$HOME/dotfiles_backup_$(date +%Y%m%d_%H%M%S)"
+
+if [ ! -d "$DOTFILES_DIR" ]; then
+    echo "Dotfiles directory not found at $DOTFILES_DIR" >&2
+    exit 1
+fi
 
 echo "Installing dotfiles from $DOTFILES_DIR"
 
 # Create backup directory if files exist
-if [ -f "$HOME/.zshrc" ] || [ -f "$HOME/.skhdrc" ] || [ -f "$HOME/.yabairc" ] || [ -f "$HOME/.tmux.conf" ] || [ -d "$HOME/.config/yazi" ]; then
+if [ -f "$HOME/.zshrc" ] || [ -f "$HOME/.skhdrc" ] || [ -f "$HOME/.yabairc" ] || [ -f "$HOME/.tmux.conf" ] || [ -d "$HOME/.config/skhd" ] || [ -d "$HOME/.config/yabai" ] || [ -d "$HOME/.config/yazi" ] || [ -d "$HOME/.config/tmux" ]; then
     echo "Creating backup at $BACKUP_DIR"
     mkdir -p "$BACKUP_DIR"
 
@@ -71,6 +76,16 @@ for file in "$DOTFILES_DIR/config/tmux"/*; do
 done
 
 # Helper commands (symlink scripts/*.sh -> ~/bin/<name>)
+echo "Removing stale helper command symlinks..."
+for link in "$HOME/bin"/*; do
+    if [ -L "$link" ]; then
+        target="$(readlink "$link")"
+        case "$target" in
+            "$DOTFILES_DIR/scripts/"*) rm "$link" ;;
+        esac
+    fi
+done
+
 for script in "$DOTFILES_DIR/scripts"/*.sh; do
     if [ -f "$script" ]; then
         name="$(basename "$script")"
@@ -104,5 +119,5 @@ echo "Next steps:"
 echo "  1. Restart yabai and skhd: alt+r"
 echo ""
 echo "To change colorscheme:"
-echo "  Edit ~/dotfiles/colorschemes/catppuccin-mocha.sh"
+echo "  Edit $DOTFILES_DIR/colorschemes/catppuccin-mocha.sh"
 echo ""
