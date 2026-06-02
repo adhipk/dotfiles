@@ -10,6 +10,10 @@ else
   echo "yabai scripting addition unavailable; skipping automatic space creation." >&2
 fi
 
+yabai -m signal --add label="hide_scratchpads_on_focus_change" event="window_focused" action="$HOME/bin/scratchpads blur-close"
+yabai -m signal --add label="hide_scratchpads_on_app_switch" event="application_front_switched" action="$HOME/bin/scratchpads blur-close"
+yabai -m signal --add label="hide_scratchpads_on_app_deactivate" event="application_deactivated" action="$HOME/bin/scratchpads blur-close"
+
 yabai -m config debug_output on
 # global settings
 yabai -m config layout                       bsp

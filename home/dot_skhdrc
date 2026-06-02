@@ -150,10 +150,12 @@ alt - 1 : ~/.config/skhd/focus_app.sh "@browser"
 alt - 2 : ~/.config/skhd/focus_app.sh "@editor"
 alt - 3 : ~/.config/skhd/focus_app.sh "Microsoft Teams"
 alt - 4 : ~/.config/skhd/focus_app.sh "Slack"
-alt - 0x2A : ~/.config/skhd/toggle_presentation_mode.sh  # alt + backslash
+alt - 0x2A : ~/bin/hotkeys presentation toggle  # alt + backslash
+ctrl + alt + cmd - n : ~/bin/scratchpads open dev  # hyper + n
 
 # -- Open floating Ghostty window at bottom (for quick commands) --
-alt + shift - 0x32 : ~/.config/skhd/toggle_ghostty_quick_terminal.sh
+alt + shift - 0x32 : ~/bin/scratchpads open quick
+escape : ~/bin/scratchpads close
 
 # ============================================================
 # Window close / minimize

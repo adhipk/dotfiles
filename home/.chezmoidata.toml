@@ -42,3 +42,18 @@ packageManager = "pnpm"
 installCommand = "pnpm install --frozen-lockfile"
 buildCommand = "pnpm build"
 unpackedPath = ".output/chrome-mv3-dev"
+
+[[externalProjects]]
+name = "raycast-lucide-excalidraw"
+url = "git@github.com:adhipk/raycast-lucide-excalidraw.git"
+refreshPeriod = "168h"
+path = ".local/share/raycast-extensions/raycast-lucide-excalidraw"
+requiredExecutables = ["npm"]
+rerunWhenMissingPaths = [
+    "node_modules",
+    "library/lucide-icons.excalidrawlib",
+]
+setupCommands = [
+    "npm ci",
+    "npm run generate-library",
+]

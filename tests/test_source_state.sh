@@ -73,7 +73,10 @@ echo ""
 echo "Testing managed helper commands..."
 for file in \
     executable_watch-sync \
+    executable_lucide-icons-excalidraw.tmpl \
     executable_reload-colors \
+    executable_hotkeys \
+    executable_scratchpads \
     symlink_default-apps.tmpl \
     executable_tmux-session-picker \
     executable_tmux-sessionizer-zoxide \
@@ -87,9 +90,14 @@ echo "Testing extension declarations..."
 assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "vscodeExtensions" "VS Code extensions are declared"
 assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "name = \"gemma-gem\"" "Chrome extension is declared"
 assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "buildCommand = \"pnpm build\"" "Chrome extension is built from source"
-assert_contains "$DOTFILES_DIR/home/.chezmoiexternal.toml.tmpl" "type = \"git-repo\"" "Chrome repositories use chezmoi externals"
+assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "\\[\\[externalProjects\\]\\]" "External projects are declared"
+assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "name = \"raycast-lucide-excalidraw\"" "Lucide Raycast project is declared"
+assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "npm run generate-library" "External project setup is declared"
+assert_contains "$DOTFILES_DIR/home/.chezmoiexternal.toml.tmpl" "type = \"git-repo\"" "Extension repositories use chezmoi externals"
+assert_contains "$DOTFILES_DIR/home/.chezmoiexternal.toml.tmpl" "externalProjects" "External projects use chezmoi externals"
 assert_file_exists "$DOTFILES_DIR/home/.chezmoiscripts/run_onchange_after_install-vscode-extensions.sh.tmpl" "VS Code install hook exists"
 assert_file_exists "$DOTFILES_DIR/home/.chezmoiscripts/run_after_sync-chrome-extensions.sh.tmpl" "Chrome build hook exists"
+assert_file_exists "$DOTFILES_DIR/home/.chezmoiscripts/run_after_sync-external-projects.sh.tmpl" "External project setup hook exists"
 
 echo ""
 echo "Testing chezmoi parsing..."

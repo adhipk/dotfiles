@@ -10,8 +10,8 @@ Personal macOS setup managed with [chezmoi](https://www.chezmoi.io/).
 
 ```text
 home/
-├── .chezmoidata.toml                 # VS Code and Chrome extension inventory
-├── .chezmoiexternal.toml.tmpl        # Chrome extension git repositories
+├── .chezmoidata.toml                 # VS Code, Chrome, and external project inventory
+├── .chezmoiexternal.toml.tmpl        # External git repositories
 ├── .chezmoiscripts/                  # Apply hooks and one-time setup scripts
 ├── bin/                              # Helper commands installed into ~/bin
 ├── dot_config/
@@ -63,7 +63,8 @@ chezmoi update -v
 
 ## Extensions
 
-Declare VS Code extension IDs and Chrome extension repositories in
+Declare VS Code extension IDs, Chrome extension repositories, and reusable
+external project repositories in
 `home/.chezmoidata.toml`.
 
 VS Code extensions are installed through the `code` CLI whenever the declared
@@ -80,6 +81,18 @@ developer mode in `chrome://extensions` and load:
 ```
 
 Chrome requires this unpacked-extension approval in the browser.
+
+Reusable scripts and apps that have grown beyond dotfile snippets are declared
+as `externalProjects`. Chezmoi clones each project to its declared path as a
+`git-repo` external. During bootstrap, the generic external-project hook checks
+required executables, runs the declared setup commands when the Git revision
+changes, and reruns setup if declared generated paths are missing.
+
+The Lucide Excalidraw Raycast project is expected at:
+
+```text
+~/.local/share/raycast-extensions/raycast-lucide-excalidraw
+```
 
 ## One-Time Setup
 

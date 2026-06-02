@@ -12,7 +12,7 @@ These commands are installed into `~/bin`, which `home/dot_zshrc` adds to
 | Command | Purpose | Source |
 | --- | --- | --- |
 | `default-apps` | Inspect and change macOS default handlers for file extensions and URL schemes. | [`scripts/default-apps.sh`](scripts/default-apps.sh) |
-| `lucide-icons-excalidraw` | Start the local Raycast development command for the Lucide icon picker. Additional arguments are passed to `npm run dev`. | [`home/bin/executable_lucide-icons-excalidraw.tmpl`](home/bin/executable_lucide-icons-excalidraw.tmpl) |
+| `lucide-icons-excalidraw` | Start the external Raycast development command for the Lucide Excalidraw picker. Additional arguments are passed to `npm run dev`. | [`home/bin/executable_lucide-icons-excalidraw.tmpl`](home/bin/executable_lucide-icons-excalidraw.tmpl) |
 | `reload-colors` | Restart yabai and skhd, then reload tmux configuration when tmux is running. | [`home/bin/executable_reload-colors`](home/bin/executable_reload-colors) |
 | `reset-yabai` | Reinstall and pin `yabai@7.1.16`, update its scripting-addition sudoers entry, and restart its service. This uses `sudo` and changes Homebrew packages and `/etc/sudoers.d/yabai`. | [`home/bin/executable_reset-yabai`](home/bin/executable_reset-yabai) |
 | `tmux-session-picker` | Select and attach to an existing tmux session with `fzf`. The current session is excluded when run inside tmux. | [`home/bin/executable_tmux-session-picker`](home/bin/executable_tmux-session-picker) |
@@ -202,11 +202,13 @@ and is documented further in [`TMUX_GUIDE.md`](TMUX_GUIDE.md).
 | --- | --- |
 | [`run_onchange_after_install-vscode-extensions.sh.tmpl`](home/.chezmoiscripts/run_onchange_after_install-vscode-extensions.sh.tmpl) | Install declared VS Code extensions with `code --install-extension --force` whenever the generated hook changes. |
 | [`run_after_sync-chrome-extensions.sh.tmpl`](home/.chezmoiscripts/run_after_sync-chrome-extensions.sh.tmpl) | Build declared Chrome extension repositories after their Git revision changes or their unpacked manifest is missing. |
+| [`run_after_sync-external-projects.sh.tmpl`](home/.chezmoiscripts/run_after_sync-external-projects.sh.tmpl) | Install and set up declared external project repositories after their Git revision changes or generated paths go missing. |
 
 [`home/.chezmoidata.toml`](home/.chezmoidata.toml) contains the extension
 inventory. [`home/.chezmoiexternal.toml.tmpl`](home/.chezmoiexternal.toml.tmpl)
 clones declared Chrome extension repositories into
-`~/.local/share/chrome-extensions/`.
+`~/.local/share/chrome-extensions/` and generic external projects into their
+declared paths.
 
 ## Source-Only Utilities
 
@@ -217,18 +219,21 @@ These scripts are present in the repository but are not installed by chezmoi:
 | [`commands/mark`](commands/mark) `TEXT` | Append a line to `~/notes/marks.md`. |
 | [`commands/show_mark`](commands/show_mark) | Print `~/notes/marks.md` when it exists. |
 
-## Packaged Utilities
+## External Projects
 
-[`commands/lucide-icons-excalidraw`](commands/lucide-icons-excalidraw) is a
-local Raycast command that searches Lucide icons and copies SVG for Excalidraw.
-See its [`README`](commands/lucide-icons-excalidraw/README.md) for usage.
+`raycast-lucide-excalidraw` is declared as an external project repo
+in [`home/.chezmoidata.toml`](home/.chezmoidata.toml). Chezmoi clones it into
+`~/.local/share/raycast-extensions/raycast-lucide-excalidraw`, installs its npm
+dependencies, and runs its setup command during bootstrap.
 
-Run its package commands from `commands/lucide-icons-excalidraw/`:
+Run its package commands from
+`~/.local/share/raycast-extensions/raycast-lucide-excalidraw/`:
 
 | Command | Purpose |
 | --- | --- |
 | `npm run dev` | Start Raycast development mode. |
 | `npm run build` | Build the Raycast command. |
+| `npm run generate-library` | Generate `library/lucide-icons.excalidrawlib` from the Lucide API. |
 | `npm run lint` | Run Raycast linting. |
 | `npm run fix-lint` | Fix lint issues where possible. |
 | `npm run publish` | Publish through the Raycast API. |

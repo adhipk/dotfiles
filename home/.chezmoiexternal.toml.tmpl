@@ -6,3 +6,12 @@
     [".local/share/chrome-extensions/{{ .name }}".pull]
         args = ["--ff-only"]
 {{ end -}}
+
+{{- range .externalProjects }}
+["{{ .path }}"]
+    type = "git-repo"
+    url = "{{ .url }}"
+    refreshPeriod = "{{ .refreshPeriod }}"
+    ["{{ .path }}".pull]
+        args = ["--ff-only"]
+{{ end -}}
