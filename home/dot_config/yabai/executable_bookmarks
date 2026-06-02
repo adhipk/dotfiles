@@ -1,0 +1,256 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+BOOKMARKS_FILE="$HOME/.config/yabai/space-bookmarks.json"
+SLOT_RE='^[1-5]$'
+
+usage() {
+  cat <<'EOF'
+Usage:
+  bookmarks set <slot>
+  bookmarks clear <slot>
+  bookmarks jump <slot>
+  bookmarks list
+  bookmarks show
+EOF
+}
+
+notify() {
+  local title="$1"
+  local message="$2"
+
+  /usr/bin/osascript - "$title" "$message" <<'APPLESCRIPT'
+on run argv
+  display notification item 2 of argv with title item 1 of argv
+end run
+APPLESCRIPT
+}
+
+validate_slot() {
+  local slot="$1"
+
+  if [[ ! "$slot" =~ $SLOT_RE ]]; then
+    notify "yabai" "Invalid slot: $slot (use 1-5)"
+    exit 1
+  fi
+}
+
+ensure_store() {
+  if [ ! -f "$BOOKMARKS_FILE" ] || [ ! -s "$BOOKMARKS_FILE" ]; then
+    mkdir -p "$(dirname "$BOOKMARKS_FILE")"
+    printf '%s\n' '{"1":null,"2":null,"3":null,"4":null,"5":null}' > "$BOOKMARKS_FILE"
+  fi
+}
+
+bookmark_uuid_for_slot() {
+  local slot="$1"
+  jq -r --arg slot "$slot" '.[$slot] // empty' "$BOOKMARKS_FILE"
+}
+
+space_index_for_uuid() {
+  local uuid="$1"
+
+  yabai -m query --spaces | jq -r --arg uuid "$uuid" '.[] | select(.uuid == $uuid) | .index // empty'
+}
+
+current_space_json() {
+  yabai -m query --spaces --space
+}
+
+clean_label() {
+  sed -E 's/^📌[0-9] ?//'
+}
+
+set_bookmark() {
+  local slot="$1"
+  validate_slot "$slot"
+  ensure_store
+
+  local uuid current_label clean current_tmp
+  uuid=$(current_space_json | jq -r '.uuid')
+
+  if [ -z "$uuid" ] || [ "$uuid" = "null" ]; then
+    notify "yabai" "Could not get current space"
+    exit 1
+  fi
+
+  current_tmp=$(mktemp "${BOOKMARKS_FILE}.XXXXXX")
+  jq --arg slot "$slot" --arg uuid "$uuid" '.[$slot] = $uuid' "$BOOKMARKS_FILE" > "$current_tmp"
+  mv "$current_tmp" "$BOOKMARKS_FILE"
+
+  current_label=$(current_space_json | jq -r '.label')
+  clean=$(printf '%s' "$current_label" | clean_label)
+
+  if [ -z "$clean" ] || [ "$clean" = "null" ]; then
+    yabai -m space --label "📌$slot"
+  else
+    yabai -m space --label "📌$slot $clean"
+  fi
+
+  notify "yabai Bookmark" "Space bookmarked to slot $slot"
+}
+
+clear_bookmark() {
+  local slot="$1"
+  validate_slot "$slot"
+
+  if [ ! -f "$BOOKMARKS_FILE" ]; then
+    notify "yabai Bookmark" "No bookmarks set"
+    exit 0
+  fi
+
+  local uuid space_index current_label clean current_tmp
+  uuid=$(bookmark_uuid_for_slot "$slot")
+
+  current_tmp=$(mktemp "${BOOKMARKS_FILE}.XXXXXX")
+  jq --arg slot "$slot" '.[$slot] = null' "$BOOKMARKS_FILE" > "$current_tmp"
+  mv "$current_tmp" "$BOOKMARKS_FILE"
+
+  if [ -n "$uuid" ] && [ "$uuid" != "null" ]; then
+    space_index=$(space_index_for_uuid "$uuid")
+
+    if [ -n "$space_index" ]; then
+      current_label=$(yabai -m query --spaces --space "$space_index" | jq -r '.label')
+      clean=$(printf '%s' "$current_label" | clean_label)
+
+      if [ -z "$clean" ] || [ "$clean" = "null" ]; then
+        yabai -m space "$space_index" --label ""
+      else
+        yabai -m space "$space_index" --label "$clean"
+      fi
+    fi
+  fi
+
+  notify "yabai Bookmark" "Bookmark slot $slot cleared"
+}
+
+jump_to_bookmark() {
+  local slot="$1"
+  validate_slot "$slot"
+
+  if [ ! -f "$BOOKMARKS_FILE" ]; then
+    notify "yabai Bookmark" "No bookmarks set yet"
+    exit 0
+  fi
+
+  local uuid space_index
+  uuid=$(bookmark_uuid_for_slot "$slot")
+
+  if [ -z "$uuid" ] || [ "$uuid" = "null" ]; then
+    notify "yabai Bookmark" "Bookmark slot $slot is empty"
+    exit 0
+  fi
+
+  space_index=$(space_index_for_uuid "$uuid")
+
+  if [ -z "$space_index" ]; then
+    notify "yabai Bookmark" "Bookmarked space no longer exists"
+    exit 0
+  fi
+
+  yabai -m space --focus "$space_index"
+}
+
+list_bookmarks() {
+  if [ ! -f "$BOOKMARKS_FILE" ]; then
+    printf '%s\n' "No bookmarks file found"
+    exit 0
+  fi
+
+  printf '%s\n' "Current Space Bookmarks:"
+  printf '%s\n' "========================"
+
+  local slot uuid space_info index label display
+  for slot in 1 2 3 4 5; do
+    uuid=$(bookmark_uuid_for_slot "$slot")
+
+    if [ -z "$uuid" ] || [ "$uuid" = "null" ]; then
+      printf '%s\n' "Slot $slot: (empty)"
+      continue
+    fi
+
+    space_info=$(yabai -m query --spaces | jq -r --arg uuid "$uuid" '.[] | select(.uuid == $uuid) | {index, label, display}')
+
+    if [ -z "$space_info" ] || [ "$space_info" = "null" ]; then
+      printf '%s\n' "Slot $slot: UUID $uuid (space deleted)"
+      continue
+    fi
+
+    index=$(printf '%s' "$space_info" | jq -r '.index')
+    label=$(printf '%s' "$space_info" | jq -r '.label // "(no label)"')
+    display=$(printf '%s' "$space_info" | jq -r '.display')
+    printf '%s\n' "Slot $slot: Space $index on Display $display - $label"
+  done
+}
+
+show_bookmarks() {
+  if [ ! -f "$BOOKMARKS_FILE" ]; then
+    notify "Pinned Spaces" "No bookmarks set"
+    exit 0
+  fi
+
+  local message="" found_any=false slot uuid space_info index label
+  for slot in 1 2 3 4 5; do
+    uuid=$(bookmark_uuid_for_slot "$slot")
+
+    if [ -n "$uuid" ] && [ "$uuid" != "null" ]; then
+      found_any=true
+      space_info=$(yabai -m query --spaces | jq -r --arg uuid "$uuid" '.[] | select(.uuid == $uuid)')
+
+      if [ -n "$space_info" ] && [ "$space_info" != "null" ]; then
+        index=$(printf '%s' "$space_info" | jq -r '.index')
+        label=$(printf '%s' "$space_info" | jq -r '.label // ""' | clean_label)
+
+        if [ -z "$label" ]; then
+          message="${message}${slot}: Space ${index}\n"
+        else
+          message="${message}${slot}: Space ${index} (${label})\n"
+        fi
+      else
+        message="${message}${slot}: (deleted)\n"
+      fi
+    fi
+  done
+
+  if [ "$found_any" = false ]; then
+    notify "Pinned Spaces" "No spaces pinned yet"
+    exit 0
+  fi
+
+  message=$(printf '%b' "$message" | sed '$d')
+  notify "Pinned Spaces" "$message"
+}
+
+main() {
+  local command="${1:-}"
+  shift || true
+
+  case "$command" in
+    set)
+      set_bookmark "${1:-}"
+      ;;
+    clear|unset|remove)
+      clear_bookmark "${1:-}"
+      ;;
+    jump|focus)
+      jump_to_bookmark "${1:-}"
+      ;;
+    list)
+      list_bookmarks
+      ;;
+    show)
+      show_bookmarks
+      ;;
+    help|-h|--help|"")
+      usage
+      ;;
+    *)
+      printf '%s\n' "Unknown command: $command" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

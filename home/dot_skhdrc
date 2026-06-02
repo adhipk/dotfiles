@@ -1,5 +1,6 @@
 # ============================================================
 # Window Management (ctrl + opt + <key>) — BSP tiling
+# Caps Lock can be held as ctrl + opt + cmd via Karabiner-Elements.
 # ============================================================
 
 # -- Cycle through windows on current desktop --
@@ -85,32 +86,32 @@ alt + cmd - right : win=$(yabai -m query --windows --window | jq -r '.id'); \
 # -- Space Bookmarking: Pin mode (alt+shift+=, then number) --
 :: pin_mode @ : osascript -e 'display notification "Press 1-5 to pin space" with title "Pin Mode"'
 alt + shift - 0x18 ; pin_mode  # alt+shift+= enters pin mode
-pin_mode < 1 : ~/.config/yabai/bookmark-space.sh 1; skhd -k "escape"
-pin_mode < 2 : ~/.config/yabai/bookmark-space.sh 2; skhd -k "escape"
-pin_mode < 3 : ~/.config/yabai/bookmark-space.sh 3; skhd -k "escape"
-pin_mode < 4 : ~/.config/yabai/bookmark-space.sh 4; skhd -k "escape"
-pin_mode < 5 : ~/.config/yabai/bookmark-space.sh 5; skhd -k "escape"
+pin_mode < 1 : ~/.config/yabai/bookmarks set 1; skhd -k "escape"
+pin_mode < 2 : ~/.config/yabai/bookmarks set 2; skhd -k "escape"
+pin_mode < 3 : ~/.config/yabai/bookmarks set 3; skhd -k "escape"
+pin_mode < 4 : ~/.config/yabai/bookmarks set 4; skhd -k "escape"
+pin_mode < 5 : ~/.config/yabai/bookmarks set 5; skhd -k "escape"
 pin_mode < escape ; default
 
 # -- Space Bookmarking: Unpin mode (alt+shift+-, then number) --
 :: unpin_mode @ : osascript -e 'display notification "Press 1-5 to unpin space" with title "Unpin Mode"'
 alt + shift - 0x1B ; unpin_mode  # alt+shift+- enters unpin mode
-unpin_mode < 1 : ~/.config/yabai/unbookmark-space.sh 1; skhd -k "escape"
-unpin_mode < 2 : ~/.config/yabai/unbookmark-space.sh 2; skhd -k "escape"
-unpin_mode < 3 : ~/.config/yabai/unbookmark-space.sh 3; skhd -k "escape"
-unpin_mode < 4 : ~/.config/yabai/unbookmark-space.sh 4; skhd -k "escape"
-unpin_mode < 5 : ~/.config/yabai/unbookmark-space.sh 5; skhd -k "escape"
+unpin_mode < 1 : ~/.config/yabai/bookmarks clear 1; skhd -k "escape"
+unpin_mode < 2 : ~/.config/yabai/bookmarks clear 2; skhd -k "escape"
+unpin_mode < 3 : ~/.config/yabai/bookmarks clear 3; skhd -k "escape"
+unpin_mode < 4 : ~/.config/yabai/bookmarks clear 4; skhd -k "escape"
+unpin_mode < 5 : ~/.config/yabai/bookmarks clear 5; skhd -k "escape"
 unpin_mode < escape ; default
 
 # -- Jump to bookmarked space (alt+shift+number) --
-alt + shift - 1 : ~/.config/yabai/jump-to-bookmark.sh 1
-alt + shift - 2 : ~/.config/yabai/jump-to-bookmark.sh 2
-alt + shift - 3 : ~/.config/yabai/jump-to-bookmark.sh 3
-alt + shift - 4 : ~/.config/yabai/jump-to-bookmark.sh 4
-alt + shift - 5 : ~/.config/yabai/jump-to-bookmark.sh 5
+alt + shift - 1 : ~/.config/yabai/bookmarks jump 1
+alt + shift - 2 : ~/.config/yabai/bookmarks jump 2
+alt + shift - 3 : ~/.config/yabai/bookmarks jump 3
+alt + shift - 4 : ~/.config/yabai/bookmarks jump 4
+alt + shift - 5 : ~/.config/yabai/bookmarks jump 5
 
 # -- Show pinned bookmarks notification (alt+shift+/) --
-alt + shift - 0x2C : ~/.config/yabai/show-bookmarks.sh  # alt+shift+/
+alt + shift - 0x2C : ~/.config/yabai/bookmarks show  # alt+shift+/
 
 # -- Focus prev/next space --
 alt + shift - h : yabai -m space --focus prev

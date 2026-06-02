@@ -16,6 +16,7 @@ home/
 ├── bin/                              # Helper commands installed into ~/bin
 ├── dot_config/
 │   ├── symlink_nvim.tmpl              # ~/.config/nvim -> repository nvim/
+│   ├── karabiner/                     # Caps Lock hyper key configuration
 │   ├── skhd/                         # skhd helper scripts
 │   ├── yabai/                        # yabai helper scripts
 │   ├── yazi/                         # Yazi configuration
@@ -122,6 +123,8 @@ bundle ID.
 
 ## Keyboard Shortcuts
 
+- tap `caps lock`: toggle Caps Lock
+- hold `caps lock`: send `ctrl + opt + cmd`
 - `alt + n`: create a space and focus it
 - `alt + shift + ~`: toggle the Ghostty scratchpad
 - `alt + backtick`: focus Ghostty

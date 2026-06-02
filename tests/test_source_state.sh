@@ -58,6 +58,7 @@ for file in \
     dot_skhdrc \
     dot_yabairc \
     dot_tmux.conf \
+    dot_config/private_karabiner/karabiner.json \
     dot_config/zsh/zshrc.commands \
     dot_config/starship.toml \
     dot_config/yazi/init.lua \

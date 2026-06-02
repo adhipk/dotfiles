@@ -6,6 +6,7 @@ TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOTFILES_DIR="$(dirname "$TEST_DIR")"
 SKHDRC="$DOTFILES_DIR/home/dot_skhdrc"
 YABAIRC="$DOTFILES_DIR/home/dot_yabairc"
+KARABINER_CONFIG="$DOTFILES_DIR/home/dot_config/private_karabiner/karabiner.json"
 
 PASSED=0
 FAILED=0
@@ -88,6 +89,29 @@ echo ""
 echo "Testing config files exist..."
 assert_file_exists "$SKHDRC" "skhdrc exists"
 assert_file_exists "$YABAIRC" "yabairc exists"
+assert_file_exists "$KARABINER_CONFIG" "Karabiner config exists"
+
+echo ""
+echo "Testing Karabiner configuration..."
+if jq -e '
+    .profiles[]
+    | select(.selected == true)
+    | .complex_modifications.rules[]
+    | .manipulators[]
+    | select(
+        .type == "basic"
+        and .from.key_code == "caps_lock"
+        and .to[0].key_code == "left_control"
+        and .to[0].modifiers == ["left_option", "left_command"]
+        and .to_if_alone[0].key_code == "caps_lock"
+    )
+' "$KARABINER_CONFIG" >/dev/null; then
+    echo "  ✓ Caps Lock is a hyper key on hold and Caps Lock on tap"
+    ((PASSED++))
+else
+    echo "  ✗ Caps Lock hyper key mapping is missing or invalid"
+    ((FAILED++))
+fi
 
 echo ""
 echo "Testing skhdrc configuration..."

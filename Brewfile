@@ -16,3 +16,4 @@ brew "zoxide"
 brew "fzf"
 
 cask "ghostty"
+cask "karabiner-elements"
