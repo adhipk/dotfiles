@@ -61,9 +61,12 @@ for file in \
     dot_config/zsh/zshrc.commands \
     dot_config/starship.toml \
     dot_config/yazi/init.lua \
-    dot_config/yazi/keymap.toml; do
+    dot_config/yazi/keymap.toml \
+    dot_config/symlink_nvim.tmpl; do
     assert_file_exists "$DOTFILES_DIR/home/$file" "$file is declared"
 done
+assert_contains "$DOTFILES_DIR/home/dot_config/symlink_nvim.tmpl" '\.chezmoi\.sourceDir }}/../nvim' "Neovim config links to the repository checkout"
+assert_file_exists "$DOTFILES_DIR/nvim/init.lua" "Neovim config is stored in the repository"
 
 echo ""
 echo "Testing managed helper commands..."

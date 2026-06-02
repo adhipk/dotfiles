@@ -5,7 +5,8 @@ Personal macOS setup managed with [chezmoi](https://www.chezmoi.io/).
 ## Layout
 
 `.chezmoiroot` points chezmoi at `home/`, which declares the desired state of
-`$HOME`.
+`$HOME`. The repository-level `nvim/` directory is linked into
+`~/.config/nvim` so edits remain live in the checkout.
 
 ```text
 home/
@@ -14,6 +15,7 @@ home/
 ├── .chezmoiscripts/                  # Apply hooks and one-time setup scripts
 ├── bin/                              # Helper commands installed into ~/bin
 ├── dot_config/
+│   ├── symlink_nvim.tmpl              # ~/.config/nvim -> repository nvim/
 │   ├── skhd/                         # skhd helper scripts
 │   ├── yabai/                        # yabai helper scripts
 │   ├── yazi/                         # Yazi configuration
@@ -23,6 +25,8 @@ home/
 ├── dot_yabairc
 ├── dot_tmux.conf
 └── dot_zshrc
+
+nvim/                                 # Neovim configuration linked into ~/.config
 ```
 
 ## Setup
