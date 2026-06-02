@@ -1,0 +1,8 @@
+{{- range .chromeExtensions }}
+[".local/share/chrome-extensions/{{ .name }}"]
+    type = "git-repo"
+    url = "{{ .url }}"
+    refreshPeriod = "{{ .refreshPeriod }}"
+    [".local/share/chrome-extensions/{{ .name }}".pull]
+        args = ["--ff-only"]
+{{ end -}}

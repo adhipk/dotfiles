@@ -6,11 +6,13 @@
 - `alt + backtick` focuses Ghostty (app focus shortcut).
 
 ## Terminal Defaults
-- `config/skhd/open_terminal_window.sh` defaults to Ghostty.
+- `home/dot_config/skhd/executable_open_terminal_window.sh` defaults to Ghostty.
 
-## Symlinks
-- `install.sh` creates symlinks for helper scripts under `~/.config/skhd/`.
-- If a new helper script is added in `config/skhd/`, rerun `./install.sh` (or `./bootstrap.sh`) to refresh symlinks.
+## Chezmoi
+- `.chezmoiroot` points to `home/`, the desired state for `$HOME`.
+- `install.sh` applies the source state with chezmoi.
+- Add helper commands under `home/bin/` with the `executable_` attribute.
+- Add one-time setup scripts under `home/.chezmoiscripts/` with a `run_once_` prefix.
 
 ## Keycode Note
-- The tilde binding uses keycode `0x32` in `skhdrc` for reliability.
+- The tilde binding uses keycode `0x32` in `home/dot_skhdrc` for reliability.

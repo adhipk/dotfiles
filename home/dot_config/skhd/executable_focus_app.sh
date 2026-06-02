@@ -3,38 +3,49 @@
 ARG="$1"
 LAUNCH_CMD=""
 
-# For @browser and @editor, find the running app name from yabai
-# and set a fallback launch command
+# Resolve macOS default handlers at invocation time so changes made in System
+# Settings take effect without updating this file.
+default_app_for_url() {
+    local url_type="$1"
+    local url="$2"
+    local app_path
+
+    app_path=$(/usr/bin/osascript -l JavaScript \
+        -e 'ObjC.import("AppKit")' \
+        -e 'ObjC.import("Foundation")' \
+        -e 'function run(argv) {
+            var url = argv[0] === "file"
+                ? $.NSURL.fileURLWithPath(argv[1])
+                : $.NSURL.URLWithString(argv[1]);
+            var appURL = $.NSWorkspace.sharedWorkspace.URLForApplicationToOpenURL(url);
+            return appURL ? ObjC.unwrap(appURL.path) : "";
+        }' \
+        -- "$url_type" "$url" 2>/dev/null)
+
+    if [ -n "$app_path" ]; then
+        basename "$app_path" .app
+    fi
+}
+
+default_markdown_editor() {
+    local sample_file
+    local app
+
+    sample_file=$(mktemp "${TMPDIR:-/tmp}/skhd-default-editor.XXXXXX.md")
+    app=$(default_app_for_url file "$sample_file")
+    rm -f "$sample_file"
+    printf '%s\n' "$app"
+}
+
 ALL_WINDOWS=$(yabai -m query --windows)
 
 case "$ARG" in
     @browser)
-        # Detect default browser app name from macOS
-        BUNDLE_ID=$(plutil -convert json -o - \
-            ~/Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist 2>/dev/null | \
-            jq -r '[.LSHandlers[] | select(.LSHandlerURLScheme == "https")] | first | .LSHandlerRoleAll // empty')
-        if [ -n "$BUNDLE_ID" ]; then
-            APP=$(osascript -e "name of app id \"$BUNDLE_ID\"" 2>/dev/null)
-        fi
+        APP=$(default_app_for_url scheme "https://google.com")
         LAUNCH_CMD="open https://google.com"
         ;;
     @editor)
-        EDITORS=("Cursor" "Visual Studio Code" "Zed" "Sublime Text" "Xcode")
-        for e in "${EDITORS[@]}"; do
-            if echo "$ALL_WINDOWS" | jq -e "[.[] | select(.app == \"$e\")] | length > 0" >/dev/null 2>&1; then
-                APP="$e"
-                break
-            fi
-        done
-        # Fall back to first installed editor
-        if [ -z "$APP" ]; then
-            for e in "${EDITORS[@]}"; do
-                if [ -d "/Applications/$e.app" ]; then
-                    APP="$e"
-                    break
-                fi
-            done
-        fi
+        APP=$(default_markdown_editor)
         LAUNCH_CMD="open -a \"${APP:-TextEdit}\""
         ;;
     *)

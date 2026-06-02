@@ -1,0 +1,44 @@
+vscodeExtensions = [
+    "anthropic.claude-code",
+    "anysphere.cursorpyright",
+    "anysphere.remote-ssh",
+    "biomejs.biome",
+    "bradlc.vscode-tailwindcss",
+    "catppuccin.catppuccin-vsc",
+    "dbaeumer.vscode-eslint",
+    "dotjoshjohnson.xml",
+    "eamodio.gitlens",
+    "echoapi.echoapi-for-vscode",
+    "esbenp.prettier-vscode",
+    "fwcd.kotlin",
+    "github.vscode-github-actions",
+    "hashicorp.terraform",
+    "jdinhlife.gruvbox",
+    "mechatroner.rainbow-csv",
+    "mermaidchart.vscode-mermaid-chart",
+    "ms-python.black-formatter",
+    "ms-python.debugpy",
+    "ms-python.python",
+    "ms-toolsai.jupyter",
+    "ms-toolsai.jupyter-renderers",
+    "ms-toolsai.vscode-jupyter-cell-tags",
+    "ms-toolsai.vscode-jupyter-slideshow",
+    "pomdtr.excalidraw-editor",
+    "qwtel.sqlite-viewer",
+    "redhat.vscode-yaml",
+    "ryuta46.multi-command",
+    "shd101wyy.markdown-preview-enhanced",
+    "sst-dev.opencode",
+    "tomoki1207.pdf",
+    "unifiedjs.vscode-remark",
+    "yutengjing.vscode-classic-experience",
+]
+
+[[chromeExtensions]]
+name = "gemma-gem"
+url = "https://github.com/kessler/gemma-gem.git"
+refreshPeriod = "168h"
+packageManager = "pnpm"
+installCommand = "pnpm install --frozen-lockfile"
+buildCommand = "pnpm build"
+unpackedPath = ".output/chrome-mv3-dev"

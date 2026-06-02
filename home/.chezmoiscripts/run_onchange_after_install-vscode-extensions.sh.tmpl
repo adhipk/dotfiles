@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v code >/dev/null 2>&1; then
+    echo "chezmoi: skipping VS Code extensions because 'code' is not in PATH" >&2
+    exit 0
+fi
+
+extensions=(
+{{- range .vscodeExtensions }}
+    {{ . | quote }}
+{{- end }}
+)
+
+for extension in "${extensions[@]}"; do
+    if ! code --install-extension "$extension" --force; then
+        echo "chezmoi: unable to install VS Code extension '$extension'; continuing" >&2
+    fi
+done

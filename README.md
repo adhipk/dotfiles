@@ -1,173 +1,112 @@
 # Dotfiles
 
-Personal macOS configuration files with centralized colorscheme management.
+Personal macOS setup managed with [chezmoi](https://www.chezmoi.io/).
 
-## Structure
+## Layout
 
+`.chezmoiroot` points chezmoi at `home/`, which declares the desired state of
+`$HOME`.
+
+```text
+home/
+├── .chezmoidata.toml                 # VS Code and Chrome extension inventory
+├── .chezmoiexternal.toml.tmpl        # Chrome extension git repositories
+├── .chezmoiscripts/                  # Apply hooks and one-time setup scripts
+├── bin/                              # Helper commands installed into ~/bin
+├── dot_config/
+│   ├── skhd/                         # skhd helper scripts
+│   ├── yabai/                        # yabai helper scripts
+│   ├── yazi/                         # Yazi configuration
+│   ├── tmux/                         # tmux configuration
+│   └── zsh/                          # zsh support files
+├── dot_skhdrc
+├── dot_yabairc
+├── dot_tmux.conf
+└── dot_zshrc
 ```
-dotfiles/
-├── colorschemes/          # Centralized color definitions
-│   ├── catppuccin-mocha.sh
-│   └── colors.sh -> catppuccin-mocha.sh
-├── config/
-│   ├── skhd/             # skhd helper scripts
-│   │   ├── focus_app.sh
-│   │   ├── show_keys.sh
-│   │   └── whichkey
-│   └── yazi/             # yazi file manager config
-│       ├── init.lua
-│       └── keymap.toml
-├── skhdrc               # Keyboard shortcuts
-├── yabairc              # Window manager config
-├── zshrc                # Zsh shell config
-├── zshrc.secrets.example # Secret env template (not committed live)
-├── install.sh           # Installation script
-└── reload_colors.sh     # Reload configs after color changes
-```
 
-## Installation
+## Setup
+
+On this checkout:
 
 ```bash
-cd ~/dotfiles
-./install.sh
-```
-
-### Quick Setup (new Mac)
-
-```bash
-cd ~/dotfiles
 ./bootstrap.sh
 ```
 
-This installs Homebrew (if needed), installs dependencies from `Brewfile`, and then runs `./install.sh`.
+`bootstrap.sh` installs Homebrew dependencies from `Brewfile`, including
+chezmoi, and applies this repository with `./install.sh`.
 
-This will:
-- Back up existing configs
-- Create symlinks for all configuration files
-- Set up proper permissions
+On another Mac, chezmoi can clone and apply the repository directly:
 
-## Keyboard Shortcuts
+```bash
+chezmoi init --apply git@github.com:adhipk/dotfiles.git
+```
 
-### Window Management (ctrl + alt)
-- `h` / `left` - Snap window left
-- `k` / `right` - Snap window right
-- `shift + h/k/u/j` - Swap window west/east/north/south
-- `return` - Toggle fullscreen
-- `f` - Toggle float
-- `w` - Close window
+Review and apply local changes with:
 
-### Window Cycling
-- `alt + tab` - Cycle through windows on current desktop (forward)
-- `shift + alt + tab` - Cycle through windows on current desktop (backward)
+```bash
+chezmoi -S "$PWD" diff
+chezmoi -S "$PWD" apply
+```
 
-### Space Management
-- `alt + k` - Close all empty desktops/spaces
-- `alt + n` - Create a new space and focus it
-- `alt + shift + ~` - Open a new Ghostty window in the current space
+After the repository is installed in chezmoi's default source directory, the
+normal update command is:
 
-### App Focus (alt + number)
-- `alt + backtick` - Ghostty (terminal)
-- `alt + 1` - Browser (smart: detects default browser)
-- `alt + 2` - Editor (smart: Cursor, VS Code, Zed, etc.)
-- `alt + 3` - Microsoft Teams
-- `alt + 4` - Slack
+```bash
+chezmoi update -v
+```
 
-Pressing the same shortcut when the app is focused:
-- Single window: toggles back to previous window
-- Multiple windows: cycles through app windows
+## Extensions
 
-### Other
-- `alt + r` - Restart yabai & skhd
-- `alt + /` - Show keybindings cheat sheet
+Declare VS Code extension IDs and Chrome extension repositories in
+`home/.chezmoidata.toml`.
 
-## Colorscheme Management
+VS Code extensions are installed through the `code` CLI whenever the declared
+list changes. Extra locally installed extensions are left alone.
 
-All colors are defined in `colorschemes/catppuccin-mocha.sh`. This is the single source of truth for colors used across all tools.
+Chrome extension source repositories are cloned into
+`~/.local/share/chrome-extensions/` as chezmoi `git-repo` externals. They are
+built locally during bootstrap and rebuilt when their Git revision changes.
+Nothing is published. For unpacked extensions such as `gemma-gem`, enable
+developer mode in `chrome://extensions` and load:
 
-### Changing Colors
+```text
+~/.local/share/chrome-extensions/gemma-gem/.output/chrome-mv3-dev
+```
 
-1. Edit `~/dotfiles/colorschemes/catppuccin-mocha.sh`
-2. Run `./reload_colors.sh` to apply changes everywhere
+Chrome requires this unpacked-extension approval in the browser.
 
-### Adding a New Colorscheme
+## One-Time Setup
 
-1. Create `colorschemes/my-scheme.sh` based on `catppuccin-mocha.sh`
-2. Update the symlink: `ln -sf my-scheme.sh colorschemes/colors.sh`
-3. Run `./reload_colors.sh`
+Add idempotent setup scripts under `home/.chezmoiscripts/` using chezmoi's
+`run_once_` naming convention:
 
-## Tools Used
+```text
+home/.chezmoiscripts/run_once_after_setup-example.sh
+```
 
-- [yabai](https://github.com/koekeishiya/yabai) - Tiling window manager
-- [skhd](https://github.com/koekeishiya/skhd) - Hotkey daemon
-- [Yazi](https://github.com/sxyazi/yazi) - Terminal file manager
-- [Catppuccin](https://github.com/catppuccin/catppuccin) - Color scheme
+Use `run_onchange_` when a script should run again after its contents change.
 
 ## Shell Secrets
 
-`zshrc` will source `~/.zshrc.secrets` when present. Keep machine-specific values
-and tokens there, and use `zshrc.secrets.example` as the template.
+`~/.zshrc` sources `~/.zshrc.secrets` when present. Keep machine-specific
+values and tokens there. `zshrc.secrets.example` is the repository template.
 
-## Yazi Integration
+## Commands
 
-- `zshrc` includes a `y` wrapper that returns you to the directory you exit from.
-- `config/yazi/keymap.toml` includes:
-  - `!` to open an interactive shell in the current directory
-  - `Esc` to close input prompts with one press
-  - `gr` to jump to the current git repo root
-- `config/yazi/init.lua` enables zoxide DB updates from Yazi.
-
-## Configuration Details
-
-### Window Manager
-
-- Layout: BSP (Binary Space Partitioning)
-- Padding: 0px top, 3px bottom/left/right
-- No gaps between windows
-- External bar offset: 40px (top)
-
-## Testing
-
-A comprehensive test suite is included to prevent regressions when making changes.
-
-### Running Tests
-
-Run all tests:
 ```bash
 make test
+make diff
+make install
+make watch
+make reload
+default-apps
 ```
 
-Run individual test suites:
-```bash
-make test-colorscheme     # Test color definitions and exports
-make test-configs         # Test skhdrc and yabairc
-make test-symlinks        # Test symlink integrity
-make test-install         # Test installer with a disposable home directory
-make test-integration     # Test end-to-end integration
-```
+## Keyboard Shortcuts
 
-Or run test scripts directly:
-```bash
-./tests/run_all_tests.sh              # Run all tests
-./tests/test_colorscheme.sh           # Individual suite
-```
-
-### Test Coverage
-
-The test suite validates:
-- **Colorscheme**: Color variables are properly defined and exported
-- **Configs**: Core keybindings are present and syntax is valid
-- **Symlinks**: All symlinks point to correct locations and targets exist
-- **Integration**: Components work together and core services are running
-
-### Best Practices
-
-- Run `make test` before committing changes
-- All tests should pass before pushing to remote
-- Add tests for new features to prevent regressions
-
-### Adding New Tests
-
-When adding features:
-1. Add test cases to appropriate test file in `tests/`
-2. Run `make test` to ensure no regressions
-3. Commit tests alongside feature changes
+- `alt + n`: create a space and focus it
+- `alt + shift + ~`: open a Ghostty window in the current space
+- `alt + backtick`: focus Ghostty
+- `alt + r`: restart yabai and skhd
+- `alt + /`: show the keybinding cheat sheet

@@ -1,6 +1,7 @@
 tap "asmvik/formulae"
 
 brew "antigen"
+brew "chezmoi"
 brew "fswatch"
 brew "asmvik/formulae/yabai"
 brew "asmvik/formulae/skhd"

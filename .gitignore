@@ -4,3 +4,6 @@
 
 # Ignore local shell secrets
 zshrc.secrets
+
+# Chrome extension repositories are declared as chezmoi externals.
+/extensions/

@@ -1,4 +1,4 @@
-.PHONY: test test-colorscheme test-configs test-symlinks test-install test-integration install compile sync watch reload clean help
+.PHONY: test test-colorscheme test-configs test-source-state test-install test-integration install compile sync diff watch reload clean help
 
 # Default target
 help:
@@ -8,13 +8,14 @@ help:
 	@echo "  make test              - Run all tests"
 	@echo "  make test-colorscheme  - Run colorscheme tests only"
 	@echo "  make test-configs      - Run config file tests only"
-	@echo "  make test-symlinks     - Run symlink integrity tests only"
+	@echo "  make test-source-state - Run chezmoi source-state tests only"
 	@echo "  make test-install      - Run disposable installer tests only"
 	@echo "  make test-integration  - Run integration tests only"
-	@echo "  make install           - Install dotfiles (create symlinks)"
-	@echo "  make compile           - Alias for install (sync commands)"
-	@echo "  make sync              - Alias for install (sync commands)"
-	@echo "  make watch             - Auto-reinstall on file changes"
+	@echo "  make install           - Apply dotfiles with chezmoi"
+	@echo "  make compile           - Alias for install"
+	@echo "  make sync              - Alias for install"
+	@echo "  make diff              - Preview chezmoi changes"
+	@echo "  make watch             - Auto-apply source-state changes"
 	@echo "  make reload            - Reload configurations"
 	@echo "  make clean             - Clean up temporary files"
 
@@ -29,8 +30,8 @@ test-colorscheme:
 test-configs:
 	@./tests/test_configs.sh
 
-test-symlinks:
-	@./tests/test_symlinks.sh
+test-source-state:
+	@./tests/test_source_state.sh
 
 test-install:
 	@./tests/test_install.sh
@@ -38,7 +39,7 @@ test-install:
 test-integration:
 	@./tests/test_integration.sh
 
-# Install dotfiles
+# Apply dotfiles
 install:
 	@./install.sh
 
@@ -46,13 +47,17 @@ install:
 compile: install
 sync: install
 
+# Preview dotfile changes
+diff:
+	@chezmoi -S "$(CURDIR)" diff
+
 # Watch for changes and auto-sync (macOS: requires fswatch)
 watch:
-	@./scripts/watch-sync.sh
+	@./home/bin/executable_watch-sync
 
 # Reload configurations
 reload:
-	@./reload_colors.sh
+	@reload-colors
 
 # Clean temporary files
 clean:

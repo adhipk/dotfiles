@@ -53,7 +53,7 @@ assert_command_exists "jq" "jq is installed"
 
 echo ""
 echo "Testing colorscheme can be sourced..."
-if source "$DOTFILES_DIR/colorschemes/colors.sh" 2>/dev/null; then
+if source "$DOTFILES_DIR/home/dot_config/colorschemes/executable_catppuccin-mocha.sh" 2>/dev/null; then
     echo "  ✓ Colorscheme sources without errors"
     ((PASSED++))
 
@@ -71,21 +71,21 @@ else
 fi
 
 echo ""
-echo "Testing reload_colors.sh script..."
-if [ -x "$DOTFILES_DIR/reload_colors.sh" ]; then
-    echo "  ✓ reload_colors.sh is executable"
+echo "Testing reload-colors helper..."
+if [ -x "$DOTFILES_DIR/home/bin/executable_reload-colors" ]; then
+    echo "  ✓ reload-colors is executable"
     ((PASSED++))
 
     # Check it restarts services
-    if grep -q "restart-service" "$DOTFILES_DIR/reload_colors.sh"; then
-        echo "  ✓ reload_colors.sh restarts services"
+    if grep -q "restart-service" "$DOTFILES_DIR/home/bin/executable_reload-colors"; then
+        echo "  ✓ reload-colors restarts services"
         ((PASSED++))
     else
-        echo "  ✗ reload_colors.sh doesn't restart services"
+        echo "  ✗ reload-colors doesn't restart services"
         ((FAILED++))
     fi
 else
-    echo "  ✗ reload_colors.sh is not executable"
+    echo "  ✗ reload-colors is not executable"
     ((FAILED++))
 fi
 
@@ -95,21 +95,21 @@ if [ -x "$DOTFILES_DIR/install.sh" ]; then
     echo "  ✓ install.sh is executable"
     ((PASSED++))
 
-    # Check it creates core config directories
-    if grep -q "mkdir.*config/skhd" "$DOTFILES_DIR/install.sh" && grep -q "mkdir.*config/yabai" "$DOTFILES_DIR/install.sh"; then
-        echo "  ✓ install.sh creates core config directories"
+    # Check it delegates desired-state application to chezmoi.
+    if grep -q "chezmoi.*apply" "$DOTFILES_DIR/install.sh"; then
+        echo "  ✓ install.sh applies the chezmoi source state"
         ((PASSED++))
     else
-        echo "  ✗ install.sh doesn't create core config directories"
+        echo "  ✗ install.sh doesn't apply the chezmoi source state"
         ((FAILED++))
     fi
 
-    # Check it creates symlinks
-    if grep -q "ln -sf" "$DOTFILES_DIR/install.sh"; then
-        echo "  ✓ install.sh creates symlinks"
+    # Check the source state declares core configs.
+    if [ -f "$DOTFILES_DIR/home/dot_config/skhd/executable_focus_app.sh" ] && [ -f "$DOTFILES_DIR/home/dot_config/yabai/executable_close_empty_spaces.sh" ]; then
+        echo "  ✓ source state declares core config directories"
         ((PASSED++))
     else
-        echo "  ✗ install.sh doesn't create symlinks"
+        echo "  ✗ source state is missing core config directories"
         ((FAILED++))
     fi
 else
@@ -209,7 +209,7 @@ fi
 
 echo ""
 echo "Testing no border integration remains..."
-if ! grep -R "config/borders\\|mark_window.sh\\|update_border.sh" "$DOTFILES_DIR"/{install.sh,skhdrc,yabairc,README.md} > /dev/null 2>&1; then
+if ! grep -R "config/borders\\|mark_window.sh\\|update_border.sh" "$DOTFILES_DIR/install.sh" "$DOTFILES_DIR/home/dot_skhdrc" "$DOTFILES_DIR/home/dot_yabairc" "$DOTFILES_DIR/README.md" > /dev/null 2>&1; then
     echo "  ✓ Border integration removed from core configs"
     ((PASSED++))
 else

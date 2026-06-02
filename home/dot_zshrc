@@ -1,11 +1,10 @@
 # Minimal zsh configuration
-DOTFILES_DIR="${DOTFILES_DIR:-${${(%):-%N}:A:h}}"
 export PATH="$HOME/.local/bin:$PATH"
 export PATH="/opt/homebrew/opt/openjdk/bin:$PATH"
 export EDITOR=nvim
-
+export MANPAGER="sh -c 'col -bx | bat --paging=always -l man -p'"
 # Zsh plugins
-source "$DOTFILES_DIR/zshrc.commands"
+source "$HOME/.config/zsh/zshrc.commands"
 if [ -f "$HOME/antigen.zsh" ]; then
     source "$HOME/antigen.zsh"
 elif [ -f /opt/homebrew/share/antigen/antigen.zsh ]; then
@@ -18,7 +17,7 @@ antigen bundle zsh-users/zsh-completions
 antigen bundle zsh-users/zsh-syntax-highlighting
 antigen bundle zsh-users/zsh-history-substring-search
 # Starship prompt
-export STARSHIP_CONFIG="$DOTFILES_DIR/starship.toml"
+export STARSHIP_CONFIG="$HOME/.config/starship.toml"
 antigen apply
 eval "$(starship init zsh)"
 bindkey '^[[A' history-substring-search-up # or '\eOA'
@@ -28,7 +27,7 @@ HISTORY_SUBSTRING_SEARCH_ENSURE_UNIQUE=1
 source zsh-syntax-highlighting.zsh
 source zsh-history-substring-search.zsh
 # Docker completions
-fpath=(/Users/adhipkashyap/.docker/completions $fpath)
+fpath=("$HOME/.docker/completions" $fpath)
 autoload -Uz compinit
 compinit
 
@@ -36,7 +35,7 @@ compinit
 alias python=python3
 
 # bun completions
-[ -s "/Users/adhipkashyap/.bun/_bun" ] && source "/Users/adhipkashyap/.bun/_bun"
+[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
 
 # bun
 export BUN_INSTALL="$HOME/.bun"
@@ -74,7 +73,7 @@ export PATH="$VAPI_INSTALL/bin:$PATH"
 export MANPATH=""$HOME/.vapi"/share/man:$MANPATH"
 
 # pnpm
-export PNPM_HOME="/Users/adhipkashyap/Library/pnpm"
+export PNPM_HOME="$HOME/Library/pnpm"
 case ":$PATH:" in
   *":$PNPM_HOME:"*) ;;
   *) export PATH="$PNPM_HOME:$PATH" ;;
@@ -82,7 +81,7 @@ esac
 # pnpm end
 
 #tmux-sessionizer setup
-export TMUX_SESSIONIZER_PATH='/Users/adhipkashyap/tmux-sessionizer'
+export TMUX_SESSIONIZER_PATH="$HOME/tmux-sessionizer"
 export PATH="$TMUX_SESSIONIZER_PATH:$PATH"
 
 bindkey -s '\ef' "tmux-sessionizer-zoxide\n"  # Alt+f (uses zoxide frecency)

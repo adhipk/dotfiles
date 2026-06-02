@@ -4,7 +4,7 @@
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOTFILES_DIR="$(dirname "$TEST_DIR")"
-COLORSCHEME="$DOTFILES_DIR/colorschemes/catppuccin-mocha.sh"
+COLORSCHEME="$DOTFILES_DIR/home/dot_config/colorschemes/executable_catppuccin-mocha.sh"
 
 PASSED=0
 FAILED=0

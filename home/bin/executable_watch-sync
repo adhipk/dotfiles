@@ -7,22 +7,22 @@ if ! command -v fswatch >/dev/null 2>&1; then
   exit 1
 fi
 
-dotfiles_dir="${DOTFILES_DIR:-$HOME/dotfiles}"
+dotfiles_dir="${DOTFILES_DIR:-$(chezmoi source-path)}"
+source_state_dir="$dotfiles_dir"
+if [ -f "$dotfiles_dir/.chezmoiroot" ]; then
+  source_state_dir="$dotfiles_dir/$(cat "$dotfiles_dir/.chezmoiroot")"
+fi
 
 echo "watch-sync: watching for changes..."
-echo "  - ${dotfiles_dir}/scripts/"
-echo "  - ${dotfiles_dir}/config/skhd/"
-echo "  - ${dotfiles_dir}/config/yabai/"
+echo "  - ${source_state_dir}/"
 echo ""
-echo "Will run: ${dotfiles_dir}/install.sh"
+echo "Will run: chezmoi -S ${dotfiles_dir} apply"
 
 fswatch -o \
-  "${dotfiles_dir}/scripts" \
-  "${dotfiles_dir}/config/skhd" \
-  "${dotfiles_dir}/config/yabai" \
+  "$source_state_dir" \
   | while read -r _; do
       echo ""
       echo "watch-sync: change detected, syncing..."
-      "${dotfiles_dir}/install.sh"
+      chezmoi -S "$dotfiles_dir" apply
       echo "watch-sync: done."
     done

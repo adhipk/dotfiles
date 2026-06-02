@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/chrome-extensions"
+mkdir -p "$state_dir"
+
+{{ range .chromeExtensions -}}
+extension_dir="$HOME/.local/share/chrome-extensions/{{ .name }}"
+stamp_file="$state_dir/{{ .name }}.revision"
+unpacked_dir="$extension_dir/{{ .unpackedPath }}"
+
+if [ ! -d "$extension_dir/.git" ]; then
+    echo "chezmoi: skipping {{ .name }} build because the repository is missing" >&2
+elif ! command -v {{ .packageManager }} >/dev/null 2>&1; then
+    echo "chezmoi: skipping {{ .name }} build because '{{ .packageManager }}' is not in PATH" >&2
+else
+    revision="$(git -C "$extension_dir" rev-parse HEAD)"
+    previous_revision="$(cat "$stamp_file" 2>/dev/null || true)"
+
+    if [ "$revision" != "$previous_revision" ] || [ ! -f "$unpacked_dir/manifest.json" ]; then
+        echo "chezmoi: building Chrome extension {{ .name }}"
+        (
+            cd "$extension_dir"
+            {{ .installCommand }}
+            {{ .buildCommand }}
+        )
+        printf '%s\n' "$revision" > "$stamp_file"
+    fi
+fi
+
+{{ end -}}

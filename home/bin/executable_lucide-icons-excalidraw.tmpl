@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+EXTENSION_DIR={{ joinPath .chezmoi.workingTree "commands/lucide-icons-excalidraw" | quote }}
+
+cd "$EXTENSION_DIR"
+exec npm run dev -- "$@"

@@ -4,8 +4,8 @@
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOTFILES_DIR="$(dirname "$TEST_DIR")"
-SKHDRC="$DOTFILES_DIR/skhdrc"
-YABAIRC="$DOTFILES_DIR/yabairc"
+SKHDRC="$DOTFILES_DIR/home/dot_skhdrc"
+YABAIRC="$DOTFILES_DIR/home/dot_yabairc"
 
 PASSED=0
 FAILED=0
@@ -119,6 +119,9 @@ assert_contains "$YABAIRC" "yabai --load-sa" "Loads scripting addition"
 
 # Test layout is BSP
 assert_contains "$YABAIRC" "layout.*bsp" "Uses BSP layout"
+
+# Removed in yabai 7.1.17
+assert_not_contains "$YABAIRC" "window_topmost" "Removed window_topmost option is not configured"
 
 # Test padding is configured
 assert_contains "$YABAIRC" "top_padding" "Top padding configured"

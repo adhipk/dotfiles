@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Script to reload all configurations after changing colorscheme
-# Usage: ./reload_colors.sh
+# Usage: reload-colors
 
 set -e
 

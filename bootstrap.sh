@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DOTFILES_DIR="${DOTFILES_DIR:-$HOME/dotfiles}"
+DOTFILES_DIR="${DOTFILES_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 BREWFILE="$DOTFILES_DIR/Brewfile"
 export DOTFILES_DIR
 
@@ -31,7 +31,7 @@ else
   exit 1
 fi
 
-echo "Installing dotfiles..."
+echo "Applying chezmoi source state..."
 "$DOTFILES_DIR/install.sh"
 
 echo ""

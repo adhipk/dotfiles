@@ -113,7 +113,7 @@ ta api
 
 5. **Colors match your catppuccin-mocha theme**
 
-6. **Auto-reloads with `alt+r`** (via reload_colors.sh)
+6. **Auto-reloads with `alt+r`** (via the `reload-colors` helper)
 
 ## Troubleshooting
 
