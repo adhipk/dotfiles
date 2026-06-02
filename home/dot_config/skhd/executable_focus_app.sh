@@ -1,7 +1,30 @@
 #!/usr/bin/env bash
 
-ARG="$1"
+PRESENTATION_MODE=false
+PRESENTATION_MODE_FILE="$HOME/.config/skhd/presentation_mode"
+
+while [[ "${1:-}" == --* ]]; do
+    case "$1" in
+        --single-window|--presentation)
+            PRESENTATION_MODE=true
+            shift
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+ARG="${1:-}"
 LAUNCH_CMD=""
+
+if [ -f "$PRESENTATION_MODE_FILE" ] && [ "$(cat "$PRESENTATION_MODE_FILE" 2>/dev/null)" = "on" ]; then
+    PRESENTATION_MODE=true
+fi
 
 # Resolve macOS default handlers at invocation time so changes made in System
 # Settings take effect without updating this file.
@@ -77,6 +100,9 @@ FOCUSED_APP=$(yabai -m query --windows --window 2>/dev/null | jq -r '.app // emp
 
 # App is already focused
 if [ "$FOCUSED_APP" = "$APP" ]; then
+    if [ "$PRESENTATION_MODE" = true ]; then
+        exit 0
+    fi
 
     # Single window — toggle off: go back to the previous window
     if [ "$WINDOW_COUNT" -eq 1 ]; then
