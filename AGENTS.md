@@ -2,7 +2,7 @@
 
 ## Key Bindings (skhd)
 - `alt + n` creates a new space and focuses it.
-- `alt + shift + ~` opens a new Ghostty window in the current space.
+- `alt + shift + ~` toggles the Ghostty scratchpad.
 - `alt + backtick` focuses Ghostty (app focus shortcut).
 
 ## Terminal Defaults

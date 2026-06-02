@@ -94,6 +94,9 @@ values and tokens there. `zshrc.secrets.example` is the repository template.
 
 ## Commands
 
+See [COMMANDS.md](COMMANDS.md) for the complete command, script, utility, and
+shortcut reference.
+
 ```bash
 make test
 make diff
@@ -116,7 +119,7 @@ bundle ID.
 ## Keyboard Shortcuts
 
 - `alt + n`: create a space and focus it
-- `alt + shift + ~`: open a Ghostty window in the current space
+- `alt + shift + ~`: toggle the Ghostty scratchpad
 - `alt + backtick`: focus Ghostty
 - `alt + r`: restart yabai and skhd
 - `alt + /`: show the keybinding cheat sheet

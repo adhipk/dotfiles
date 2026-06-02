@@ -5,7 +5,7 @@
 **Your workflow:**
 - **yabai** manages physical window placement (tiling windows on macOS)
 - **tmux** manages terminal sessions/panes inside Ghostty windows
-- **tmux-sessionizer** (Ctrl+F) quickly switches between project sessions
+- **tmux-sessionizer** (`Alt+f`) quickly switches between project sessions
 
 ## Quick Start
 
@@ -74,7 +74,7 @@ tmux new -s frontend
 
 ### Option 2: Use tmux-sessionizer (already configured!)
 ```bash
-# Press Ctrl+F to fuzzy find projects
+# Press Alt+f to fuzzy find projects
 # Switch between sessions instantly
 # Works great with your existing setup
 ```
@@ -113,7 +113,8 @@ ta api
 
 5. **Colors match your catppuccin-mocha theme**
 
-6. **Auto-reloads with `alt+r`** (via the `reload-colors` helper)
+6. **Reload deliberately** - `alt+r` restarts yabai and skhd. Run
+   `reload-colors` to restart those services and reload tmux configuration.
 
 ## Troubleshooting
 
