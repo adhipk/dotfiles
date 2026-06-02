@@ -102,7 +102,16 @@ make apply-debug
 make watch
 make reload
 default-apps
+default-apps list
+default-apps get .md
+default-apps set .md Obsidian
+default-apps set https: Safari
+default-apps --help
 ```
+
+`default-apps` prints macOS handlers and changes extension or URL-scheme
+defaults. The app argument may be an application name, application path, or
+bundle ID.
 
 ## Keyboard Shortcuts
 
