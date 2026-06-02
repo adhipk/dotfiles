@@ -97,7 +97,8 @@ values and tokens there. `zshrc.secrets.example` is the repository template.
 ```bash
 make test
 make diff
-make install
+make apply
+make apply-debug
 make watch
 make reload
 default-apps

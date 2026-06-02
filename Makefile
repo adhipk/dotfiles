@@ -1,4 +1,4 @@
-.PHONY: test test-colorscheme test-configs test-source-state test-install test-integration install compile sync diff watch reload clean help
+.PHONY: test test-colorscheme test-configs test-source-state test-install test-integration install apply apply-debug compile sync diff watch reload clean help
 
 # Default target
 help:
@@ -12,6 +12,8 @@ help:
 	@echo "  make test-install      - Run disposable installer tests only"
 	@echo "  make test-integration  - Run integration tests only"
 	@echo "  make install           - Apply dotfiles with chezmoi"
+	@echo "  make apply             - Alias for install"
+	@echo "  make apply-debug       - Apply dotfiles with verbose chezmoi output"
 	@echo "  make compile           - Alias for install"
 	@echo "  make sync              - Alias for install"
 	@echo "  make diff              - Preview chezmoi changes"
@@ -44,6 +46,9 @@ install:
 	@./install.sh
 
 # Alias targets (habit-friendly)
+apply: install
+apply-debug:
+	@DOTFILES_DEBUG=1 ./install.sh
 compile: install
 sync: install
 

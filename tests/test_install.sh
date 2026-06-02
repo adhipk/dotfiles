@@ -36,7 +36,7 @@ echo "Installer Tests"
 echo "================================"
 
 mkdir -p "$FAKE_BIN"
-printf '#!/usr/bin/env bash\nprintf \"%%s\\\\n\" \"$*\" > \"$CHEZMOI_ARGS_FILE\"\n' > "$FAKE_BIN/chezmoi"
+printf '#!/usr/bin/env bash\nprintf \"%%s\\\\n\" \"$*\" >> \"$CHEZMOI_ARGS_FILE\"\n' > "$FAKE_BIN/chezmoi"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$FAKE_BIN/brew"
 chmod +x "$FAKE_BIN/chezmoi" "$FAKE_BIN/brew"
 
