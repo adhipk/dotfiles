@@ -85,7 +85,7 @@ fi
 
 # Get all non-minimized, non-hidden window IDs for this app (including other displays)
 WINDOWS=$(echo "$ALL_WINDOWS" | jq -r --arg app "$APP" \
-    '[.[] | select(.app == $app and ."is-minimized" == false and ."is-hidden" == false)] | sort_by(.id) | .[].id')
+    '[.[] | select(.app == $app and ."is-minimized" == false and ."is-hidden" == false and ((.scratchpad // "") | length == 0))] | sort_by(.id) | .[].id')
 
 if [ -z "$WINDOWS" ]; then
     eval "$LAUNCH_CMD"
@@ -141,7 +141,7 @@ fi
 CURRENT_SPACE=$(yabai -m query --spaces --space | jq -r '.index')
 CURRENT_DISPLAY=$(yabai -m query --displays --display | jq -r '.index')
 BEST=$(echo "$ALL_WINDOWS" | jq -r --arg app "$APP" --arg space "$CURRENT_SPACE" --arg display "$CURRENT_DISPLAY" \
-    '[.[] | select(.app == $app and ."is-minimized" == false and ."is-hidden" == false)] |
+    '[.[] | select(.app == $app and ."is-minimized" == false and ."is-hidden" == false and ((.scratchpad // "") | length == 0))] |
      sort_by(
        if .space == ($space | tonumber) then 0 else 1 end,
        if .display == ($display | tonumber) then 0 else 1 end,

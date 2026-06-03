@@ -139,6 +139,7 @@ bundle ID.
 - tap `caps lock`: toggle Caps Lock
 - hold `caps lock`: send `ctrl + opt + cmd`
 - `alt + n`: create a space and focus it
+- `hyper + n`: open the spotlight Ghostty terminal with its own lightweight zshrc
 - `alt + shift + ~`: toggle the Ghostty scratchpad
 - `alt + backtick`: focus Ghostty
 - `alt + r`: restart yabai and skhd

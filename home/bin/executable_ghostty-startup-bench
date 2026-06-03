@@ -1,0 +1,245 @@
+#!/usr/bin/env zsh
+
+set -euo pipefail
+
+zmodload zsh/datetime
+
+iterations="${1:-5}"
+spotlight_zdotdir="${SPOTLIGHT_ZDOTDIR:-$HOME/.config/zsh/spotlight}"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ghostty-startup-bench [iterations]
+
+Benchmarks:
+  shell: default login zsh startup
+  shell: spotlight login zsh startup
+  ghostty: +new-window time until yabai sees the window
+  ghostty: open -n -a time until yabai sees the window
+
+Set GHOSTTY_STARTUP_BENCH_SHELL_ONLY=1 to skip GUI window benchmarks.
+EOF
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
+if ! [[ "$iterations" =~ '^[0-9]+$' ]] || (( iterations < 1 )); then
+  printf 'iterations must be a positive integer\n' >&2
+  exit 1
+fi
+
+now_ms() {
+  printf '%.0f\n' "$(( EPOCHREALTIME * 1000 ))"
+}
+
+duration_ms() {
+  local start="$1"
+  local end
+  end=$(now_ms)
+  printf '%d\n' "$(( end - start ))"
+}
+
+run_timed() {
+  local start
+  start=$(now_ms)
+  "$@" >/dev/null 2>&1
+  duration_ms "$start"
+}
+
+summary() {
+  local label="$1"
+  shift
+  local values=("$@")
+  local count="${#values[@]}"
+  local sorted sum min max avg p50 p95 idx95
+
+  sorted=($(printf '%s\n' "${values[@]}" | sort -n))
+  min="${sorted[1]}"
+  max="${sorted[$count]}"
+  sum=0
+  for value in "${values[@]}"; do
+    (( sum += value ))
+  done
+  avg="$(( sum / count ))"
+  p50="${sorted[$(( (count + 1) / 2 ))]}"
+  idx95="$(( (count * 95 + 99) / 100 ))"
+  (( idx95 < 1 )) && idx95=1
+  (( idx95 > count )) && idx95="$count"
+  p95="${sorted[$idx95]}"
+
+  printf '%-28s min=%4sms p50=%4sms avg=%4sms p95=%4sms max=%4sms samples=%s\n' \
+    "$label" "$min" "$p50" "$avg" "$p95" "$max" "$(IFS=,; printf '%s' "${values[*]}")"
+}
+
+bench_shell() {
+  local label="$1"
+  shift
+  local samples=()
+
+  for _ in $(seq 1 "$iterations"); do
+    samples+=("$(run_timed "$@")")
+  done
+
+  summary "$label" "${samples[@]}"
+}
+
+ghostty_window_ids_json() {
+  local windows_json
+  windows_json="$(yabai -m query --windows 2>/dev/null || true)"
+  if [[ -z "$windows_json" ]]; then
+    printf '[]\n'
+    return 0
+  fi
+
+  printf '%s\n' "$windows_json" | jq -c '[ .[] | select(.app == "Ghostty") | .id ]'
+}
+
+wait_for_ghostty_window() {
+  local title="$1"
+  local before_json="$2"
+  local deadline="$(( $(now_ms) + 5000 ))"
+  local windows_json
+  local win_id
+
+  while (( $(now_ms) < deadline )); do
+    windows_json="$(yabai -m query --windows 2>/dev/null || true)"
+    if [[ -n "$windows_json" ]]; then
+      win_id="$(printf '%s\n' "$windows_json" | jq -r --arg title "$title" --argjson before "$before_json" '
+        (
+          [ .[] | select(.app == "Ghostty") | select(.title == $title) | .id ] |
+          last // empty
+        ) as $title_match |
+        if $title_match != "" then
+          $title_match
+        else
+          ([ .[] | select(.app == "Ghostty") | .id ] - $before | last // empty)
+        end
+      ')"
+      if [[ -n "$win_id" ]]; then
+        printf '%s\n' "$win_id"
+        return 0
+      fi
+    fi
+    sleep 0.02
+  done
+
+  return 1
+}
+
+close_window_id() {
+  local win_id="$1"
+  yabai -m window "$win_id" --close >/dev/null 2>&1 || true
+}
+
+ghostty_new_window_supported() {
+  command -v ghostty >/dev/null 2>&1 || return 1
+  [[ "$(uname -s)" != "Darwin" ]] || return 1
+  ghostty +new-window --help >/dev/null 2>&1
+}
+
+bench_ghostty_window() {
+  local label="$1"
+  shift
+  local samples=()
+  local i title start win_id before_json
+
+  for i in $(seq 1 "$iterations"); do
+    title="ghostty-bench:${label}:${$}:${i}"
+    before_json="$(ghostty_window_ids_json)"
+    start=$(now_ms)
+    if ! "$@" "$title"; then
+      printf '%-28s launch failed; skipping remaining samples\n' "$label" >&2
+      break
+    fi
+    if win_id="$(wait_for_ghostty_window "$title" "$before_json")"; then
+      samples+=("$(duration_ms "$start")")
+      close_window_id "$win_id"
+    else
+      printf '%-28s sample %d timed out waiting for window title\n' "$label" "$i" >&2
+    fi
+    sleep 0.15
+  done
+
+  if (( ${#samples[@]} > 0 )); then
+    summary "$label" "${samples[@]}"
+  fi
+
+  return 0
+}
+
+launch_ghostty_new_window() {
+  local title="$1"
+  ghostty +new-window \
+    --title="$title" \
+    --working-directory="$HOME" \
+    --command='sh -c "sleep 10"' >/dev/null 2>&1
+}
+
+launch_ghostty_open() {
+  local title="$1"
+  open -n -a Ghostty --args \
+    --title="$title" \
+    --working-directory="$HOME" \
+    --command='direct:/bin/cat'
+}
+
+launch_ghostty_open_minimal() {
+  local title="$1"
+  open -n -a Ghostty --args \
+    --config-default-files=false \
+    --shell-integration=none \
+    --title="$title" \
+    --working-directory="$HOME" \
+    --command='direct:/bin/cat'
+}
+
+launch_ghostty_open_spotlight_default() {
+  local title="$1"
+  open -n -a Ghostty --args \
+    --title="$title" \
+    --working-directory="$HOME" \
+    --command="direct:$HOME/bin/spotlight-zsh"
+}
+
+launch_ghostty_open_spotlight() {
+  local title="$1"
+  open -n -a Ghostty --args \
+    --config-default-files=false \
+    --shell-integration=none \
+    --title="$title" \
+    --working-directory="$HOME" \
+    --command="direct:$HOME/bin/spotlight-zsh"
+}
+
+printf 'iterations=%s spotlight_zdotdir=%s\n' "$iterations" "$spotlight_zdotdir"
+if ghostty_new_window_supported; then
+  printf 'ghostty +new-window supported=yes\n'
+else
+  printf 'ghostty +new-window supported=no\n'
+fi
+
+bench_shell "zsh login default" /bin/zsh -lic "exit 0"
+bench_shell "zsh login spotlight" env ZDOTDIR="$spotlight_zdotdir" SPOTLIGHT_SHELL=1 /bin/zsh -lic "exit 0"
+
+if [[ "${GHOSTTY_STARTUP_BENCH_SHELL_ONLY:-0}" == "1" ]]; then
+  exit 0
+fi
+
+if command -v yabai >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+  if ghostty_new_window_supported; then
+    bench_ghostty_window "ghostty +new-window" launch_ghostty_new_window
+  fi
+
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    bench_ghostty_window "open default cat" launch_ghostty_open
+    bench_ghostty_window "open minimal cat" launch_ghostty_open_minimal
+    bench_ghostty_window "open default spotlight" launch_ghostty_open_spotlight_default
+    bench_ghostty_window "open minimal spotlight" launch_ghostty_open_spotlight
+  fi
+else
+  printf 'Skipping Ghostty window benchmarks; requires yabai and jq.\n' >&2
+fi

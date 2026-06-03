@@ -175,6 +175,7 @@ operations to these shortcuts:
 | `Alt+n` | Create and focus a new space. |
 | `Alt+k` | Close empty spaces. |
 | `Alt+Backtick`, `Alt+1..4` | Focus Ghostty, the default browser, the default Markdown editor, Teams, or Slack. |
+| `Ctrl+Alt+Cmd+n` | Toggle the spotlight Ghostty terminal using `~/.config/zsh/spotlight/.zshrc`. |
 | `Alt+Shift+Backtick` | Toggle the Ghostty scratchpad. |
 | `Ctrl+Alt+w`, `Ctrl+Alt+z` | Close or minimize the current window. |
 | `Alt+r` | Restart yabai and skhd. |

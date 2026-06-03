@@ -75,6 +75,7 @@ for file in \
     dot_tmux.conf \
     dot_config/private_karabiner/karabiner.json \
     dot_config/zsh/zshrc.commands \
+    dot_config/zsh/spotlight/dot_zshrc \
     dot_config/starship.toml \
     dot_config/yazi/init.lua \
     dot_config/yazi/keymap.toml \
@@ -88,6 +89,8 @@ echo ""
 echo "Testing managed helper commands..."
 for file in \
     executable_watch-sync \
+    executable_ghostty-startup-bench \
+    executable_spotlight-zsh \
     executable_lucide-icons-excalidraw.tmpl \
     executable_reload-colors \
     executable_hotkeys \
@@ -104,6 +107,7 @@ echo ""
 echo "Testing scratchpad implementation..."
 assert_not_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" 'SCRATCHPAD_STATE_FILE' "Scratchpads CLI does not use a JSON registry"
 assert_not_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" 'scratchpads\.json' "Scratchpads CLI does not persist window IDs"
+assert_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_focus_app.sh" 'scratchpad // ""' "App focus helper excludes scratchpad windows"
 
 echo ""
 echo "Testing extension declarations..."
