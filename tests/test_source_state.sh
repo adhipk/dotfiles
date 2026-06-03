@@ -43,6 +43,21 @@ assert_contains() {
     fi
 }
 
+assert_not_contains() {
+    local file="$1"
+    local pattern="$2"
+    local test_name="$3"
+
+    if grep -q "$pattern" "$file"; then
+        echo "  ✗ $test_name"
+        echo "    Unexpected pattern found: $pattern"
+        ((FAILED++))
+    else
+        echo "  ✓ $test_name"
+        ((PASSED++))
+    fi
+}
+
 echo "================================"
 echo "Chezmoi Source-State Tests"
 echo "================================"
@@ -84,6 +99,11 @@ for file in \
     executable_unescape-string; do
     assert_file_exists "$DOTFILES_DIR/home/bin/$file" "$file is declared"
 done
+
+echo ""
+echo "Testing scratchpad implementation..."
+assert_not_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" 'SCRATCHPAD_STATE_FILE' "Scratchpads CLI does not use a JSON registry"
+assert_not_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" 'scratchpads\.json' "Scratchpads CLI does not persist window IDs"
 
 echo ""
 echo "Testing extension declarations..."

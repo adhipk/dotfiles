@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/external-projects"
+mkdir -p "$state_dir"
+
+{{ range .externalProjects -}}
+project_name="{{ .name }}"
+project_dir="$HOME/{{ .path }}"
+stamp_file="$state_dir/{{ .name }}.revision"
+missing_executable=""
+
+if [ ! -d "$project_dir/.git" ]; then
+    echo "chezmoi: skipping $project_name setup because the repository is missing" >&2
+else
+    missing_path=""
+    {{- range .requiredExecutables }}
+    if ! command -v {{ . }} >/dev/null 2>&1; then
+        missing_executable="{{ . }}"
+    fi
+    {{- end }}
+    {{- range .rerunWhenMissingPaths }}
+    if [ -z "$missing_path" ] && [ ! -e "$project_dir/{{ . }}" ]; then
+        missing_path="{{ . }}"
+    fi
+    {{- end }}
+
+    if [ -n "$missing_executable" ]; then
+        echo "chezmoi: skipping $project_name setup because '$missing_executable' is not in PATH" >&2
+    else
+        revision="$(git -C "$project_dir" rev-parse HEAD)"
+        previous_revision="$(cat "$stamp_file" 2>/dev/null || true)"
+
+        if [ "$revision" != "$previous_revision" ] || [ -n "$missing_path" ]; then
+            echo "chezmoi: setting up external project $project_name"
+            (
+                cd "$project_dir"
+                {{- range .setupCommands }}
+                {{ . }}
+                {{- end }}
+            )
+            printf '%s\n' "$revision" > "$stamp_file"
+        fi
+    fi
+fi
+
+{{ end -}}

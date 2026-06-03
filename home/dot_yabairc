@@ -10,6 +10,9 @@ else
   echo "yabai scripting addition unavailable; skipping automatic space creation." >&2
 fi
 
+yabai -m signal --remove "hide_scratchpads_on_focus_change" >/dev/null 2>&1 || true
+yabai -m signal --remove "hide_scratchpads_on_app_switch" >/dev/null 2>&1 || true
+yabai -m signal --remove "hide_scratchpads_on_app_deactivate" >/dev/null 2>&1 || true
 yabai -m signal --add label="hide_scratchpads_on_focus_change" event="window_focused" action="$HOME/bin/scratchpads blur-close"
 yabai -m signal --add label="hide_scratchpads_on_app_switch" event="application_front_switched" action="$HOME/bin/scratchpads blur-close"
 yabai -m signal --add label="hide_scratchpads_on_app_deactivate" event="application_deactivated" action="$HOME/bin/scratchpads blur-close"
@@ -58,6 +61,10 @@ yabai -m rule --add app="^App Store$"        manage=off
 yabai -m rule --add app="^System Information$" manage=off
 yabai -m rule --add app="^Keychain Access$"  manage=off
 yabai -m rule --add title="^skhd keys$"     manage=off
+
+# Scratchpad windows are launched with forced Ghostty titles so yabai can
+# classify them before they briefly enter the BSP grid.
+eval "$("$HOME/bin/scratchpads" rules)"
 
 # ============================================================
 # Fixed Space Order (1-4)
