@@ -13,9 +13,6 @@ fi
 yabai -m signal --remove "hide_scratchpads_on_focus_change" >/dev/null 2>&1 || true
 yabai -m signal --remove "hide_scratchpads_on_app_switch" >/dev/null 2>&1 || true
 yabai -m signal --remove "hide_scratchpads_on_app_deactivate" >/dev/null 2>&1 || true
-yabai -m signal --add label="hide_scratchpads_on_focus_change" event="window_focused" action="$HOME/bin/scratchpads blur-close"
-yabai -m signal --add label="hide_scratchpads_on_app_switch" event="application_front_switched" action="$HOME/bin/scratchpads blur-close"
-yabai -m signal --add label="hide_scratchpads_on_app_deactivate" event="application_deactivated" action="$HOME/bin/scratchpads blur-close"
 
 yabai -m config debug_output on
 # global settings

@@ -73,7 +73,7 @@ open_terminal_window() {
   yabai -m rule --add app="^${terminal_app}$" space="$current_space" label="$rule_label"
 
   if [ "$terminal_app" = "Ghostty" ]; then
-    open -n -a "$terminal_app"
+    env -u ZDOTDIR open -n -a "$terminal_app"
   elif [ "$terminal_app" = "iTerm2" ]; then
     /usr/bin/osascript -e 'tell application "iTerm2" to create window with default profile'
   elif [ "$terminal_app" = "Terminal" ]; then

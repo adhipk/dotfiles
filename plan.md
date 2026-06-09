@@ -12,6 +12,20 @@ This document tracks changes and behaviors I want to add to the dotfiles.
 - close unused sessions/windows.
 - figure out whats the difference between windows and sessions, where each abstraction works best.
 
+## hyperspaces (tmux sessions + fixed app set)
+- Create project-specific session groups called hyperspaces.
+- Each hyperspace should map to:
+  - 1 bare terminal window (primary tmux session shell)
+  - 1 text editor window
+  - 1 Chrome window
+  - 1 coding agent window
+- Use a pinned map for fast switching:
+  - `hyper + number` jumps to pinned hyperspace slot (1-9).
+  - `hyper + '+'`, then number pins current tmux session into slot.
+  - `hyper + '-'`, then number removes pinned hyperspace from slot.
+  - `hyper + space` opens sesh search filtered for hyperspaces (Raycast extension once configured).
+- Build `home/bin/executable_hyperspace` as the controller for pinning/search/connect operations backed by a config file at `~/.config/sesh/hyperspaces.json`.
+
 ## opt ~ to cycle through all terminal sessions too broad
 - at any given time I will have like 5-10 active terminal windows.
 - background servers and such can be launched and attached to tmux using our `daemon`
@@ -41,7 +55,6 @@ can use its own tmux session? with windows?
 # Retrieved 2026-06-02, License - CC BY-SA 3.0
 
 tail -f outputfile | xargs -IL date +"%Y%m%d_%H%M%S:L"
-
 
 
 

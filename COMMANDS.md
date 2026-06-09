@@ -15,8 +15,9 @@ These commands are installed into `~/bin`, which `home/dot_zshrc` adds to
 | `lucide-icons-excalidraw` | Start the external Raycast development command for the Lucide Excalidraw picker. Additional arguments are passed to `npm run dev`. | [`home/bin/executable_lucide-icons-excalidraw.tmpl`](home/bin/executable_lucide-icons-excalidraw.tmpl) |
 | `reload-colors` | Restart yabai and skhd, then reload tmux configuration when tmux is running. | [`home/bin/executable_reload-colors`](home/bin/executable_reload-colors) |
 | `reset-yabai` | Reinstall and pin `yabai@7.1.16`, update its scripting-addition sudoers entry, and restart its service. This uses `sudo` and changes Homebrew packages and `/etc/sudoers.d/yabai`. | [`home/bin/executable_reset-yabai`](home/bin/executable_reset-yabai) |
-| `tmux-session-picker` | Select and attach to an existing tmux session with `fzf`. The current session is excluded when run inside tmux. | [`home/bin/executable_tmux-session-picker`](home/bin/executable_tmux-session-picker) |
-| `tmux-sessionizer-zoxide` | Select an existing tmux session or a zoxide-ranked directory with `fzf`; directories are handed to `tmux-sessionizer`. | [`home/bin/executable_tmux-sessionizer-zoxide`](home/bin/executable_tmux-sessionizer-zoxide) |
+| `tmux-session-picker` | Select and switch to an existing tmux session with `sesh` + `fzf`. | [`home/bin/executable_tmux-session-picker`](home/bin/executable_tmux-session-picker) |
+| `tmux-sessionizer-zoxide` | Pick from existing tmux sessions or zoxide-ranked directories and connect via `sesh`. | [`home/bin/executable_tmux-sessionizer-zoxide`](home/bin/executable_tmux-sessionizer-zoxide) |
+| `tmux-sessionizer` | Compatibility wrapper for `-s <index>` and interactive selection, backed by `sesh`. | [`home/bin/executable_tmux-sessionizer`](home/bin/executable_tmux-sessionizer) |
 | `unescape-buffer` | Read escaped text from stdin and write unescaped newlines, tabs, carriage returns, quotes, and backslashes to stdout. Implemented in Node.js. | [`home/bin/executable_unescape-buffer`](home/bin/executable_unescape-buffer) |
 | `unescape-string` | Read escaped text from stdin and write an unescaped version to stdout. Implemented with `sed`. | [`home/bin/executable_unescape-string`](home/bin/executable_unescape-string) |
 | `watch-sync` | Watch the chezmoi source state with `fswatch` and apply it after changes. | [`home/bin/executable_watch-sync`](home/bin/executable_watch-sync) |
@@ -76,9 +77,10 @@ It also defines convenience aliases:
 | `tkss` | `tmux kill-session -t` |
 | `roigin` | `origin` |
 
-The shell binds `Alt+f` to `tmux-sessionizer-zoxide`, `Alt+e` to
-`tmux-session-picker`, and `Alt+h`, `Alt+t`, `Alt+n`, and `Alt+s` to the first
-four `tmux-sessionizer` slots.
+The shell binds `Alt+f` to `tmux-sessionizer-zoxide` and `Alt+e` to
+`tmux-session-picker`; both use `sesh` under the hood.
+`Alt+h`, `Alt+t`, `Alt+n`, and `Alt+s` use `tmux-sessionizer -s 0..3`, and this repository
+includes a `tmux-sessionizer` wrapper that maps those slots to `sesh`.
 
 ## Repository Commands
 
@@ -165,8 +167,6 @@ operations to these shortcuts:
 | `Ctrl+Alt+s`, `Ctrl+Alt+b`, `Ctrl+Alt+o`, `Ctrl+Alt+x/y` | Toggle split, balance, rotate, or mirror the layout. |
 | `Ctrl+Alt+f`, `Ctrl+Alt+d`, `Ctrl+Alt+g` | Toggle float, stack west, or toggle BSP/stack layout. |
 | `Alt+Cmd+[`, `Alt+Cmd+]`, `Alt+Cmd+Left/Right` | Move the current window between displays. |
-| `Alt+Shift+=`, then `1` through `5` | Bookmark the current space. |
-| `Alt+Shift+-`, then `1` through `5` | Remove a space bookmark. |
 | `Alt+Shift+1..5` | Jump to a bookmarked space. |
 | `Alt+Shift+/` | Show bookmarked spaces. |
 | `Alt+Shift+h/k` | Focus the previous or next space. |
@@ -174,12 +174,15 @@ operations to these shortcuts:
 | `Ctrl+Alt+n` | Move the current window to a new labeled space. |
 | `Alt+n` | Create and focus a new space. |
 | `Alt+k` | Close empty spaces. |
-| `Alt+Backtick`, `Alt+1..4` | Focus Ghostty, the default browser, the default Markdown editor, Teams, or Slack. |
-| `Ctrl+Alt+Cmd+n` | Toggle the spotlight Ghostty terminal using `~/.config/zsh/spotlight/.zshrc`. |
-| `Alt+Shift+Backtick` | Toggle the Ghostty scratchpad. |
+| `Alt+Backtick`, `Alt+~`, `Alt+1..4` | Focus Ghostty, the default browser, the default Markdown editor, Teams, or Slack. |
 | `Ctrl+Alt+w`, `Ctrl+Alt+z` | Close or minimize the current window. |
 | `Alt+r` | Restart yabai and skhd. |
 | `Alt+/` | Toggle the `whichkey` overlay. |
+
+Experimental hyper bindings, including hyperspace session slots and the
+Spotlight scratchpad shortcut, are kept in
+[`home/dot_config/skhd/modules/hyperspace.skhdrc`](home/dot_config/skhd/modules/hyperspace.skhdrc)
+and are not loaded by default.
 
 ## Configuration Utilities
 

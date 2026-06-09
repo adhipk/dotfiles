@@ -4,16 +4,12 @@ set -euo pipefail
 
 SCRATCHPAD_LOG_FILE="${SCRATCHPAD_LOG_FILE:-/tmp/scratchpads_${USER:-unknown}.log}"
 TMUX_SESSIONIZER="${TMUX_SESSIONIZER_CMD:-$HOME/bin/tmux-sessionizer-zoxide}"
-SPOTLIGHT_ZDOTDIR="${SPOTLIGHT_ZDOTDIR:-$HOME/.config/zsh/spotlight}"
 
 usage() {
   cat <<'EOF'
 Usage:
   scratchpads open quick
-  scratchpads open dev
-  scratchpads open spotlight <label> [command...]
   scratchpads close
-  scratchpads blur-close
   scratchpads debug
   scratchpads rules
 EOF
@@ -23,23 +19,6 @@ log() {
   local ts
   ts=$(date '+%Y-%m-%dT%H:%M:%S%z')
   printf '%s [%s] %s\n' "$ts" "${0##*/}" "$*" >> "$SCRATCHPAD_LOG_FILE"
-}
-
-# skhd mode toggles: bind Escape to close the scratchpad only while one is
-# focused (see ~/.skhdrc `:: scratchpad`). f13 enters that mode, f14 leaves it;
-# both are captured in either mode so a redundant toggle is a harmless no-op.
-SKHD_BIN="${SKHD_BIN:-skhd}"
-
-enter_scratchpad_mode() {
-  if command -v "$SKHD_BIN" >/dev/null 2>&1; then
-    "$SKHD_BIN" -k 'f13' >/dev/null 2>&1 || true
-  fi
-}
-
-leave_scratchpad_mode() {
-  if command -v "$SKHD_BIN" >/dev/null 2>&1; then
-    "$SKHD_BIN" -k 'f14' >/dev/null 2>&1 || true
-  fi
 }
 
 query_windows_json() {
@@ -261,12 +240,10 @@ close_all_scratchpads() {
   local restore_id
 
   log "close_all_scratchpads start"
-  hide_scratchpad_label "dev_space_prompt"
 
   if ! ids=$(query_windows_json 2>/dev/null | jq -r '
     .[]
     | select((.scratchpad // "") | length > 0)
-    | select((.scratchpad // "") != "dev_space_prompt")
     | .id'); then
     log "close_all_scratchpads could not query yabai"
     return 0
@@ -279,7 +256,6 @@ close_all_scratchpads() {
 
   restore_id=$(focused_non_scratchpad_window_id 2>/dev/null || true)
   close_window_ids "" "$ids" "$restore_id"
-  leave_scratchpad_mode
   log "close_all_scratchpads done"
 }
 
@@ -300,7 +276,6 @@ close_scratchpads_for_label() {
 
   restore_id=$(focused_non_scratchpad_window_id 2>/dev/null || true)
   close_window_ids "$label" "$ids" "$restore_id"
-  leave_scratchpad_mode
 }
 
 hide_scratchpad_label() {
@@ -370,11 +345,8 @@ scratchpad_profile_for_label() {
     quick_terminal)
       printf '%s\n' "bottom"
       ;;
-    dev_space_prompt)
-      printf '%s\n' "spotlight"
-      ;;
     *)
-      printf '%s\n' "spotlight"
+      printf '%s\n' "bottom"
       ;;
   esac
 }
@@ -384,24 +356,10 @@ scratchpad_grid_for_profile() {
     bottom)
       printf '%s\n' "6:1:0:4:1:2"
       ;;
-    spotlight)
-      printf '%s\n' "12:12:2:3:8:5"
-      ;;
     *)
-      printf '%s\n' "12:12:2:3:8:5"
+      printf '%s\n' "6:1:0:4:1:2"
       ;;
   esac
-}
-
-spotlight_ghostty_style_args() {
-  printf '%s\n' \
-    "--theme=TokyoNight Night" \
-    "--font-size=15" \
-    "--window-padding-x=18" \
-    "--window-padding-y=14" \
-    "--background-opacity=0.96" \
-    "--cursor-color=#7dd3fc" \
-    "--selection-background=#164e63"
 }
 
 launch_ghostty() {
@@ -410,23 +368,15 @@ launch_ghostty() {
   local profile="${3:-}"
   local cwd="$HOME"
   local ghostty_args=(--working-directory="$cwd" --title="$title")
-  local style_arg
+  local -a clean_ghostty_env=(env -u ZDOTDIR)
 
   if [ -n "$initial_command" ]; then
     ghostty_args+=(--command="$initial_command")
   fi
 
-  if [ "$profile" = "spotlight" ]; then
-    while IFS= read -r style_arg; do
-      [ -n "$style_arg" ] && ghostty_args+=("$style_arg")
-    done <<EOF_STYLE_ARGS
-$(spotlight_ghostty_style_args)
-EOF_STYLE_ARGS
-  fi
-
   if [ "$(uname -s)" != "Darwin" ] && command -v ghostty >/dev/null 2>&1; then
     log "launching ghostty window via +new-window cwd=$cwd title=$title"
-    if ghostty +new-window "${ghostty_args[@]}" >/dev/null 2>&1; then
+    if "${clean_ghostty_env[@]}" ghostty +new-window "${ghostty_args[@]}" >/dev/null 2>&1; then
       return 0
     fi
     log "ghostty +new-window launch failed; falling back"
@@ -434,13 +384,13 @@ EOF_STYLE_ARGS
 
   if [ "$(uname -s)" = "Darwin" ]; then
     log "launching Ghostty via open cwd=$cwd title=$title"
-    open -n -a Ghostty --args "${ghostty_args[@]}" >/dev/null 2>&1 || {
+    "${clean_ghostty_env[@]}" open -n -a Ghostty --args "${ghostty_args[@]}" >/dev/null 2>&1 || {
       log "Ghostty open launch failed"
       return 1
     }
   else
     log "launching Ghostty via open -n -a Ghostty --args --working-directory=$cwd --title=$title"
-    open -n -a Ghostty --args "${ghostty_args[@]}" >/dev/null 2>&1 || {
+    "${clean_ghostty_env[@]}" open -n -a Ghostty --args "${ghostty_args[@]}" >/dev/null 2>&1 || {
       log "Ghostty launch failed"
       return 1
     }
@@ -500,7 +450,6 @@ print_rule_for_label() {
 
 print_static_rules() {
   print_rule_for_label "quick_terminal"
-  print_rule_for_label "dev_space_prompt"
 }
 
 ghostty_window_ids_json() {
@@ -557,7 +506,7 @@ open_scratchpad() {
     profile=$(scratchpad_profile_for_label "$label")
   fi
 
-  if [ "$profile" != "bottom" ] && [ "$profile" != "spotlight" ]; then
+  if [ "$profile" != "bottom" ]; then
     printf '%s\n' "Unknown scratchpad profile: $profile" >&2
     return 1
   fi
@@ -583,13 +532,8 @@ open_scratchpad_with_profile() {
 
   if existing_ids=$(scratchpad_ids "$label" 2>/dev/null); then
     if [ -n "$existing_ids" ]; then
-      if [ "$label" = "dev_space_prompt" ]; then
-        log "existing persistent scratchpad label=$label found; toggling visibility"
-        toggle_scratchpad_label "$label" "$profile"
-      else
-        log "existing scratchpad label=$label found; closing instead of spawning a duplicate"
-        close_scratchpads_for_label "$label"
-      fi
+      log "existing scratchpad label=$label found; closing instead of spawning a duplicate"
+      close_scratchpads_for_label "$label"
       return 0
     fi
   else
@@ -602,14 +546,9 @@ open_scratchpad_with_profile() {
 
   title=$(scratchpad_window_title "$label")
 
-  if [ "$label" = "dev_space_prompt" ]; then
-    log "launching dev scratchpad with spotlight zshrc"
-    initial_command="direct:$HOME/bin/spotlight-zsh"
-    command_text="exec env SPOTLIGHT_ZDOTDIR=\"$SPOTLIGHT_ZDOTDIR\" $HOME/bin/spotlight-zsh"
-  else
-    log "launching quick scratchpad"
-    command_text="${*:-}"
-  fi
+  log "launching quick scratchpad"
+  initial_command="direct:/bin/zsh"
+  command_text="${*:-}"
 
   if win_id=$(ghostty_window_id_for_title "$title" 2>/dev/null); then
     if [ -n "$win_id" ]; then
@@ -617,7 +556,6 @@ open_scratchpad_with_profile() {
       yabai -m window "$win_id" --scratchpad "$label" >/dev/null 2>&1 || true
       yabai -m window "$win_id" --grid "$(scratchpad_grid_for_profile "$profile")" >/dev/null 2>&1 || true
       yabai -m window --focus "$win_id" >/dev/null 2>&1 || true
-      enter_scratchpad_mode
       send_command_to_ghostty_window "$title" "$command_text" || true
       return 0
     fi
@@ -649,46 +587,16 @@ open_scratchpad_with_profile() {
     fi
     yabai -m window "$win_id" --grid "$(scratchpad_grid_for_profile "$profile")" >/dev/null 2>&1 || true
     yabai -m window --focus "$win_id" >/dev/null 2>&1 || true
-    enter_scratchpad_mode
     send_command_to_ghostty_window "$title" "$command_text" || true
   else
     log "failed to locate the new Ghostty window for label=$label"
   fi
 }
 
-close_scratchpads_if_blurred() {
-  local focused_json
-  local focused_label
-  local focused_id
-
-  sleep 0.1
-  if ! focused_json=$(query_focused_window_json 2>/dev/null); then
-    log "blur-close could not query focused window"
-    return 0
-  fi
-
-  focused_id=$(printf '%s\n' "$focused_json" | jq -r '.id // empty')
-  focused_label=$(printf '%s\n' "$focused_json" | jq -r '(.scratchpad // "") | select(length > 0)')
-  log "blur-close focused_id=${focused_id:-<empty>} focused_label=${focused_label:-<empty>}"
-
-  if [ -n "$focused_label" ]; then
-    log "blur-close ignored because the focused window is still a scratchpad"
-    # A scratchpad holds focus -> arm Escape-to-close for it.
-    enter_scratchpad_mode
-    return 0
-  fi
-
-  hide_scratchpad_label "dev_space_prompt"
-  close_scratchpads_for_label "quick_terminal"
-  # Focus left every scratchpad -> Escape goes back to behaving normally.
-  leave_scratchpad_mode
-}
-
 debug_state() {
   {
     printf 'log_file=%s\n' "$SCRATCHPAD_LOG_FILE"
     printf 'tmux_sessionizer=%s\n' "$TMUX_SESSIONIZER"
-    printf 'spotlight_zdotdir=%s\n' "$SPOTLIGHT_ZDOTDIR"
     printf '\nfocused_window:\n'
     if query_focused_window_json >/dev/null 2>&1; then
       query_focused_window_json | jq '{id, app, title, scratchpad, is_visible: ."is-visible", has_focus: ."has-focus"}'
@@ -716,23 +624,8 @@ main() {
     open:quick)
       open_scratchpad "quick_terminal" "bottom"
       ;;
-    open:dev)
-      open_scratchpad "dev_space_prompt" "spotlight"
-      ;;
-    open:spotlight)
-      label="${3:-}"
-      shift 3 || true
-      if [ -z "$label" ]; then
-        printf '%s\n' "Usage: scratchpads open spotlight <label> [command...]" >&2
-        exit 1
-      fi
-      open_scratchpad "$label" "spotlight" "$@"
-      ;;
     close:)
       close_all_scratchpads
-      ;;
-    blur-close:)
-      close_scratchpads_if_blurred
       ;;
     debug:)
       debug_state

@@ -1,10 +1,13 @@
-# Lightweight zsh configuration for the hyper+n spotlight terminal.
+# Lightweight zsh configuration for the spotlight terminal.
 
-export SPOTLIGHT_SHELL="${SPOTLIGHT_SHELL:-1}"
+SPOTLIGHT_SHELL="${SPOTLIGHT_SHELL:-1}"
+SPOTLIGHT_ZDOTDIR_ACTIVE="${ZDOTDIR:-$HOME}"
+unset ZDOTDIR SPOTLIGHT_SHELL
+
 export PATH="$HOME/bin:$HOME/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 export EDITOR="${EDITOR:-nvim}"
 
-HISTFILE="${ZDOTDIR:-$HOME}/.zsh_history"
+HISTFILE="$SPOTLIGHT_ZDOTDIR_ACTIVE/.zsh_history"
 HISTSIZE=500
 SAVEHIST=500
 

@@ -14,6 +14,7 @@ home/
 ├── .chezmoiexternal.toml.tmpl        # External git repositories
 ├── .chezmoiscripts/                  # Apply hooks and one-time setup scripts
 ├── bin/                              # Helper commands installed into ~/bin
+├── dot_agents/                       # Personal agent skills and docs -> ~/.agents
 ├── dot_config/
 │   ├── symlink_nvim.tmpl              # ~/.config/nvim -> repository nvim/
 │   ├── karabiner/                     # Caps Lock hyper key configuration
@@ -105,6 +106,13 @@ home/.chezmoiscripts/run_once_after_setup-example.sh
 
 Use `run_onchange_` when a script should run again after its contents change.
 
+## Agent Defaults
+
+Personal agent behavior is checked in under `home/dot_agents/`, which chezmoi
+applies to `~/.agents/`. Use `home/dot_agents/skills/` for personal Codex
+skills and `home/dot_agents/docs/` for centralized agent-readable
+documentation.
+
 ## Shell Secrets
 
 `~/.zshrc` sources `~/.zshrc.secrets` when present. Keep machine-specific
@@ -139,8 +147,10 @@ bundle ID.
 - tap `caps lock`: toggle Caps Lock
 - hold `caps lock`: send `ctrl + opt + cmd`
 - `alt + n`: create a space and focus it
-- `hyper + n`: open the spotlight Ghostty terminal with its own lightweight zshrc
-- `alt + shift + ~`: toggle the Ghostty scratchpad
-- `alt + backtick`: focus Ghostty
+- `alt + backtick` / `alt + ~`: focus Ghostty
 - `alt + r`: restart yabai and skhd
 - `alt + /`: show the keybinding cheat sheet
+
+Experimental hyper bindings, including hyperspace session slots and the
+Spotlight scratchpad shortcut, are parked in
+`home/dot_config/skhd/modules/hyperspace.skhdrc` and are not loaded by default.

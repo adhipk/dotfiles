@@ -5,7 +5,6 @@ set -euo pipefail
 zmodload zsh/datetime
 
 iterations="${1:-5}"
-spotlight_zdotdir="${SPOTLIGHT_ZDOTDIR:-$HOME/.config/zsh/spotlight}"
 
 usage() {
   cat <<'EOF'
@@ -14,7 +13,6 @@ Usage:
 
 Benchmarks:
   shell: default login zsh startup
-  shell: spotlight login zsh startup
   ghostty: +new-window time until yabai sees the window
   ghostty: open -n -a time until yabai sees the window
 
@@ -197,25 +195,7 @@ launch_ghostty_open_minimal() {
     --command='direct:/bin/cat'
 }
 
-launch_ghostty_open_spotlight_default() {
-  local title="$1"
-  open -n -a Ghostty --args \
-    --title="$title" \
-    --working-directory="$HOME" \
-    --command="direct:$HOME/bin/spotlight-zsh"
-}
-
-launch_ghostty_open_spotlight() {
-  local title="$1"
-  open -n -a Ghostty --args \
-    --config-default-files=false \
-    --shell-integration=none \
-    --title="$title" \
-    --working-directory="$HOME" \
-    --command="direct:$HOME/bin/spotlight-zsh"
-}
-
-printf 'iterations=%s spotlight_zdotdir=%s\n' "$iterations" "$spotlight_zdotdir"
+printf 'iterations=%s\n' "$iterations"
 if ghostty_new_window_supported; then
   printf 'ghostty +new-window supported=yes\n'
 else
@@ -223,7 +203,6 @@ else
 fi
 
 bench_shell "zsh login default" /bin/zsh -lic "exit 0"
-bench_shell "zsh login spotlight" env ZDOTDIR="$spotlight_zdotdir" SPOTLIGHT_SHELL=1 /bin/zsh -lic "exit 0"
 
 if [[ "${GHOSTTY_STARTUP_BENCH_SHELL_ONLY:-0}" == "1" ]]; then
   exit 0
@@ -237,8 +216,6 @@ if command -v yabai >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
   if [[ "$(uname -s)" == "Darwin" ]]; then
     bench_ghostty_window "open default cat" launch_ghostty_open
     bench_ghostty_window "open minimal cat" launch_ghostty_open_minimal
-    bench_ghostty_window "open default spotlight" launch_ghostty_open_spotlight_default
-    bench_ghostty_window "open minimal spotlight" launch_ghostty_open_spotlight
   fi
 else
   printf 'Skipping Ghostty window benchmarks; requires yabai and jq.\n' >&2

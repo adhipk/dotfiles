@@ -83,26 +83,7 @@ alt + cmd - right : win=$(yabai -m query --windows --window | jq -r '.id'); \
                     yabai -m display --focus 2; \
                     yabai -m window --focus "$win"  # alt+cmd+right
 
-# -- Space Bookmarking: Pin mode (alt+shift+=, then number) --
-:: pin_mode @ : osascript -e 'display notification "Press 1-5 to pin space" with title "Pin Mode"'
-alt + shift - 0x18 ; pin_mode  # alt+shift+= enters pin mode
-pin_mode < 1 : ~/.config/yabai/bookmarks set 1; skhd -k "escape"
-pin_mode < 2 : ~/.config/yabai/bookmarks set 2; skhd -k "escape"
-pin_mode < 3 : ~/.config/yabai/bookmarks set 3; skhd -k "escape"
-pin_mode < 4 : ~/.config/yabai/bookmarks set 4; skhd -k "escape"
-pin_mode < 5 : ~/.config/yabai/bookmarks set 5; skhd -k "escape"
-pin_mode < escape ; default
-
-# -- Space Bookmarking: Unpin mode (alt+shift+-, then number) --
-:: unpin_mode @ : osascript -e 'display notification "Press 1-5 to unpin space" with title "Unpin Mode"'
-alt + shift - 0x1B ; unpin_mode  # alt+shift+- enters unpin mode
-unpin_mode < 1 : ~/.config/yabai/bookmarks clear 1; skhd -k "escape"
-unpin_mode < 2 : ~/.config/yabai/bookmarks clear 2; skhd -k "escape"
-unpin_mode < 3 : ~/.config/yabai/bookmarks clear 3; skhd -k "escape"
-unpin_mode < 4 : ~/.config/yabai/bookmarks clear 4; skhd -k "escape"
-unpin_mode < 5 : ~/.config/yabai/bookmarks clear 5; skhd -k "escape"
-unpin_mode < escape ; default
-
+# -- Space Bookmarking (yabai spaces) --
 # -- Jump to bookmarked space (alt+shift+number) --
 alt + shift - 1 : ~/.config/yabai/bookmarks jump 1
 alt + shift - 2 : ~/.config/yabai/bookmarks jump 2
@@ -151,27 +132,8 @@ alt - 2 : ~/.config/skhd/focus_app.sh "@editor"
 alt - 3 : ~/.config/skhd/focus_app.sh "Microsoft Teams"
 alt - 4 : ~/.config/skhd/focus_app.sh "Slack"
 alt - 0x2A : ~/bin/hotkeys presentation toggle  # alt + backslash
-ctrl + alt + cmd - n : ~/bin/scratchpads open dev  # hyper + n spotlight terminal
 
-# -- Open floating Ghostty window at bottom (for quick commands) --
-alt + shift - 0x32 : ~/bin/scratchpads open quick
-
-# -- Escape closes the scratchpad, but ONLY while one is focused --
-# skhd has no conditional pass-through, so a *global* `escape` binding would
-# swallow Escape in every app (breaks vim, dialogs, etc.). Instead we scope it
-# to a non-capturing `scratchpad` mode that the `scratchpads` script enters when
-# a scratchpad gains focus and leaves when focus moves away (see blur-close).
-# In `default` mode Escape is unbound, so it passes through normally everywhere.
-#
-# f13/f14 are the mode-toggle signals emitted by `scratchpads` via `skhd -k`.
-# They are bound (captured) in BOTH modes so a redundant toggle never leaks into
-# the focused app as a stray F13/F14 keypress.
-:: scratchpad                       # non-capturing: normal typing falls through
-f13 ; scratchpad                    # default  -> enter scratchpad mode
-f14 : true                          # default  -> swallow redundant exit signal
-scratchpad < f14 ; default          # scratchpad -> leave (back to normal Escape)
-scratchpad < f13 : true             # scratchpad -> swallow redundant enter signal
-scratchpad < escape : ~/bin/scratchpads close
+alt + shift - 0x32 : ~/.config/skhd/focus_app.sh "Ghostty"  # alt + tilde
 
 # ============================================================
 # Window close / minimize

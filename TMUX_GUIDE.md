@@ -5,7 +5,7 @@
 **Your workflow:**
 - **yabai** manages physical window placement (tiling windows on macOS)
 - **tmux** manages terminal sessions/panes inside Ghostty windows
-- **tmux-sessionizer** (`Alt+f`) quickly switches between project sessions
+- **sesh** command (`tmux-sessionizer-zoxide`) quickly switches between project sessions
 
 ## Quick Start
 
@@ -29,20 +29,16 @@ tl
 tkss myproject
 ```
 
-## Key Bindings (Direct - No Prefix!)
+## Key Bindings
 
-### Panes (splits) - Most Common
-- `Alt+\` - Split horizontally (side by side)
-- `Alt+-` - Split vertically (top/bottom)
-- `Alt+h/j/k/l` - Navigate panes (vim-style)
-- `Alt+H/J/K/L` - Resize panes
-- `Alt+w` - Close pane
-- `Alt+z` - Toggle zoom (fullscreen pane)
+### Panes (most common)
+- `Ctrl+A \|` - Split pane horizontally (keep current directory)
+- `Ctrl+A -` - Split pane vertically (keep current directory)
 
 ### Windows (like browser tabs)
-- `Alt+t` - New window
-- `Alt+p` - Previous window
-- `Alt+n` - Next window
+- `Ctrl+A c` - New window (tmux default)
+- `Ctrl+A p` - Previous window
+- `Ctrl+A n` - Next window
 - `Ctrl+A 0-9` - Switch to window by number (uses prefix)
 - `Ctrl+A ,` - Rename window (uses prefix)
 - `Ctrl+A &` - Kill window (uses prefix)
@@ -72,11 +68,11 @@ tmux new -s frontend
 # Create splits/windows as needed
 ```
 
-### Option 2: Use tmux-sessionizer (already configured!)
+### Option 2: Use sesh (already configured!)
 ```bash
-# Press Alt+f to fuzzy find projects
-# Switch between sessions instantly
-# Works great with your existing setup
+# Run `tmux-sessionizer-zoxide` to fuzzy find projects
+# Then switch between sessions instantly
+# Works great with your existing setup and uses `sesh`
 ```
 
 ### Option 3: Detached sessions as "workspaces"

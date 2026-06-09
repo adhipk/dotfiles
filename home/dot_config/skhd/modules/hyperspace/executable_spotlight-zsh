@@ -1,0 +1,5 @@
+#!/bin/sh
+
+module_dir="${0%/*}"
+
+exec env ZDOTDIR="${SPOTLIGHT_ZDOTDIR:-$module_dir}" SPOTLIGHT_SHELL=1 /bin/zsh -l
