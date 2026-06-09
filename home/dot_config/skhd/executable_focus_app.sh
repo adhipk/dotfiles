@@ -2,12 +2,17 @@
 
 PRESENTATION_MODE=false
 PRESENTATION_MODE_FILE="$HOME/.config/skhd/presentation_mode"
+EXCLUDE_TITLE_RE="${FOCUS_APP_EXCLUDE_TITLE_RE:-}"
 
 while [[ "${1:-}" == --* ]]; do
     case "$1" in
         --single-window|--presentation)
             PRESENTATION_MODE=true
             shift
+            ;;
+        --exclude-title)
+            EXCLUDE_TITLE_RE="${2:-}"
+            shift 2
             ;;
         --)
             shift
@@ -77,6 +82,10 @@ case "$ARG" in
         ;;
 esac
 
+if [ "$APP" = "Ghostty" ] && [ -z "$EXCLUDE_TITLE_RE" ]; then
+    EXCLUDE_TITLE_RE='(^|[^[:alnum:]_-])(n?vim|codex|claude)([^[:alnum:]_-]|$)|Action Required'
+fi
+
 # No running windows found — launch
 if [ -z "$APP" ]; then
     eval "$LAUNCH_CMD"
@@ -84,8 +93,19 @@ if [ -z "$APP" ]; then
 fi
 
 # Get all non-minimized, non-hidden window IDs for this app (including other displays)
-WINDOWS=$(echo "$ALL_WINDOWS" | jq -r --arg app "$APP" \
-    '[.[] | select(.app == $app and ."is-minimized" == false and ."is-hidden" == false and ((.scratchpad // "") | length == 0))] | sort_by(.id) | .[].id')
+WINDOWS=$(echo "$ALL_WINDOWS" | jq -r --arg app "$APP" --arg exclude_title_re "$EXCLUDE_TITLE_RE" '
+    def eligible_window:
+        .app == $app
+        and ."is-minimized" == false
+        and ."is-hidden" == false
+        and ((.scratchpad // "") | length == 0)
+        and (
+            ($exclude_title_re | length) == 0
+            or (((.title // "") | test($exclude_title_re; "i")) | not)
+        );
+
+    [.[] | select(eligible_window)] | sort_by(.id) | .[].id
+')
 
 if [ -z "$WINDOWS" ]; then
     eval "$LAUNCH_CMD"
@@ -97,15 +117,26 @@ WINDOW_COUNT=$(echo "$WINDOWS" | wc -l | tr -d ' ')
 # Get currently focused window info
 FOCUSED_ID=$(yabai -m query --windows --window 2>/dev/null | jq -r '.id // empty')
 FOCUSED_APP=$(yabai -m query --windows --window 2>/dev/null | jq -r '.app // empty')
+FOCUSED_IS_ELIGIBLE=false
+for WID in $WINDOWS; do
+    if [ "$WID" = "$FOCUSED_ID" ]; then
+        FOCUSED_IS_ELIGIBLE=true
+        break
+    fi
+done
 
 # App is already focused
-if [ "$FOCUSED_APP" = "$APP" ]; then
+if [ "$FOCUSED_APP" = "$APP" ] && [ "$FOCUSED_IS_ELIGIBLE" = true ]; then
     if [ "$PRESENTATION_MODE" = true ]; then
         exit 0
     fi
 
     # Single window — toggle off: go back to the previous window
     if [ "$WINDOW_COUNT" -eq 1 ]; then
+        if [ -n "$EXCLUDE_TITLE_RE" ]; then
+            exit 0
+        fi
+
         yabai -m window --focus recent 2>/dev/null
         exit 0
     fi
@@ -140,15 +171,26 @@ fi
 # Prefer windows on current space/display, then fall back to any window
 CURRENT_SPACE=$(yabai -m query --spaces --space | jq -r '.index')
 CURRENT_DISPLAY=$(yabai -m query --displays --display | jq -r '.index')
-BEST=$(echo "$ALL_WINDOWS" | jq -r --arg app "$APP" --arg space "$CURRENT_SPACE" --arg display "$CURRENT_DISPLAY" \
-    '[.[] | select(.app == $app and ."is-minimized" == false and ."is-hidden" == false and ((.scratchpad // "") | length == 0))] |
+BEST=$(echo "$ALL_WINDOWS" | jq -r --arg app "$APP" --arg space "$CURRENT_SPACE" --arg display "$CURRENT_DISPLAY" --arg exclude_title_re "$EXCLUDE_TITLE_RE" '
+    def eligible_window:
+        .app == $app
+        and ."is-minimized" == false
+        and ."is-hidden" == false
+        and ((.scratchpad // "") | length == 0)
+        and (
+            ($exclude_title_re | length) == 0
+            or (((.title // "") | test($exclude_title_re; "i")) | not)
+        );
+
+    [.[] | select(eligible_window)] |
      sort_by(
        if .space == ($space | tonumber) then 0 else 1 end,
        if .display == ($display | tonumber) then 0 else 1 end,
        if ."has-focus" then 0 else 1 end,
        if ."is-visible" then 0 else 1 end
      ) |
-     first | .id // empty')
+     first | .id // empty
+')
 
 if [ -n "$BEST" ]; then
     # Get the space and display of the target window

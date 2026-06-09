@@ -12,6 +12,8 @@ These commands are installed into `~/bin`, which `home/dot_zshrc` adds to
 | Command | Purpose | Source |
 | --- | --- | --- |
 | `default-apps` | Inspect and change macOS default handlers for file extensions and URL schemes. | [`scripts/default-apps.sh`](scripts/default-apps.sh) |
+| `kit` | Speak text with KittenTTS, either from arguments or stdin, and optionally write WAV output. | [`home/bin/executable_kit`](home/bin/executable_kit) |
+| `kit-watch` | Watch a text file with `fswatch` and read its contents with `kit` whenever it changes. | [`home/bin/executable_kit-watch`](home/bin/executable_kit-watch) |
 | `lucide-icons-excalidraw` | Start the external Raycast development command for the Lucide Excalidraw picker. Additional arguments are passed to `npm run dev`. | [`home/bin/executable_lucide-icons-excalidraw.tmpl`](home/bin/executable_lucide-icons-excalidraw.tmpl) |
 | `reload-colors` | Restart yabai and skhd, then reload tmux configuration when tmux is running. | [`home/bin/executable_reload-colors`](home/bin/executable_reload-colors) |
 | `reset-yabai` | Reinstall and pin `yabai@7.1.16`, update its scripting-addition sudoers entry, and restart its service. This uses `sudo` and changes Homebrew packages and `/etc/sudoers.d/yabai`. | [`home/bin/executable_reset-yabai`](home/bin/executable_reset-yabai) |
@@ -49,6 +51,28 @@ requires `duti`, which is installed from the `Brewfile`.
 printf 'line one\\nline two\\tvalue\\n' | unescape-buffer
 printf 'line one\\nline two\\tvalue\\n' | unescape-string
 ```
+
+### Text To Speech
+
+```bash
+kit "Read this aloud"
+kit -v Luna -s 1.1 "Read this with Luna"
+kit --backend chatterbox --voice-ref ~/voices/reference.wav "Read this with Chatterbox Turbo"
+kit-watch notes.md
+kit-watch --tail notes.md
+kit-watch draft.md -- -v Bella --stream-threshold 100
+kit-watch --tail draft.md -- --backend chatterbox --voice-ref ~/voices/reference.wav
+kit-watch --no-initial notes.md
+```
+
+`kit-watch --tail FILE` reads the whole file once on startup, then reads only
+newly appended text after each change. Combine it with `--no-initial` to start
+watching at the current end of the file.
+
+`kit --backend chatterbox` runs Resemble AI Chatterbox Turbo lazily through
+`uv` and keeps KittenTTS as the default backend. Chatterbox is intended for
+higher quality voice-cloned readback and accepts a reference WAV with
+`--voice-ref`.
 
 ## Shell Commands
 
@@ -174,7 +198,7 @@ operations to these shortcuts:
 | `Ctrl+Alt+n` | Move the current window to a new labeled space. |
 | `Alt+n` | Create and focus a new space. |
 | `Alt+k` | Close empty spaces. |
-| `Alt+Backtick`, `Alt+~`, `Alt+1..4` | Focus Ghostty, the default browser, the default Markdown editor, Teams, or Slack. |
+| `Alt+Backtick`, `Alt+~`, `Alt+1..4` | Focus Ghostty, the default browser, the default Markdown editor, Teams, or Slack. Ghostty focus skips task windows titled like `nvim`, `vim`, `codex`, `claude`, or Codex's `Action Required` status. |
 | `Ctrl+Alt+w`, `Ctrl+Alt+z` | Close or minimize the current window. |
 | `Alt+r` | Restart yabai and skhd. |
 | `Alt+/` | Toggle the `whichkey` overlay. |

@@ -1,0 +1,388 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12,<3.13"
+# dependencies = [
+#   "soundfile",
+#   "kittentts @ https://github.com/KittenML/KittenTTS/releases/download/0.8.1/kittentts-0.8.1-py3-none-any.whl",
+# ]
+# ///
+"""
+KittenTTS command-line interface - acts as a 'say' command replacement
+Usage: kit [options] <text>
+"""
+import sys
+import argparse
+import json
+import os
+import tempfile
+import subprocess
+import re
+import threading
+import queue
+from pathlib import Path
+
+def repo_id_for_model(model_name):
+    """Return the Hugging Face repo id used by KittenTTS."""
+    if "/" not in model_name:
+        return f"KittenML/{model_name}"
+    return model_name
+
+def cached_model_available(model_name):
+    """Check whether KittenTTS' required Hugging Face files are cached locally."""
+    repo_id = repo_id_for_model(model_name)
+    cache_home = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface"))
+    repo_cache = cache_home / "hub" / f"models--{repo_id.replace('/', '--')}"
+    refs_main = repo_cache / "refs" / "main"
+
+    if not refs_main.exists():
+        return False
+
+    revision = refs_main.read_text().strip()
+    snapshot = repo_cache / "snapshots" / revision
+    config_path = snapshot / "config.json"
+
+    if not config_path.exists():
+        return False
+
+    try:
+        with config_path.open() as f:
+            config = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    model_file = config.get("model_file")
+    voices_file = config.get("voices")
+    if not model_file or not voices_file:
+        return False
+
+    return (snapshot / model_file).exists() and (snapshot / voices_file).exists()
+
+def strip_markdown(text):
+    """Remove markdown formatting for natural speech"""
+    # Remove headers
+    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+
+    # Remove bold/italic
+    text = re.sub(r'\*\*\*(.+?)\*\*\*', r'\1', text)  # bold+italic
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)      # bold
+    text = re.sub(r'\*(.+?)\*', r'\1', text)          # italic
+    text = re.sub(r'___(.+?)___', r'\1', text)        # bold+italic
+    text = re.sub(r'__(.+?)__', r'\1', text)          # bold
+    text = re.sub(r'_(.+?)_', r'\1', text)            # italic
+
+    # Remove strikethrough
+    text = re.sub(r'~~(.+?)~~', r'\1', text)
+
+    # Remove inline code
+    text = re.sub(r'`(.+?)`', r'\1', text)
+
+    # Remove code blocks
+    text = re.sub(r'^```.*$', '', text, flags=re.MULTILINE)
+
+    # Remove links but keep text [text](url) -> text
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+
+    # Remove images ![alt](url)
+    text = re.sub(r'!\[([^\]]*)\]\([^\)]+\)', '', text)
+
+    # Remove horizontal rules
+    text = re.sub(r'^(\*{3,}|-{3,}|_{3,})$', '', text, flags=re.MULTILINE)
+
+    # Remove blockquotes
+    text = re.sub(r'^>\s+', '', text, flags=re.MULTILINE)
+
+    # Remove list markers (bullets and numbers)
+    text = re.sub(r'^[\*\-\+]\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\d+\.\s+', '', text, flags=re.MULTILINE)
+
+    # Remove extra whitespace
+    text = re.sub(r'\n\n+', '\n\n', text)
+    text = text.strip()
+
+    return text
+
+def chunk_text(text, chunk_size):
+    """Split text into chunks at sentence boundaries when possible"""
+    # Split on sentence endings
+    sentences = re.split(r'([.!?]+\s+)', text)
+
+    chunks = []
+    current_chunk = ""
+
+    for i in range(0, len(sentences), 2):
+        sentence = sentences[i]
+        punctuation = sentences[i + 1] if i + 1 < len(sentences) else ""
+        full_sentence = sentence + punctuation
+
+        # If adding this sentence exceeds chunk_size and we have content, save chunk
+        if current_chunk and len(current_chunk) + len(full_sentence) > chunk_size:
+            chunks.append(current_chunk.strip())
+            current_chunk = full_sentence
+        else:
+            current_chunk += full_sentence
+
+    # Add remaining text
+    if current_chunk.strip():
+        chunks.append(current_chunk.strip())
+
+    return chunks
+
+def stream_text(model, text, voice, speed, chunk_size):
+    """Stream text by generating and playing chunks with overlap to eliminate pauses"""
+    import soundfile as sf
+
+    chunks = chunk_text(text, chunk_size)
+    print(f"Streaming {len(chunks)} chunks...", file=sys.stderr)
+
+    # Queue for passing audio files from generator to player
+    audio_queue = queue.Queue(maxsize=2)
+
+    def generate_chunks():
+        """Generate audio chunks in a separate thread"""
+        for i, chunk in enumerate(chunks):
+            print(f"[{i+1}/{len(chunks)}] Generating: {chunk[:50]}...", file=sys.stderr)
+
+            # Generate audio for this chunk
+            audio = model.generate(chunk, voice=voice, speed=speed)
+
+            # Save to temporary file
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+                sf.write(tmp.name, audio, 24000)
+                tmp_path = tmp.name
+
+            audio_queue.put(tmp_path)
+
+        # Signal end of chunks
+        audio_queue.put(None)
+
+    # Start generation thread
+    generator_thread = threading.Thread(target=generate_chunks)
+    generator_thread.start()
+
+    # Play chunks as they become available
+    while True:
+        tmp_path = audio_queue.get()
+
+        if tmp_path is None:
+            break
+
+        # Play audio using afplay (macOS)
+        try:
+            subprocess.run(['afplay', tmp_path], check=True)
+        finally:
+            # Clean up temp file
+            Path(tmp_path).unlink(missing_ok=True)
+
+    # Wait for generator to finish
+    generator_thread.join()
+
+def play_wav(path):
+    """Play a WAV file with the macOS audio player."""
+    subprocess.run(['afplay', str(path)], check=True)
+
+def get_input_text(args, parser):
+    """Return text from positional args or stdin."""
+    if not args.text:
+        if not sys.stdin.isatty():
+            text = sys.stdin.read().strip()
+        else:
+            parser.print_help()
+            sys.exit(1)
+    else:
+        text = ' '.join(args.text)
+
+    if not text:
+        print("Error: No text provided", file=sys.stderr)
+        sys.exit(1)
+
+    if not args.no_strip_markdown:
+        text = strip_markdown(text)
+
+    return text
+
+def generate_with_chatterbox(args, text):
+    """Generate speech with Chatterbox Turbo in a lazy uv environment."""
+    if args.list_voices:
+        print("Chatterbox Turbo does not provide fixed local voice names.")
+        print("Use --voice-ref PATH_TO_WAV for voice cloning.")
+        return
+
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as text_file:
+        text_file.write(text)
+        text_path = Path(text_file.name)
+
+    output_path = Path(args.output) if args.output else None
+    temp_output = None
+    if output_path is None:
+        temp_output = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        temp_output.close()
+        output_path = Path(temp_output.name)
+
+    script = r'''
+import os
+from pathlib import Path
+
+import torch
+import torchaudio as ta
+from chatterbox.tts_turbo import ChatterboxTurboTTS
+
+device = os.environ.get("KIT_CHATTERBOX_DEVICE")
+if not device:
+    if torch.cuda.is_available():
+        device = "cuda"
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        device = "mps"
+    else:
+        device = "cpu"
+
+model = ChatterboxTurboTTS.from_pretrained(device=device)
+text = Path(os.environ["KIT_CHATTERBOX_TEXT"]).read_text()
+voice_ref = os.environ.get("KIT_CHATTERBOX_VOICE_REF")
+kwargs = {}
+if voice_ref:
+    kwargs["audio_prompt_path"] = voice_ref
+
+wav = model.generate(text, **kwargs)
+ta.save(os.environ["KIT_CHATTERBOX_OUTPUT"], wav, model.sr)
+'''
+
+    env = os.environ.copy()
+    env["KIT_CHATTERBOX_TEXT"] = str(text_path)
+    env["KIT_CHATTERBOX_OUTPUT"] = str(output_path)
+    if args.voice_ref:
+        env["KIT_CHATTERBOX_VOICE_REF"] = str(Path(args.voice_ref).expanduser())
+    if args.chatterbox_device and args.chatterbox_device != "auto":
+        env["KIT_CHATTERBOX_DEVICE"] = args.chatterbox_device
+
+    cmd = [
+        "uv",
+        "run",
+        "--python",
+        args.chatterbox_python,
+        "--with",
+        args.chatterbox_package,
+        "python",
+        "-c",
+        script,
+    ]
+
+    try:
+        subprocess.run(cmd, check=True, env=env)
+        if args.output:
+            print(f"Audio saved to {output_path}")
+        else:
+            play_wav(output_path)
+    finally:
+        text_path.unlink(missing_ok=True)
+        if temp_output is not None:
+            output_path.unlink(missing_ok=True)
+
+def generate_with_kitten(args, text):
+    if (
+        not args.refresh_model
+        and not os.environ.get("HF_TOKEN")
+        and cached_model_available(args.model)
+    ):
+        os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
+    # Import KittenTTS only for the default backend so alternate backends stay lazy.
+    try:
+        from kittentts import KittenTTS
+        import soundfile as sf
+    except ImportError as e:
+        print(f"Error: KittenTTS not installed properly: {e}", file=sys.stderr)
+        print("Please run setup again.", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        model = KittenTTS(args.model)
+    except Exception as e:
+        print(f"Error loading model: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.list_voices:
+        print("Available voices:")
+        for voice in model.available_voices:
+            print(f"  - {voice}")
+        return
+
+    try:
+        if args.output:
+            model.generate_to_file(text, args.output, voice=args.voice, speed=args.speed)
+            print(f"Audio saved to {args.output}")
+        else:
+            should_stream = len(text) > args.stream_threshold
+
+            if should_stream:
+                stream_text(model, text, args.voice, args.speed, args.chunk_size)
+            else:
+                audio = model.generate(text, voice=args.voice, speed=args.speed)
+
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+                    sf.write(tmp.name, audio, 24000)
+                    tmp_path = Path(tmp.name)
+
+                try:
+                    play_wav(tmp_path)
+                finally:
+                    tmp_path.unlink(missing_ok=True)
+
+    except Exception as e:
+        print(f"Error generating speech: {e}", file=sys.stderr)
+        sys.exit(1)
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='kit - Text-to-speech command',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  kit "Hello, world!"
+  kit -v Luna "This is a test"
+  kit -s 1.2 "Speak faster"
+  kit --backend chatterbox --voice-ref voice.wav "Hello"
+  kit -o output.wav "Save to file"
+  echo "Hello" | kit
+        """
+    )
+
+    parser.add_argument('text', nargs='*', help='Text to speak')
+    parser.add_argument('--backend', choices=['kitten', 'chatterbox'], default='kitten',
+                       help='TTS backend to use (default: kitten)')
+    parser.add_argument('-v', '--voice', default='Jasper',
+                       help='KittenTTS voice to use (default: Jasper)')
+    parser.add_argument('-s', '--speed', type=float, default=1.0,
+                       help='KittenTTS speech speed (default: 1.0)')
+    parser.add_argument('-o', '--output', help='Output file (if not specified, plays audio)')
+    parser.add_argument('-l', '--list-voices', action='store_true',
+                       help='List available voices')
+    parser.add_argument('-m', '--model', default='KittenML/kitten-tts-mini-0.8',
+                       help='KittenTTS model to use (default: KittenML/kitten-tts-mini-0.8)')
+    parser.add_argument('--chunk-size', type=int, default=500,
+                       help='KittenTTS character chunk size for streaming (default: 500)')
+    parser.add_argument('--stream-threshold', type=int, default=200,
+                       help='KittenTTS text length threshold to trigger streaming (default: 200)')
+    parser.add_argument('--no-strip-markdown', action='store_true',
+                       help='Keep markdown formatting (default: strip markdown)')
+    parser.add_argument('--refresh-model', action='store_true',
+                       help='Check Hugging Face for KittenTTS model updates even when cached')
+    parser.add_argument('--voice-ref',
+                       help='Chatterbox reference WAV for voice cloning')
+    parser.add_argument('--chatterbox-device', choices=['auto', 'cpu', 'mps', 'cuda'], default=None,
+                       help='Chatterbox device override (default: auto)')
+    parser.add_argument('--chatterbox-python', default='3.11',
+                       help='Python version uv should use for Chatterbox (default: 3.11)')
+    parser.add_argument('--chatterbox-package', default='chatterbox-tts',
+                       help='Python package spec for Chatterbox (default: chatterbox-tts)')
+
+    args = parser.parse_args()
+
+    text = "" if args.list_voices else get_input_text(args, parser)
+
+    if args.backend == "chatterbox":
+        generate_with_chatterbox(args, text)
+    else:
+        generate_with_kitten(args, text)
+
+if __name__ == '__main__':
+    main()

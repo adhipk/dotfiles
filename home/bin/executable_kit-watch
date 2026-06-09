@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage:
+  kit-watch [--tail] [--no-initial] [--debounce SECONDS] FILE [-- KIT_ARGS...]
+
+Examples:
+  kit-watch notes.md
+  kit-watch --tail notes.md
+  kit-watch notes.md -- -v Luna -s 1.1
+  kit-watch --no-initial draft.txt -- --stream-threshold 100
+
+Watches FILE with fswatch and reads its full contents with kit whenever it
+changes. With --tail, only newly appended text is read after the initial pass.
+KIT_ARGS are passed directly to kit.
+EOF
+}
+
+if ! command -v fswatch >/dev/null 2>&1; then
+  echo "kit-watch: fswatch not found." >&2
+  echo "Install it with: brew install fswatch" >&2
+  exit 1
+fi
+
+if ! command -v kit >/dev/null 2>&1; then
+  echo "kit-watch: kit not found in PATH." >&2
+  exit 1
+fi
+
+initial=1
+tail_mode=0
+debounce="0.4"
+file=""
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --no-initial)
+      initial=0
+      shift
+      ;;
+    --tail)
+      tail_mode=1
+      shift
+      ;;
+    --debounce)
+      if [ "$#" -lt 2 ]; then
+        echo "kit-watch: --debounce requires a value." >&2
+        exit 2
+      fi
+      debounce="$2"
+      shift 2
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "kit-watch: unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+    *)
+      file="$1"
+      shift
+      if [ "${1-}" = "--" ]; then
+        shift
+      fi
+      break
+      ;;
+  esac
+done
+
+if [ -z "$file" ]; then
+  echo "kit-watch: missing FILE." >&2
+  usage >&2
+  exit 2
+fi
+
+if [ ! -f "$file" ]; then
+  echo "kit-watch: file not found: $file" >&2
+  exit 1
+fi
+
+kit_args=("$@")
+last_size=0
+
+run_kit() {
+  if [ "${#kit_args[@]}" -gt 0 ]; then
+    kit "${kit_args[@]}"
+  else
+    kit
+  fi
+}
+
+read_file() {
+  if [ ! -s "$file" ]; then
+    echo "kit-watch: skipping empty file: $file" >&2
+    last_size=0
+    return
+  fi
+
+  echo "kit-watch: reading $file"
+  run_kit < "$file"
+  last_size="$(wc -c < "$file" | tr -d '[:space:]')"
+}
+
+read_tail() {
+  local current_size start_byte
+
+  if [ ! -s "$file" ]; then
+    echo "kit-watch: skipping empty file: $file" >&2
+    last_size=0
+    return
+  fi
+
+  current_size="$(wc -c < "$file" | tr -d '[:space:]')"
+
+  if [ "$current_size" -lt "$last_size" ]; then
+    echo "kit-watch: file shrank; resetting tail offset." >&2
+    last_size=0
+  fi
+
+  if [ "$current_size" -eq "$last_size" ]; then
+    echo "kit-watch: no appended text."
+    return
+  fi
+
+  start_byte=$((last_size + 1))
+  echo "kit-watch: reading appended text from byte $start_byte"
+  tail -c +"$start_byte" "$file" | run_kit
+  last_size="$current_size"
+}
+
+echo "kit-watch: watching $file"
+echo "kit-watch: Ctrl-C to stop"
+
+if [ "$initial" -eq 1 ]; then
+  read_file
+else
+  last_size="$(wc -c < "$file" | tr -d '[:space:]')"
+fi
+
+fswatch -o "$file" | while read -r _; do
+  sleep "$debounce"
+  if [ "$tail_mode" -eq 1 ]; then
+    read_tail
+  else
+    read_file
+  fi
+done

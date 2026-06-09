@@ -147,7 +147,7 @@ bundle ID.
 - tap `caps lock`: toggle Caps Lock
 - hold `caps lock`: send `ctrl + opt + cmd`
 - `alt + n`: create a space and focus it
-- `alt + backtick` / `alt + ~`: focus Ghostty
+- `alt + backtick` / `alt + ~`: focus Ghostty, skipping task windows titled like `nvim`, `vim`, `codex`, `claude`, or Codex's `Action Required` status
 - `alt + r`: restart yabai and skhd
 - `alt + /`: show the keybinding cheat sheet
 
