@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Task report — {{PROJECT}}</title>
+  <link rel="stylesheet" href="shared/hyperspace.css">
+  <script src="https://hyperclayjs.com/hyperclay.js?edit-mode,save-system,save-toast"></script>
+</head>
+<body data-project="{{PROJECT}}" data-agent="{{AGENT}}" data-updated="{{ISO8601}}">
+  <header>
+    <h1>Task report</h1>
+    <p class="meta">Project: <strong>{{PROJECT}}</strong> · Agent: <strong>{{AGENT}}</strong></p>
+  </header>
+  <main id="content">
+    <section>
+      <h2>Summary</h2>
+      <p>{{SUMMARY}}</p>
+    </section>
+    <section>
+      <h2>What changed</h2>
+      <ul>
+        <li>{{CHANGE_1}}</li>
+      </ul>
+    </section>
+    <section>
+      <h2>Commands run</h2>
+      <pre>{{COMMANDS}}</pre>
+    </section>
+    <section>
+      <h2>Next steps</h2>
+      <ul>
+        <li>{{NEXT_STEP}}</li>
+      </ul>
+    </section>
+    <section>
+      <h2>Status</h2>
+      <p><span class="badge success">completed</span> <!-- or needs-input / blocked --></p>
+    </section>
+  </main>
+  <footer>Task report · {{ISO8601}}</footer>
+</body>
+</html>

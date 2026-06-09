@@ -7,6 +7,19 @@ Chezmoi applies it to `~/.agents`.
 
 - `skills/` maps to `~/.agents/skills` for personal Codex skills.
 - `docs/` maps to `~/.agents/docs` for centralized agent-readable documentation.
+- `profiles/` maps to `~/.agents/profiles` for optional agent profiles that do not
+  override these defaults unless explicitly activated.
+
+## Profiles
+
+Optional profiles live under `profiles/<name>/`. They are **opt-in** — default behavior
+is unchanged unless you activate a profile (e.g. `nearly-headless print-agents`).
+
+| Profile | Purpose |
+|---------|---------|
+| `nearly-headless` | Headless tmux agents, HTML artifacts, hyperspace integration |
+
+See `profiles/nearly-headless/README.md` and `docs/nearly-headless.md`.
 
 ## Codex Skills
 

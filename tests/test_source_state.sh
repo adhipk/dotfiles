@@ -97,9 +97,19 @@ for file in \
     executable_tmux-session-picker \
     executable_tmux-sessionizer-zoxide \
     executable_unescape-buffer \
-    executable_unescape-string; do
+    executable_unescape-string \
+    executable_nearly-headless \
+    executable_hyperspace-open-report; do
     assert_file_exists "$DOTFILES_DIR/home/bin/$file" "$file is declared"
 done
+
+echo ""
+echo "Testing nearly-headless profile..."
+assert_file_exists "$DOTFILES_DIR/home/dot_agents/profiles/nearly-headless/AGENTS.md" "nearly-headless profile exists"
+assert_file_exists "$DOTFILES_DIR/home/dot_agents/skills/html-artifact/SKILL.md" "html-artifact skill exists"
+assert_file_exists "$DOTFILES_DIR/home/dot_agents/skills/hyperspace-status/SKILL.md" "hyperspace-status skill exists"
+assert_file_exists "$DOTFILES_DIR/home/dot_agents/docs/templates/base.html" "HTML base template exists"
+assert_contains "$DOTFILES_DIR/home/dot_agents/AGENTS.md" "profiles/" "Root agents docs mention profiles"
 
 echo ""
 echo "Testing scratchpad implementation..."

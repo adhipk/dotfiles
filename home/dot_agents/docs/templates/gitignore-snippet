@@ -1,0 +1,3 @@
+# Add to project .gitignore for nearly-headless artifacts
+.hyperspace/
+!.hyperspace/.gitkeep

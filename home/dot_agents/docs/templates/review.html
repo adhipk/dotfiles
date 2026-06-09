@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Review — {{TITLE}}</title>
+  <link rel="stylesheet" href="shared/hyperspace.css">
+  <script src="https://hyperclayjs.com/hyperclay.js?edit-mode,save-system,save-toast"></script>
+</head>
+<body data-project="{{PROJECT}}" data-agent="{{AGENT}}" data-updated="{{ISO8601}}">
+  <header>
+    <h1>{{TITLE}}</h1>
+    <p class="meta">Review target: <strong>{{REVIEW_TARGET}}</strong></p>
+  </header>
+  <main id="content">
+    <section>
+      <h2>Overview</h2>
+      <p>{{OVERVIEW}}</p>
+    </section>
+    <section>
+      <h2>Findings</h2>
+      <article class="finding severity-high">
+        <h3>High — {{FINDING_TITLE}}</h3>
+        <p>{{FINDING_BODY}}</p>
+        <pre>{{DIFF_SNIPPET}}</pre>
+      </article>
+      <article class="finding severity-medium">
+        <h3>Medium — example finding</h3>
+        <p>Description of issue.</p>
+      </article>
+      <article class="finding severity-low">
+        <h3>Low — nit</h3>
+        <p>Minor suggestion.</p>
+      </article>
+    </section>
+    <section>
+      <h2>Verdict</h2>
+      <p class="callout">{{VERDICT}}</p>
+    </section>
+  </main>
+  <footer>Code review artifact · {{ISO8601}}</footer>
+</body>
+</html>

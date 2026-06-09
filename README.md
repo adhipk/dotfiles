@@ -113,6 +113,11 @@ applies to `~/.agents/`. Use `home/dot_agents/skills/` for personal Codex
 skills and `home/dot_agents/docs/` for centralized agent-readable
 documentation.
 
+Optional **nearly-headless** profile (`home/dot_agents/profiles/nearly-headless/`)
+for headless tmux agents that produce HTML artifacts instead of a chat UI.
+Activate with `nearly-headless print-agents`; open reports with
+`hyperspace-open-report <slug>`. See `home/dot_agents/docs/nearly-headless.md`.
+
 ## Shell Secrets
 
 `~/.zshrc` sources `~/.zshrc.secrets` when present. Keep machine-specific

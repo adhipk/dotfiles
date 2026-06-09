@@ -7,3 +7,8 @@ zshrc.secrets
 
 # Chrome extension repositories are declared as chezmoi externals.
 /extensions/
+
+# Agent-generated HTML artifacts (nearly-headless profile)
+.hyperspace/
+!.hyperspace/.gitkeep
+!.hyperspace/shared/

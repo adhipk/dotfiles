@@ -1,6 +1,16 @@
 # Planned changes
 This document tracks changes and behaviors I want to add to the dotfiles.
 
+## nearly-headless (HTML artifacts + headless agents)
+
+Task checklist: `home/dot_agents/profiles/nearly-headless/TASKS.md`
+
+- [x] Agent profile `nearly-headless` under `home/dot_agents/profiles/`
+- [x] HTML templates + HyperClay patterns in `home/dot_agents/docs/templates/`
+- [x] Skills `$html-artifact`, `$hyperspace-status`
+- [x] `nearly-headless` and `hyperspace-open-report` commands
+- [ ] tmux/sesh hyperspace runtime (phase 2 in TASKS.md)
+
 ## quick terminal (scratchpad) window.
  - Launch with tmux
  - automatically close (find out how scratchpads do this)

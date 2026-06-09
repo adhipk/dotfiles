@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Open a nearly-headless HTML artifact from .hyperspace/
+
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage:
+  hyperspace-open-report <slug> [--project DIR]
+
+Opens <project>/.hyperspace/<slug>.html in the default browser.
+Slug may include or omit the .html extension.
+EOF
+}
+
+resolve_project() {
+  local dir="${1:-.}"
+  cd "$dir"
+  if git rev-parse --show-toplevel >/dev/null 2>&1; then
+    git rev-parse --show-toplevel
+  else
+    pwd
+  fi
+}
+
+main() {
+  local slug=""
+  local project="."
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --project|-p)
+        project="${2:?missing directory after --project}"
+        shift 2
+        ;;
+      -h|--help|help)
+        usage
+        exit 0
+        ;;
+      *)
+        if [ -z "$slug" ]; then
+          slug="$1"
+          shift
+        else
+          echo "Unexpected argument: $1" >&2
+          usage >&2
+          exit 1
+        fi
+        ;;
+    esac
+  done
+
+  if [ -z "$slug" ]; then
+    usage >&2
+    exit 1
+  fi
+
+  case "$slug" in
+    *.html) ;;
+    *) slug="${slug}.html" ;;
+  esac
+
+  local root
+  root=$(resolve_project "$project")
+  local artifact="$root/.hyperspace/$slug"
+
+  if [ ! -f "$artifact" ]; then
+    echo "Artifact not found: $artifact" >&2
+    echo "Create with \$html-artifact or nearly-headless init-project" >&2
+    exit 1
+  fi
+
+  if ! command -v open >/dev/null 2>&1; then
+    echo "$artifact"
+    exit 0
+  fi
+
+  exec open "$artifact"
+}
+
+main "$@"

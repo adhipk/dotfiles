@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Status — {{PROJECT}}</title>
+  <link rel="stylesheet" href="shared/hyperspace.css">
+  <script src="https://hyperclayjs.com/hyperclay.js?edit-mode,save-system,save-toast"></script>
+</head>
+<body data-project="{{PROJECT}}" data-agent="{{AGENT}}" data-updated="{{ISO8601}}">
+  <header>
+    <h1>Hyperspace status</h1>
+    <p class="meta">Project: <strong>{{PROJECT}}</strong> · Session: <code>{{TMUX_SESSION}}</code></p>
+  </header>
+  <main id="content">
+    <section>
+      <h2>Agents</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Window</th>
+            <th>Provider</th>
+            <th>Status</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>codex-main</code></td>
+            <td>codex</td>
+            <td><span class="badge running">running</span></td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+    <section>
+      <h2>tmux sessions</h2>
+      <pre>{{TMUX_LIST}}</pre>
+    </section>
+    <section>
+      <h2>Artifacts</h2>
+      <ul>
+        <li><a href="status.html">status.html</a> (this page)</li>
+      </ul>
+    </section>
+  </main>
+  <footer>Regenerate with <code>$hyperspace-status</code> · {{ISO8601}}</footer>
+</body>
+</html>

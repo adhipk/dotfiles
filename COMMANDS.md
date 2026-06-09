@@ -23,6 +23,8 @@ These commands are installed into `~/bin`, which `home/dot_zshrc` adds to
 | `unescape-buffer` | Read escaped text from stdin and write unescaped newlines, tabs, carriage returns, quotes, and backslashes to stdout. Implemented in Node.js. | [`home/bin/executable_unescape-buffer`](home/bin/executable_unescape-buffer) |
 | `unescape-string` | Read escaped text from stdin and write an unescaped version to stdout. Implemented with `sed`. | [`home/bin/executable_unescape-string`](home/bin/executable_unescape-string) |
 | `watch-sync` | Watch the chezmoi source state with `fswatch` and apply it after changes. | [`home/bin/executable_watch-sync`](home/bin/executable_watch-sync) |
+| `nearly-headless` | Show, print, or initialize the nearly-headless agent profile (HTML artifacts, headless hyperspaces). | [`home/bin/executable_nearly-headless`](home/bin/executable_nearly-headless) |
+| `hyperspace-open-report` | Open `<project>/.hyperspace/<slug>.html` in the default browser. | [`home/bin/executable_hyperspace-open-report`](home/bin/executable_hyperspace-open-report) |
 
 `default-apps` is installed as a symlink by
 [`home/bin/symlink_default-apps.tmpl`](home/bin/symlink_default-apps.tmpl).
@@ -73,6 +75,21 @@ watching at the current end of the file.
 `uv` and keeps KittenTTS as the default backend. Chatterbox is intended for
 higher quality voice-cloned readback and accepts a reference WAV with
 `--voice-ref`.
+
+### Nearly-headless (HTML artifacts)
+
+```bash
+nearly-headless info
+nearly-headless print-agents
+nearly-headless tasks
+nearly-headless init-project
+nearly-headless init-project ~/my-project
+hyperspace-open-report status
+hyperspace-open-report pr-142 --project ~/dotfiles
+```
+
+Profile docs: [`home/dot_agents/docs/nearly-headless.md`](home/dot_agents/docs/nearly-headless.md).
+Task list: [`home/dot_agents/profiles/nearly-headless/TASKS.md`](home/dot_agents/profiles/nearly-headless/TASKS.md).
 
 ## Shell Commands
 

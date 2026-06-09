@@ -4,6 +4,11 @@
 
 Create personal Codex skills in `~/.agents/skills` and manage their source through this dotfiles repository at `home/dot_agents/skills`.
 
+### Skills Created
+
+- `$html-artifact`: HTML reports for nearly-headless profile (`.hyperspace/`).
+- `$hyperspace-status`: tmux status dashboard HTML.
+
 ### Skills To Create
 
 - `$add-note`: Save relevant user messages or requested content into the notes folder.

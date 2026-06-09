@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Decision required — {{PROJECT}}</title>
+  <link rel="stylesheet" href="shared/hyperspace.css">
+  <script src="https://hyperclayjs.com/hyperclay.js?edit-mode,save-system,save-toast,ask,consent"></script>
+</head>
+<body data-project="{{PROJECT}}" data-agent="{{AGENT}}" data-updated="{{ISO8601}}">
+  <header>
+    <h1>Decision required</h1>
+    <p class="meta">Agent <strong>{{AGENT}}</strong> is blocked until you choose.</p>
+  </header>
+  <main id="content">
+    <section class="callout warning">
+      <p><strong>Waiting for user input.</strong> Review below, then respond in tmux or edit this page.</p>
+    </section>
+    <section>
+      <h2>Context</h2>
+      <p>{{CONTEXT}}</p>
+    </section>
+    <section>
+      <h2>Options</h2>
+      <ol>
+        <li><strong>{{OPTION_A}}</strong> — {{OPTION_A_DESC}}</li>
+        <li><strong>{{OPTION_B}}</strong> — {{OPTION_B_DESC}}</li>
+      </ol>
+    </section>
+    <section>
+      <h2>Recommendation</h2>
+      <p>{{RECOMMENDATION}}</p>
+    </section>
+    <section>
+      <h2>Your response</h2>
+      <p contenteditable="true" id="user-response" data-persist>
+        Type your decision here. Save the page (HyperClay save) or reply in the agent terminal.
+      </p>
+    </section>
+  </main>
+  <footer>Decision artifact · notify user with path to this file · {{ISO8601}}</footer>
+</body>
+</html>
