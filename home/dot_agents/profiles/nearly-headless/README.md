@@ -43,8 +43,7 @@ headless session. Point the agent at `~/.agents/profiles/nearly-headless/AGENTS.
 ### Codex
 
 Start Codex through the renderer runner or your preferred provider session and
-invoke `$html-artifact` for profile skills. `$hyperspace-status` is only for the
-separate tmux utility. Personal skills live in `~/.agents/skills/`.
+invoke `$html-artifact` or `$live-doc` for profile skills. Personal skills live in `~/.agents/skills/`.
 
 ### Claude Code
 
@@ -62,12 +61,12 @@ merge into the repo root `CLAUDE.md` unless the whole project is nearly-headless
 ├── docs/
 │   ├── nearly-headless.md
 │   ├── headless-html-artifacts.md
-│   ├── tmux-session-manager.md
+│   ├── agent-comms.md
 │   ├── hyperclay-patterns.md
 │   └── templates/     # HTML shells
 └── skills/
     ├── html-artifact/
-    └── hyperspace-status/
+    └── live-doc/
 ```
 
 ## Project output

@@ -7,7 +7,7 @@ Create personal Codex skills in `~/.agents/skills` and manage their source throu
 ### Skills Created
 
 - `$html-artifact`: HTML reports for nearly-headless profile (`.hyperspace/`).
-- `$hyperspace-status`: tmux status dashboard HTML.
+- `$live-doc`: shared `.hyperspace/livedoc.html` canvas.
 
 ### Skills To Create
 

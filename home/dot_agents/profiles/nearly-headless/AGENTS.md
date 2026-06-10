@@ -12,7 +12,7 @@ explicitly selects the nearly-headless profile.
 
 - Profile root: `~/.agents/profiles/nearly-headless/`
 - Run `nearly-headless print-agents` to print this file for Cursor/Codex context.
-- Invoke profile skills: `$html-artifact`, `$hyperspace-status`, `$live-doc`
+- Invoke profile skills: `$html-artifact`, `$live-doc`
 - Read: `~/.agents/docs/nearly-headless.md`, `~/.agents/docs/html-artifacts.md`,
   `~/.agents/docs/headless-html-artifacts.md`
 
@@ -73,13 +73,11 @@ Set `data-project`, `data-agent`, and `data-updated` on `<body>` (templates incl
 | Skill | When |
 |-------|------|
 | `$html-artifact` | Creating or updating any HTML artifact |
-| `$hyperspace-status` | Hyperspace tmux workspace status, not nearly-headless core |
 | `$live-doc` | User saved the browser canvas — read and execute |
 
 ## Related dotfiles
 
-- `hyperspace` CLI — separate tmux workspace manager, not nearly-headless runtime
 - `hyperspace-open-report` — open `.hyperspace/<slug>.html`
 - `nearly-headless` — profile helper commands
-- Docs: `~/.agents/docs/headless-html-artifacts.md`, `~/.agents/docs/tmux-session-manager.md`
+- Docs: `~/.agents/docs/headless-html-artifacts.md`
 - Task list: `~/.agents/profiles/nearly-headless/TASKS.md`

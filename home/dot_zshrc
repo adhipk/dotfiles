@@ -80,16 +80,7 @@ case ":$PATH:" in
 esac
 # pnpm end
 
-# sesh/tmux session manager integration
-
-bindkey -s '\ef' "tmux-sessionizer-zoxide\n"  # Alt+f (tmux sessions + zoxide via sesh)
-bindkey -s '\ee' "tmux-session-picker\n"      # Alt+e (existing tmux sessions via sesh)
-bindkey -s '\eh' "tmux-sessionizer -s 0\n"    # Alt+h (sesh slot 0)
-bindkey -s '\et' "tmux-sessionizer -s 1\n"    # Alt+t (sesh slot 1)
-bindkey -s '\en' "tmux-sessionizer -s 2\n"    # Alt+n (sesh slot 2)
-bindkey -s '\es' "tmux-sessionizer -s 3\n"    # Alt+s (sesh slot 3)
-
-# Tmux aliases
+# Tmux aliases (optional manual use)
 alias ta='tmux attach -t'
 alias tad='tmux attach -d -t'
 alias ts='tmux new-session -s'

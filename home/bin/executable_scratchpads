@@ -3,7 +3,6 @@
 set -euo pipefail
 
 SCRATCHPAD_LOG_FILE="${SCRATCHPAD_LOG_FILE:-/tmp/scratchpads_${USER:-unknown}.log}"
-TMUX_SESSIONIZER="${TMUX_SESSIONIZER_CMD:-$HOME/bin/tmux-sessionizer-zoxide}"
 
 usage() {
   cat <<'EOF'
@@ -596,7 +595,6 @@ open_scratchpad_with_profile() {
 debug_state() {
   {
     printf 'log_file=%s\n' "$SCRATCHPAD_LOG_FILE"
-    printf 'tmux_sessionizer=%s\n' "$TMUX_SESSIONIZER"
     printf '\nfocused_window:\n'
     if query_focused_window_json >/dev/null 2>&1; then
       query_focused_window_json | jq '{id, app, title, scratchpad, is_visible: ."is-visible", has_focus: ."has-focus"}'

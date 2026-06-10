@@ -1,12 +1,10 @@
 {
   "defaults": {
     "codex-main": {
-      "provider": "codex",
-      "launch": "hyperspace-window-launch codex"
+      "provider": "codex"
     },
     "claude-review": {
-      "provider": "claude",
-      "launch": "hyperspace-window-launch claude"
+      "provider": "claude"
     }
   },
   "projects": {
@@ -16,8 +14,7 @@
       "liveDocWindow": "codex-main",
       "windows": {
         "codex-main": {
-          "provider": "codex",
-          "launch": "hyperspace-window-launch codex"
+          "provider": "codex"
         }
       }
     }

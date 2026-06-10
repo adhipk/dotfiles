@@ -33,5 +33,5 @@ tms() {
 
   tmux new-session -d -s "$session_name" -c "$directory"
   echo "Created session '$session_name' in $directory"
-  echo "Switch with: Alt+F or tmux attach -t $session_name"
+  echo "Attach with: tmux attach -t $session_name"
 }

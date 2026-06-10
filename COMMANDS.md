@@ -19,16 +19,12 @@ These commands are installed into `~/bin`, which `home/dot_zshrc` adds to
 | `reload-colors` | Restart yabai and skhd, then reload tmux configuration when tmux is running. | [`home/bin/executable_reload-colors`](home/bin/executable_reload-colors) |
 | `reset-yabai` | Reinstall and pin `yabai@7.1.16`, update its scripting-addition sudoers entry, and restart its service. This uses `sudo` and changes Homebrew packages and `/etc/sudoers.d/yabai`. | [`home/bin/executable_reset-yabai`](home/bin/executable_reset-yabai) |
 | `serve_md` | Render a Markdown file or folder with Pandoc and serve it from a managed local Caddy site. | [`home/bin/executable_serve_md`](home/bin/executable_serve_md) |
-| `tmux-session-picker` | Select and switch to an existing tmux session with `sesh` + `fzf`. | [`home/bin/executable_tmux-session-picker`](home/bin/executable_tmux-session-picker) |
-| `tmux-sessionizer-zoxide` | Pick from existing tmux sessions or zoxide-ranked directories and connect via `sesh`. | [`home/bin/executable_tmux-sessionizer-zoxide`](home/bin/executable_tmux-sessionizer-zoxide) |
-| `tmux-sessionizer` | Compatibility wrapper for `-s <index>` and interactive selection, backed by `sesh`. | [`home/bin/executable_tmux-sessionizer`](home/bin/executable_tmux-sessionizer) |
 | `unescape-buffer` | Read escaped text from stdin and write unescaped newlines, tabs, carriage returns, quotes, and backslashes to stdout. Implemented in Node.js. | [`home/bin/executable_unescape-buffer`](home/bin/executable_unescape-buffer) |
 | `unescape-string` | Read escaped text from stdin and write an unescaped version to stdout. Implemented with `sed`. | [`home/bin/executable_unescape-string`](home/bin/executable_unescape-string) |
 | `watch-sync` | Watch the chezmoi source state with `fswatch` and apply it after changes. | [`home/bin/executable_watch-sync`](home/bin/executable_watch-sync) |
 | `headless-artifacts` | Compatibility alias for `nearly-headless`. | [`home/bin/executable_headless-artifacts`](home/bin/executable_headless-artifacts) |
 | `nearly-headless` | Shim into the standalone TypeScript app at `~/.local/share/nearly-headless`. | [`home/bin/executable_nearly-headless`](home/bin/executable_nearly-headless) |
 | `hyperspace-open-report` | Compatibility alias for `nearly-headless open`. | [`home/bin/executable_hyperspace-open-report`](home/bin/executable_hyperspace-open-report) |
-| `hyperspace` | Hyperspace tmux workspace manager: project terminals, agent panes, editors, pins, and connect/search helpers. | [`home/bin/executable_hyperspace`](home/bin/executable_hyperspace) |
 | `hyperspace-serve` | Compatibility alias for `nearly-headless serve`. | [`home/bin/executable_hyperspace-serve`](home/bin/executable_hyperspace-serve) |
 
 `default-apps` is installed as a symlink by
@@ -132,25 +128,8 @@ hyperspace-serve stop
 Local server: `http://127.0.0.1:4200/<route>/` is the nearly-headless workspace: create tasks, watch progress, inspect artifacts, and answer agent-generated interactive inputs. See [`home/dot_agents/docs/nearly-headless.md`](home/dot_agents/docs/nearly-headless.md).
 
 Dotfiles only installs shims for nearly-headless. The app source/build should
-live in the external project `~/.local/share/nearly-headless`.
-
-### Hyperspace
-
-```bash
-hyperspace
-hyperspace open dotfiles
-hyperspace start dotfiles codex-main
-hyperspace focus dotfiles codex-main
-hyperspace stop dotfiles codex-main
-hyperspace agent start dotfiles codex-main
-hyperspace agent focus dotfiles codex-main
-hyperspace agent status dotfiles
-hyperspace connect 2
-hyperspace pin 2
-hyperspace search
-```
-
-`hyperspace` is the tmux workspace manager for local project windows/panes. It is a separate idea from nearly-headless. See [`home/dot_agents/docs/tmux-session-manager.md`](home/dot_agents/docs/tmux-session-manager.md).
+live in the external project `~/.local/share/nearly-headless`. Migration status:
+[MIGRATION.md](MIGRATION.md) · workflow: [EXTERNAL-PROJECTS.md](EXTERNAL-PROJECTS.md).
 
 Profile docs: [`home/dot_agents/docs/nearly-headless.md`](home/dot_agents/docs/nearly-headless.md).
 Task list: [`home/dot_agents/profiles/nearly-headless/TASKS.md`](home/dot_agents/profiles/nearly-headless/TASKS.md).
@@ -181,11 +160,6 @@ It also defines convenience aliases:
 | `tksv` | `tmux kill-server` |
 | `tkss` | `tmux kill-session -t` |
 | `roigin` | `origin` |
-
-The shell binds `Alt+f` to `tmux-sessionizer-zoxide` and `Alt+e` to
-`tmux-session-picker`; both use `sesh` under the hood.
-`Alt+h`, `Alt+t`, `Alt+n`, and `Alt+s` use `tmux-sessionizer -s 0..3`, and this repository
-includes a `tmux-sessionizer` wrapper that maps those slots to `sesh`.
 
 ## Repository Commands
 
@@ -285,11 +259,6 @@ operations to these shortcuts:
 | `Alt+r` | Restart yabai and skhd. |
 | `Alt+/` | Toggle the `whichkey` overlay. |
 
-Hyperspace hyper bindings (`hyper+1-9` connect, `hyper++` pin, `hyper+-` unpin,
-`hyper+space` search, `hyper+n` spotlight scratchpad) are in
-[`home/dot_skhdrc`](home/dot_skhdrc). These bindings target the tmux session
-manager. See [`hyperspace`](home/bin/executable_hyperspace).
-
 ## Configuration Utilities
 
 | Source | Purpose |
@@ -304,7 +273,7 @@ manager. See [`hyperspace`](home/bin/executable_hyperspace).
 The main [`home/dot_yabairc`](home/dot_yabairc) configures BSP tiling, padding,
 window rules, fixed space labels, optional scripting-addition loading, and
 JankyBorders startup. [`home/dot_tmux.conf`](home/dot_tmux.conf) configures tmux
-and is documented further in [`TMUX_GUIDE.md`](TMUX_GUIDE.md).
+for optional manual use.
 
 ## Chezmoi Automation
 

@@ -96,16 +96,12 @@ for file in \
     executable_scratchpads \
     executable_serve_md \
     symlink_default-apps.tmpl \
-    executable_tmux-session-picker \
-    executable_tmux-sessionizer-zoxide \
     executable_unescape-buffer \
     executable_unescape-string \
     executable_headless-artifacts \
     executable_nearly-headless \
     executable_hyperspace-open-report \
-    executable_hyperspace \
     executable_hyperspace-serve \
-    executable_hyperspace-window-launch \
     executable_hyperspace-run-live-doc; do
     assert_file_exists "$DOTFILES_DIR/home/bin/$file" "$file is declared"
 done
@@ -114,12 +110,14 @@ echo ""
 echo "Testing nearly-headless profile..."
 assert_file_exists "$DOTFILES_DIR/home/dot_agents/profiles/nearly-headless/AGENTS.md" "nearly-headless profile exists"
 assert_file_exists "$DOTFILES_DIR/home/dot_agents/skills/html-artifact/SKILL.md" "html-artifact skill exists"
-assert_file_exists "$DOTFILES_DIR/home/dot_agents/skills/hyperspace-status/SKILL.md" "hyperspace-status skill exists"
+assert_file_exists "$DOTFILES_DIR/home/dot_agents/skills/live-doc/SKILL.md" "live-doc skill exists"
+assert_not_contains "$DOTFILES_DIR/home/dot_agents/profiles/nearly-headless/AGENTS.md" "hyperspace-status" "profile docs no longer reference hyperspace-status"
 assert_file_exists "$DOTFILES_DIR/home/dot_agents/docs/templates/base.html" "HTML base template exists"
 assert_file_exists "$DOTFILES_DIR/home/dot_agents/docs/html-artifacts.md" "HTML artifacts guide exists"
 assert_file_exists "$DOTFILES_DIR/home/dot_agents/docs/headless-html-artifacts.md" "nearly-headless product guide exists"
 assert_file_exists "$DOTFILES_DIR/home/dot_agents/docs/nearly-headless-product.md" "nearly-headless product thesis exists"
-assert_file_exists "$DOTFILES_DIR/home/dot_agents/docs/tmux-session-manager.md" "tmux session manager guide exists"
+assert_not_contains "$DOTFILES_DIR/home/dot_agents/docs/nearly-headless.md" "tmux-session-manager" "nearly-headless doc no longer references tmux manager"
+assert_contains "$DOTFILES_DIR/AGENTS.md" "Hyperspace live doc" "dotfiles AGENTS.md documents live doc"
 assert_file_exists "$DOTFILES_DIR/home/dot_config/nearly-headless/config.json" "nearly-headless config exists"
 assert_file_exists "$DOTFILES_DIR/home/dot_agents/docs/templates/components/finding.html" "HTML finding component exists"
 assert_not_contains "$DOTFILES_DIR/home/dot_agents/docs/templates/review.html" "hyperclay" "Review template is plain HTML"
@@ -137,40 +135,27 @@ assert_contains "$DOTFILES_DIR/Brewfile" "brew \"caddy\"" "Brewfile installs cad
 assert_contains "$DOTFILES_DIR/Brewfile" "brew \"pandoc\"" "Brewfile installs pandoc for serve_md"
 
 echo ""
-echo "Testing hyperspace runtime..."
-assert_file_exists "$DOTFILES_DIR/home/dot_config/sesh/sesh.toml" "sesh.toml exists"
-assert_file_exists "$DOTFILES_DIR/home/dot_config/hyperspaces/config.json" "hyperspace config exists"
-assert_file_exists "$DOTFILES_DIR/home/dot_config/hyperspaces/executable_notify.sh" "hyperspace notify script exists"
-assert_contains "$DOTFILES_DIR/home/dot_tmux.conf" "alert-bell" "tmux config wires alert-bell hook"
-assert_contains "$DOTFILES_DIR/home/dot_skhdrc" "hyperspace connect 1" "skhd loads hyperspace bindings"
-assert_contains "$DOTFILES_DIR/home/bin/executable_hyperspace" "connect_session" "hyperspace has session connect helper"
-assert_contains "$DOTFILES_DIR/home/bin/executable_hyperspace" "tmux select-window" "hyperspace focuses windows via tmux"
-assert_contains "$DOTFILES_DIR/home/bin/executable_hyperspace" "hyperspace focus" "hyperspace focus command exists"
-assert_file_exists "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "hyperspace server script exists"
-assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "4200" "hyperspace server defaults to port 4200"
-assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "discoverSessions" "hyperspace server routes by session"
-assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "resolveSession" "hyperspace server resolves session cwd"
-assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "spawnSync" "hyperspace server uses spawnSync for tmux"
-assert_file_exists "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_live.js" "hyperspace live doc client exists"
-assert_file_exists "$DOTFILES_DIR/home/dot_config/hyperspaces/components/hyperspace-components.js" "hyperspace web components JS exists"
-assert_file_exists "$DOTFILES_DIR/home/dot_config/hyperspaces/components/hyperspace-components.css" "hyperspace web components CSS exists"
+echo "Testing nearly-headless runtime..."
+assert_file_exists "$DOTFILES_DIR/home/dot_config/hyperspaces/config.json" "nearly-headless legacy config exists"
+assert_file_exists "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "nearly-headless server script exists"
+assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "4200" "nearly-headless server defaults to port 4200"
+assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "discoverSessions" "nearly-headless server discovers projects"
+assert_not_contains "$DOTFILES_DIR/home/dot_skhdrc" "hyperspace connect 1" "skhd no longer loads tmux hyperspace bindings"
+assert_not_contains "$DOTFILES_DIR/Brewfile" 'brew "sesh"' "sesh is not a brew dependency"
+assert_file_exists "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_live.js" "live doc client exists"
+assert_file_exists "$DOTFILES_DIR/home/dot_config/hyperspaces/components/hyperspace-components.js" "web components JS exists"
+assert_file_exists "$DOTFILES_DIR/home/dot_config/hyperspaces/components/hyperspace-components.css" "web components CSS exists"
 assert_file_exists "$DOTFILES_DIR/home/dot_config/hyperspaces/livedoc.html.template" "livedoc.html template exists"
 assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/components/hyperspace-components.js" "hs-callout" "web components register hs-callout"
-assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "livedoc.html" "hyperspace server uses livedoc.html source"
-assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "readLiveDoc" "hyperspace server loads live doc"
-assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "hyperspace-run-live-doc" "hyperspace server runs codex exec on save"
+assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "livedoc.html" "server uses livedoc.html source"
+assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "readLiveDoc" "server loads live doc"
+assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "hyperspace-run-live-doc" "server runs codex exec on save"
 assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "hyperspace-components.js" "live doc shell loads web components"
-assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "preview" "hyperspace server serves livedoc preview"
+assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "preview" "server serves livedoc preview"
 assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "live-doc-canvas" "live doc browser shows rendered editable canvas"
 assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "readRenderedCanvas" "live doc API serves canvas HTML"
 assert_not_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "build-live-doc" "live doc has no astro build step"
-assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/config.json" "hyperspace-window-launch" "config declares launch command"
-assert_contains "$DOTFILES_DIR/home/bin/executable_hyperspace-window-launch" "exec codex" "window launch starts interactive codex"
-assert_contains "$DOTFILES_DIR/AGENTS.md" "Hyperspace live doc" "dotfiles AGENTS.md documents live doc"
-assert_file_exists "$DOTFILES_DIR/home/dot_agents/skills/live-doc/SKILL.md" "live-doc skill exists"
-assert_contains "$DOTFILES_DIR/home/bin/executable_hyperspace" "valid_project_slug" "hyperspace validates project slugs"
-assert_contains "$DOTFILES_DIR/home/bin/executable_hyperspace" "HYPERSPACE_PROJECT_PATH" "hyperspace passes project path to agents"
-assert_contains "$DOTFILES_DIR/home/bin/executable_hyperspace" "normalize_project_id" "hyperspace normalizes project ids"
+assert_contains "$DOTFILES_DIR/MIGRATION.md" "Dropped: tmux / sesh" "migration doc records tmux stack removal"
 
 echo ""
 echo "Testing scratchpad implementation..."
@@ -178,10 +163,15 @@ assert_not_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" 'SCRATCHPAD_
 assert_not_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" 'scratchpads\.json' "Scratchpads CLI does not persist window IDs"
 assert_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_focus_app.sh" 'scratchpad // ""' "App focus helper excludes scratchpad windows"
 assert_not_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" 'SPOTLIGHT_SHELL' "Scratchpads CLI does not load hyperspace shell"
-assert_file_exists "$DOTFILES_DIR/home/dot_config/skhd/modules/hyperspace/executable_spotlight-zsh" "Hyperspace module keeps spotlight shell wrapper"
-assert_file_exists "$DOTFILES_DIR/home/dot_config/skhd/modules/hyperspace/dot_zshrc" "Hyperspace module keeps spotlight zshrc"
-assert_file_exists "$DOTFILES_DIR/home/dot_config/skhd/modules/hyperspace/executable_hyperspace" "Hyperspace module keeps hyperspace CLI"
-assert_file_exists "$DOTFILES_DIR/home/dot_config/skhd/modules/hyperspace/executable_open_spotlight_scratchpad" "Hyperspace module keeps spotlight scratchpad launcher"
+
+echo ""
+echo "Testing migration documentation..."
+assert_file_exists "$DOTFILES_DIR/MIGRATION.md" "migration status dashboard exists"
+assert_file_exists "$DOTFILES_DIR/EXTERNAL-PROJECTS.md" "external projects workflow exists"
+assert_file_exists "$DOTFILES_DIR/home/dot_agents/docs/agent-comms.md" "agent-comms boundary doc exists"
+assert_contains "$DOTFILES_DIR/MIGRATION.md" "agent-comms" "migration doc covers agent-comms"
+assert_contains "$DOTFILES_DIR/MIGRATION.md" "gemma-gem" "migration doc covers gemma-gem"
+assert_contains "$DOTFILES_DIR/home/dot_agents/profiles/nearly-headless/TASKS.md" "Phase 3" "task list includes extraction phase"
 
 echo ""
 echo "Testing extension declarations..."

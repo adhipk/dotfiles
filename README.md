@@ -93,6 +93,8 @@ See [EXTERNAL-PROJECTS.md](EXTERNAL-PROJECTS.md) for the full workflow:
 register a tool as an external project first, then extract its source into a
 dedicated repository while dotfiles keeps only shims and machine wiring.
 
+**Migration status:** [MIGRATION.md](MIGRATION.md)
+
 The Lucide Excalidraw Raycast project is expected at:
 
 ```text
@@ -127,16 +129,17 @@ applies to `~/.agents/`. Use `home/dot_agents/skills/` for personal Codex
 skills and `home/dot_agents/docs/` for centralized agent-readable
 documentation.
 
-Optional agent workflows are split into two independent projects:
+Optional agent workflows:
 
 - **Nearly-headless** (`home/dot_agents/docs/nearly-headless.md`):
   a browser workspace for creating agent tasks, sending them to provider
   sessions, streaming progress, and letting agents build interactive UI when
   they need input. Its HTML-first interaction model is based on
   `articles/Unreasonable-Effectiveness-of-HTML.html`.
-- **Hyperspace** (`home/dot_agents/docs/tmux-session-manager.md`):
-  a tmux workspace manager for keeping project terminals, agent sessions, and
-  editors together with pinned keyboard navigation.
+- **Agent-comms** (`home/dot_agents/docs/agent-comms.md`):
+  planned local event bus for cross-tool messaging (prototype only).
+
+See [MIGRATION.md](MIGRATION.md) for extraction status.
 
 The nearly-headless profile (`home/dot_agents/profiles/nearly-headless/`) adds
 artifact and live-doc authoring defaults. Activate with
@@ -182,8 +185,3 @@ bundle ID.
 - `alt + r`: restart yabai and skhd
 - `alt + /`: show the keybinding cheat sheet
 - `hyper + d`: defuddle the URL in the clipboard into readable HTML, keeping original CSS links, save it to `~/Downloads/defuddled-pages`, copy it, and open it
-
-Hyperspace hyper bindings (`hyper+1-9` connect, `hyper++` pin, `hyper+-` unpin,
-`hyper+space` search) are in `home/dot_skhdrc`. The `hyperspace` command
-(`home/bin/executable_hyperspace`) is the tmux workspace manager only.
-Nearly-headless runs separately through `nearly-headless serve`.

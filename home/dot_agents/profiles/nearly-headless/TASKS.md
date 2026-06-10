@@ -2,19 +2,21 @@
 
 Track implementation progress here. Update checkboxes as work lands in dotfiles.
 
-Nearly-headless is the browser task workspace for provider-backed agents.
-Hyperspace is the separate tmux workspace manager. See
-`~/.agents/docs/nearly-headless.md` and `~/.agents/docs/tmux-session-manager.md`.
+**Migration status:** `MIGRATION.md` in the dotfiles repository ·
+**Extraction workflow:** `EXTERNAL-PROJECTS.md` in the dotfiles repository
 
-## Phase 1 — Presentation layer (this PR)
+Nearly-headless is the browser task workspace for provider-backed agents.
+See `~/.agents/docs/nearly-headless.md`.
+
+## Phase 1 — Presentation layer
 
 - [x] `nearly-headless` agent profile (`profiles/nearly-headless/`)
 - [x] HTML templates + shared CSS (`docs/templates/`)
 - [x] `$html-artifact` skill
 - [x] `$live-doc` skill
 - [x] `hyperclay-patterns.md` agent reference
-- [x] `nearly-headless` CLI helper
-- [x] `hyperspace-open-report` command
+- [x] `nearly-headless` CLI shim
+- [x] Compatibility aliases (`hyperspace-serve`, `hyperspace-open-report`, `headless-artifacts`)
 
 ## Phase 2 — Nearly-headless app core
 
@@ -29,22 +31,25 @@ Hyperspace is the separate tmux workspace manager. See
 - [ ] Scoped agent writes for task/artifact surfaces
 - [ ] Approval/user-input flow with interactive generated UI
 
-## Hyperspace — tmux workspace manager
+## Phase 3 — Extraction to external repo
 
-- [x] `sesh.toml` hyperspace session templates (`hs-<project>` windows)
-- [x] Extend `hyperspace` CLI: `agent start|focus|status`, `connect --switch`
-- [x] tmux hooks: `pane-died`, `alert-bell` → `notify.sh`
-- [x] `set -g exit-empty off` for agent sessions
-- [x] Enable hyperspace bindings in `home/dot_skhdrc`
-- [x] Split tmux manager default path from HTML artifact server startup
-- [ ] `hyperspace watch` — poll tmux, notify on state transitions
-- [ ] Notification body includes project/window/status path
+Per `EXTERNAL-PROJECTS.md` Phase 2 checklist:
+
+- [x] Register `nearly-headless` in `home/.chezmoidata.toml`
+- [x] Add `home/bin/executable_nearly-headless` shim
+- [ ] Move server/runtime from `home/dot_config/hyperspaces/` to external repo
+- [ ] Move HTML components and live-doc shell to external repo
+- [ ] Point config at `~/.config/nearly-headless/`
+- [ ] Remove duplicate implementation from dotfiles (keep shims only)
 
 ## Phase 4 — Polish
 
-- [ ] Raycast deeplink for hyperspace search
-- [ ] `live-sync` on status dashboard (HyperClay SSE)
 - [ ] Per-project `.hyperspace/` gitignore in chezmoi external template
+
+## Dropped
+
+- **Hyperspace tmux workspace manager** — removed; see `MIGRATION.md` § Dropped
+- **`$hyperspace-status` skill** — removed with tmux manager
 
 ## Done criteria
 
@@ -52,4 +57,4 @@ Hyperspace is the separate tmux workspace manager. See
 2. Task dispatches to a provider session and streams progress.
 3. Agent can request input by generating an interactive page surface.
 4. `hyperspace-open-report status` opens a static artifact when needed.
-3. Default `~/.agents/AGENTS.md` behavior is unchanged without profile activation.
+5. Default `~/.agents/AGENTS.md` behavior is unchanged without profile activation.

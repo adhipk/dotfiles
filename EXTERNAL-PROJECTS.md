@@ -1,5 +1,8 @@
 # External Projects
 
+**Migration status:** [MIGRATION.md](MIGRATION.md) tracks product phases and
+extraction progress for all projects. This document describes the workflow.
+
 Tools in this repository often start as small scripts under `home/bin/` or
 `scripts/`. When they grow into real projects — CLIs, browser apps, Raycast
 extensions, libraries — they belong in their own Git repositories. Dotfiles
@@ -63,7 +66,11 @@ Existing examples:
 ~/.local/share/nearly-headless
 ~/.local/share/raycast-extensions/raycast-lucide-excalidraw
 ~/.local/share/chrome-extensions/gemma-gem
+~/.local/share/agent-comms          # planned
 ```
+
+Local prototypes before a remote exists live under `extensions/` (gitignored).
+See [MIGRATION.md](MIGRATION.md) for current prototype paths.
 
 ### 2. Declare it in `home/.chezmoidata.toml`
 
@@ -225,10 +232,13 @@ documented in this repo:
 
 - **Nearly-headless** — browser task workspace, artifact server, live-doc UI.
   See `home/dot_agents/docs/nearly-headless.md`.
-- **Hyperspace** — tmux workspace manager only. See
-  `home/dot_agents/docs/tmux-session-manager.md`.
+- **Agent-comms** — local event bus for cross-tool messaging. See
+  `home/dot_agents/docs/agent-comms.md`.
+- **Gemma-gem** — on-device Chrome extension; fork of upstream
+  `kessler/gemma-gem`. See [MIGRATION.md](MIGRATION.md#gemma-gem).
 
-Those two projects must not share implementation trees after extraction.
+Agent-comms is a shared library — consumers integrate via adapters in their own
+repos.
 
 ### Rename and path cleanup
 
@@ -239,7 +249,9 @@ during prototyping:
 | --- | --- |
 | `hyperspace_server.mjs`, `hyperspace-serve` | `nearly-headless serve` |
 | `~/.config/hyperspaces/` (server/runtime) | `~/.config/nearly-headless/` |
-| `hyperspace` CLI | tmux manager in `adhipk/hyperspace` (separate repo) |
+| `hyperspace-open-report` | `nearly-headless open` |
+
+The old `hyperspace` tmux CLI was dropped — do not extract it.
 
 Keep old command names as compatibility shims for one release cycle when
 renaming user-facing entrypoints.
@@ -283,16 +295,17 @@ chezmoi apply   # reruns setupCommands when HEAD changes
 
 ## Current inventory
 
-| Project | Remote | Dotfiles role | Extraction status |
+Canonical status: [MIGRATION.md](MIGRATION.md#project-inventory). Summary:
+
+| Project | Remote | Dotfiles role | External phase |
 | --- | --- | --- | --- |
-| nearly-headless | `git@github.com:adhipk/nearly-headless.git` | Shim + agent profile/docs; server still partially in `home/dot_config/hyperspaces/` | In progress |
+| nearly-headless | `git@github.com:adhipk/nearly-headless.git` | Shim + profile/docs; server still in `home/dot_config/hyperspaces/` | Phase 2 in progress |
 | raycast-lucide-excalidraw | `git@github.com:adhipk/raycast-lucide-excalidraw.git` | External + dev shim | Extracted |
-| gemma-gem | `https://github.com/kessler/gemma-gem.git` (fork planned) | Chrome external; local work under `extensions/` (gitignored) | Track separately → fork |
-| hyperspace | (planned `adhipk/hyperspace`) | Full CLI in `home/bin/executable_hyperspace` | Not yet extracted |
-| agent-comms | (planned) | Prototype under `extensions/gemma-gem/agent-comms/` | Not yet extracted |
+| gemma-gem | `https://github.com/kessler/gemma-gem.git` (fork planned) | Chrome external; local fork at `extensions/gemma-gem/` | Phase 1 only |
+| agent-comms | planned `adhipk/agent-comms` | Prototype at `extensions/gemma-gem/agent-comms/` | Not started |
 | default-apps | dotfiles `scripts/default-apps.sh` | Symlink from `~/bin` | Optional extract |
 
-Update this table when a project crosses Phase 1 or Phase 2.
+Update [MIGRATION.md](MIGRATION.md) when a project crosses a phase boundary.
 
 ## Quick reference — files to touch
 
@@ -307,7 +320,9 @@ Update this table when a project crosses Phase 1 or Phase 2.
 
 ## Related docs
 
+- [MIGRATION.md](MIGRATION.md) — migration status dashboard
 - [README.md](README.md) — repository layout and bootstrap
 - [COMMANDS.md](COMMANDS.md) — installed commands and shortcuts
+- `home/dot_agents/profiles/nearly-headless/TASKS.md` — product build checklist
 - `home/dot_agents/docs/nearly-headless.md` — nearly-headless product boundary
-- `home/dot_agents/docs/tmux-session-manager.md` — hyperspace product boundary
+- `home/dot_agents/docs/agent-comms.md` — agent-comms product boundary

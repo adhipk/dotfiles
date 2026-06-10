@@ -34,5 +34,6 @@ See `profiles/nearly-headless/README.md` and `docs/nearly-headless.md`.
 - Keep project-specific notes in the project or in `~/notes` unless they describe default agent behavior.
 - `nearly-headless`: task dispatch, progress, artifacts, comments, approvals,
   provider sessions, and agent-created UI.
-- `hyperspace`: separate tmux workspace manager for terminals, agents, and
-  project editors.
+- `agent-comms`: planned local event bus; see `docs/agent-comms.md`.
+
+Migration status: `MIGRATION.md` in the dotfiles repository.

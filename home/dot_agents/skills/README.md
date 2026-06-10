@@ -15,7 +15,7 @@ Chezmoi applies this directory to `~/.agents/skills`, where Codex can discover p
 | Skill | Profile | Purpose |
 |-------|---------|---------|
 | `html-artifact` | nearly-headless | Write HTML reports to `.hyperspace/` |
-| `hyperspace-status` | nearly-headless | Generate status dashboard from tmux |
+| `live-doc` | nearly-headless | Edit the shared `.hyperspace/livedoc.html` canvas |
 
-Invoke with `$html-artifact` or `$hyperspace-status`. Activate the profile first:
+Invoke with `$html-artifact` or `$live-doc`. Activate the profile first:
 `nearly-headless print-agents`.

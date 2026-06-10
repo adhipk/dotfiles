@@ -26,9 +26,8 @@ shareable, interactive medium that keeps the user in the loop.
 
 ## Does Not Own
 
-- Hyperspace/tmux workspace management
-- Keyboard shortcut routing
-- Terminal focus
+- Terminal multiplexing or tmux workspace management
+- Keyboard shortcut routing for session switching
 - Repo file edits without an explicit runner/apply step
 
 ## Generic Repo Flow
@@ -134,5 +133,3 @@ Dotfiles should only install/wire that binary. The standalone project owns:
 - HTML templates and artifact skills/docs
 - a runner adapter interface for Codex, Claude, OpenAI API, or mock runners
 - provider-session persistence and resume/apply flows
-
-Hyperspace/tmux belongs in a separate project.

@@ -66,7 +66,9 @@ as a prettier report format.
 Project split:
 
 - `headless-html-artifacts.md` — nearly-headless product notes
-- `tmux-session-manager.md` — Hyperspace tmux workspace manager
+- `agent-comms.md` — planned cross-tool event bus (prototype only)
+
+Migration status: `MIGRATION.md` in the dotfiles repository.
 
 ## Profile
 
@@ -75,7 +77,7 @@ Project split:
 | Profile instructions | `~/.agents/profiles/nearly-headless/AGENTS.md` |
 | Task list | `~/.agents/profiles/nearly-headless/TASKS.md` |
 | Templates | `~/.agents/docs/templates/` |
-| Skills | `$html-artifact`, `$live-doc` (`$hyperspace-status` is for Hyperspace) |
+| Skills | `$html-artifact`, `$live-doc` |
 
 Activate: `nearly-headless print-agents` — does not alter default `~/.agents/AGENTS.md`.
 
@@ -122,9 +124,10 @@ comments, or fill generated inputs; saves/commands dispatch provider turns.
 - `home/bin/executable_nearly-headless` — shim into standalone app
 - `home/bin/executable_hyperspace-serve` — compatibility alias for `nearly-headless serve`
 - `home/bin/executable_hyperspace-open-report` — compatibility alias for `nearly-headless open`
+- `home/bin/executable_headless-artifacts` — compatibility alias for `nearly-headless`
 - `home/.chezmoidata.toml` — declares the external `nearly-headless` checkout
-- `home/bin/executable_hyperspace` — Hyperspace tmux workspace manager
-- `hyperspaces.md` — backend architecture notes
-- `plan.md` — planned tmux/skhd work
+- `MIGRATION.md` — migration status dashboard
+- `EXTERNAL-PROJECTS.md` — extraction workflow
+- `plan.md` — future ergonomics not tied to extraction
 
 See `TASKS.md` for implementation checklist.
