@@ -1,45 +1,54 @@
 ---
 name: html-artifact
 description: >-
-  Create or update HTML artifacts for the nearly-headless profile using
-  ~/.agents/docs/templates and HyperClay. Use when producing reports, reviews,
-  status pages, or decision prompts instead of long Markdown. Only when
-  nearly-headless profile is active.
+  Create self-contained HTML artifacts for the nearly-headless profile using
+  templates and components in ~/.agents/docs/templates/. Use for reports,
+  reviews, plans, explainers, and interactive pages instead of long Markdown.
+  Only when nearly-headless profile is active.
 ---
 
 # HTML Artifact
 
-Produce rich HTML files for the user to open in a browser. **Nearly-headless profile only.**
+Produce single `.html` files the user opens in a browser. **Nearly-headless profile only.**
 
-## When to use
+Read `~/.agents/docs/html-artifacts.md` first.
 
-- Task reports, PR/code reviews, plans, status dashboards
-- Anything over ~100 lines or needing color, tables, collapsible sections
-- User is in headless tmux agent mode
+## When to use HTML
 
-Prefer Markdown for short notes and repo docs unless the user asks for HTML.
+- Reports, reviews, plans, status, exploration, explainers
+- Spatial content: diffs, diagrams, timelines, side-by-side comparisons
+- Light interaction: `<details>`, copy-export, `contenteditable` — via templates/components
 
-## Steps
+Prefer Markdown for short notes. Prefer HTML when the [html-effectiveness](https://thariqs.github.io/html-effectiveness/) *types* fit (review, report, exploration, etc.) — those demos are examples, not code to import.
 
-1. Read `~/.agents/docs/hyperclay-patterns.md`.
-2. Pick a template from `~/.agents/docs/templates/`:
-   - `task-report.html` — completed work
-   - `status-dashboard.html` — agent/session status
-   - `review.html` — findings with severity
-   - `decision.html` — blocked, needs approval
-   - `base.html` — generic
-3. Ensure `<project>/.hyperspace/` exists.
-4. Copy `shared/hyperspace.css` to `<project>/.hyperspace/shared/` if missing.
-5. Write `<project>/.hyperspace/<slug>.html` — fill content sections only.
-6. Set `data-project`, `data-agent`, `data-updated` on `<body>` with real values.
-7. Tell the user: `hyperspace-open-report <slug>` (omit `.html`).
+## Workflow
 
-## Placeholders
+1. Pick a **template** from `~/.agents/docs/templates/` (or extend one).
+2. Compose **components** from `templates/components/` as needed.
+3. Ensure `<project>/.hyperspace/` exists (`nearly-headless init-project`).
+4. Copy `shared/hyperspace.css` into `.hyperspace/shared/` if missing.
+5. Write `<project>/.hyperspace/<slug>.html`.
+6. Tell the user: `hyperspace-open-report <slug>` or `http://127.0.0.1:4200/<route>/<slug>` if `hyperspace serve` is running.
 
-Replace `{{TITLE}}`, `{{PROJECT}}`, `{{AGENT}}`, `{{ISO8601}}`, `{{TIMESTAMP}}`, and template-specific blocks. Remove unused placeholder sections.
+## Templates
 
-## Do not
+| Template | Type |
+|----------|------|
+| `base.html` | Generic |
+| `task-report.html` | Completed work |
+| `status-dashboard.html` | Agent/session status |
+| `review.html` | Code/PR review |
+| `decision.html` | Blocked — user chooses |
+| `exploration.html` | Compare approaches |
+| `explainer.html` | Feature/concept |
 
-- Build SPAs or import npm packages
-- Invent new CSS frameworks (use `shared/hyperspace.css` classes)
-- Replace default agent behavior outside nearly-headless profile
+## Components
+
+Copy snippets from `templates/components/` (`finding`, `callout`, `comparison-columns`, `details-section`, `export-bar`). Create new component files when a pattern repeats.
+
+## Rules
+
+- Plain HTML + `hyperspace.css` by default — no CDN frameworks unless the page needs them.
+- Small inline `<script>` only for interaction (copy button, toggles).
+- HyperClay is optional — see `hyperclay-patterns.md` only if explicitly requested.
+- Do not build SPAs, React apps, or npm-based pages.

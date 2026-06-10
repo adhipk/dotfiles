@@ -1,0 +1,240 @@
+:root {
+  --base: #1e1e2e;
+  --mantle: #181825;
+  --surface0: #313244;
+  --surface1: #45475a;
+  --text: #cdd6f4;
+  --subtext: #a6adc8;
+  --blue: #89b4fa;
+  --green: #a6e3a1;
+  --yellow: #f9e2af;
+  --mauve: #cba6f7;
+  --font: ui-sans-serif, system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--base);
+  color: var(--text);
+  font-family: var(--font);
+}
+
+.hyperspace-app {
+  display: grid;
+  grid-template-columns: 14rem 1fr 12rem;
+  height: 100vh;
+}
+
+.sidebar,
+.artifacts {
+  background: var(--mantle);
+  border-right: 1px solid var(--surface0);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.artifacts {
+  border-right: 0;
+  border-left: 1px solid var(--surface0);
+}
+
+.sidebar h2,
+.artifacts h2 {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--subtext);
+  border-bottom: 1px solid var(--surface0);
+}
+
+.session-list,
+.artifact-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem;
+  overflow: auto;
+  flex: 1;
+}
+
+.session-list a,
+.artifact-list a {
+  display: block;
+  padding: 0.55rem 0.65rem;
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.session-list a:hover,
+.artifact-list a:hover {
+  background: var(--surface0);
+}
+
+.session-list a.active {
+  background: var(--surface1);
+  color: var(--blue);
+}
+
+.session-list .status {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--subtext);
+  margin-top: 0.15rem;
+}
+
+.session-list .windows {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.68rem;
+  color: var(--green);
+  margin-top: 0.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.doc-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--surface0);
+  background: var(--mantle);
+}
+
+.doc-header h1 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--blue);
+}
+
+.doc-meta {
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--subtext);
+}
+
+.doc-meta.saved {
+  color: var(--green);
+}
+
+.doc-meta.dirty {
+  color: var(--yellow);
+}
+
+.doc-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.component-palette {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.doc-toolbar button {
+  border: 1px solid var(--surface0);
+  background: var(--blue);
+  color: var(--base);
+  border-radius: 8px;
+  padding: 0.4rem 0.85rem;
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.doc-toolbar button.secondary {
+  background: transparent;
+  color: var(--subtext);
+  border-color: var(--surface1);
+}
+
+.doc-toolbar button.secondary:hover:not(:disabled) {
+  background: var(--surface0);
+  color: var(--yellow);
+}
+
+.doc-toolbar button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.badge {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--surface0);
+}
+
+.badge.running { color: var(--green); }
+.badge.needs-input { color: var(--yellow); }
+.badge.idle { color: var(--subtext); }
+
+.canvas-wrap {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+  background: var(--base);
+}
+
+.live-canvas.live-doc-canvas {
+  min-height: calc(100vh - 4rem);
+  width: 100%;
+  outline: none;
+}
+
+.empty-state {
+  margin: auto;
+  text-align: center;
+  color: var(--subtext);
+  max-width: 24rem;
+  line-height: 1.5;
+  padding: 2rem;
+}
+
+@media (max-width: 900px) {
+  .hyperspace-app {
+    grid-template-columns: 1fr;
+  }
+
+  .doc-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .doc-meta {
+    margin-left: 0;
+  }
+
+  .doc-toolbar {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .artifacts {
+    display: none;
+  }
+}

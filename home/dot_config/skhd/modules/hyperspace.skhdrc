@@ -1,8 +1,5 @@
-# Experimental hyperspace keybindings.
-# This module is intentionally not loaded by home/dot_skhdrc.
-#
-# To try it again, append this file to an active skhd config or move the
-# bindings into a generated module loader once skhd configuration is modular.
+# Hyperspace keybindings (reference copy).
+# Active bindings live in home/dot_skhdrc and call `hyperspace` from ~/bin.
 
 # -- Hyperspaces (sesh sessions) --
 # Caps Lock held as hyper: ctrl + alt + cmd (existing Karabiner mapping)

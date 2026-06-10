@@ -1,0 +1,16 @@
+<!-- Component: export-bar — copy a section to clipboard (vanilla JS) -->
+<div class="callout" style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+  <button type="button" id="copy-export">Copy response</button>
+  <span id="copy-status" class="meta"></span>
+</div>
+<script>
+  document.getElementById('copy-export')?.addEventListener('click', () => {
+    const el = document.getElementById('export-source');
+    if (!el) return;
+    const text = el.innerText || el.textContent || '';
+    navigator.clipboard.writeText(text).then(() => {
+      const s = document.getElementById('copy-status');
+      if (s) s.textContent = 'Copied.';
+    });
+  });
+</script>

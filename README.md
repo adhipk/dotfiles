@@ -156,6 +156,6 @@ bundle ID.
 - `alt + r`: restart yabai and skhd
 - `alt + /`: show the keybinding cheat sheet
 
-Experimental hyper bindings, including hyperspace session slots and the
-Spotlight scratchpad shortcut, are parked in
-`home/dot_config/skhd/modules/hyperspace.skhdrc` and are not loaded by default.
+Hyperspace hyper bindings (`hyper+1-9` connect, `hyper++` pin, `hyper+-` unpin,
+`hyper+space` search) are in `home/dot_skhdrc`. The `hyperspace` command
+(`home/bin/executable_hyperspace`) manages tmux sessions and agents.

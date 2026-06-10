@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+# Localhost server for .hyperspace HTML artifacts (default :4200).
+
+set -euo pipefail
+
+SERVER_SCRIPT="${HYPERSPACE_SERVER_SCRIPT:-$HOME/.config/hyperspaces/hyperspace_server.mjs}"
+PID_FILE="${HYPERSPACE_SERVE_PID_FILE:-$HOME/.local/state/hyperspaces/serve.pid}"
+LOG_FILE="${HYPERSPACE_SERVE_LOG_FILE:-$HOME/.local/state/hyperspaces/serve.log}"
+PORT="${HYPERSPACE_SERVE_PORT:-4200}"
+HOST="${HYPERSPACE_SERVE_HOST:-127.0.0.1}"
+
+usage() {
+  cat <<EOF
+Usage:
+  hyperspace-serve
+  hyperspace-serve --port 4200
+  hyperspace-serve start [--port 4200]   # background (restarts if already running)
+  hyperspace-serve restart [--port 4200]
+  hyperspace-serve stop
+  hyperspace-serve status
+  hyperspace-serve open                  # open index in browser
+
+Serves active tmux hyperspace sessions at http://${HOST}:${PORT}
+  /              → live doc canvas + session picker
+  /:route/       → editable livedoc canvas (save → livedoc.html + codex exec)
+  /:route/preview/ → standalone livedoc.html
+  /:route/*.html → project .hyperspace/ artifacts
+EOF
+}
+
+require_server() {
+  if [ ! -f "$SERVER_SCRIPT" ]; then
+    echo "Server script not found: $SERVER_SCRIPT" >&2
+    echo "Apply dotfiles with chezmoi." >&2
+    exit 1
+  fi
+  if ! command -v node >/dev/null 2>&1; then
+    echo "node is required to run hyperspace-serve" >&2
+    exit 1
+  fi
+}
+
+is_running() {
+  [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null
+}
+
+start_background() {
+  require_server
+  mkdir -p "$(dirname "$PID_FILE")" "$(dirname "$LOG_FILE")"
+
+  if is_running; then
+    echo "Restarting hyperspace serve (pid $(cat "$PID_FILE"))..."
+    kill "$(cat "$PID_FILE")" 2>/dev/null || true
+    rm -f "$PID_FILE"
+    sleep 0.2
+  fi
+
+  nohup env HYPERSPACE_SERVE_PORT="$PORT" HYPERSPACE_SERVE_HOST="$HOST" \
+    node "$SERVER_SCRIPT" >>"$LOG_FILE" 2>&1 < /dev/null &
+  echo $! >"$PID_FILE"
+  sleep 0.3
+  if is_running; then
+    echo "hyperspace serve http://${HOST}:${PORT} (pid $(cat "$PID_FILE"))"
+  else
+    echo "Failed to start — see $LOG_FILE" >&2
+    exit 1
+  fi
+}
+
+stop_server() {
+  if ! is_running; then
+    rm -f "$PID_FILE"
+    echo "Not running"
+    exit 0
+  fi
+  kill "$(cat "$PID_FILE")"
+  rm -f "$PID_FILE"
+  echo "Stopped"
+}
+
+status_server() {
+  if is_running; then
+    echo "running pid $(cat "$PID_FILE") → http://${HOST}:${PORT}"
+  else
+    echo "stopped"
+    exit 1
+  fi
+}
+
+open_index() {
+  if command -v open >/dev/null 2>&1; then
+    open "http://${HOST}:${PORT}/"
+  else
+    echo "http://${HOST}:${PORT}/"
+  fi
+}
+
+foreground() {
+  require_server
+  export HYPERSPACE_SERVE_PORT="$PORT"
+  export HYPERSPACE_SERVE_HOST="$HOST"
+  exec node "$SERVER_SCRIPT"
+}
+
+main() {
+  local command="run"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      start|restart) command="$1"; shift ;;
+      stop) command="stop"; shift ;;
+      status) command="status"; shift ;;
+      open) command="open"; shift ;;
+      --port)
+        PORT="${2:?}"
+        shift 2
+        ;;
+      -h|--help|help)
+        usage
+        exit 0
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+
+  case "$command" in
+    start|restart) start_background ;;
+    stop) stop_server ;;
+    status) status_server ;;
+    open) open_index ;;
+    run) foreground ;;
+  esac
+}
+
+main "$@"

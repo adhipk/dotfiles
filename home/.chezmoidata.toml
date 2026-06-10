@@ -51,9 +51,9 @@ path = ".local/share/raycast-extensions/raycast-lucide-excalidraw"
 requiredExecutables = ["npm"]
 rerunWhenMissingPaths = [
     "node_modules",
-    "library/lucide-icons.excalidrawlib",
+    "projects/excalidraw-library/library/lucide-icons.excalidrawlib",
 ]
 setupCommands = [
-    "npm ci",
-    "npm run generate-library",
+    "npm install",
+    "npm run generate:excalidraw",
 ]

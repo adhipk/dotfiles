@@ -5,8 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{TITLE}} — {{PROJECT}}</title>
   <link rel="stylesheet" href="shared/hyperspace.css">
-  <!-- HyperClay: edit + save + prompts. See ~/.agents/docs/hyperclay-patterns.md -->
-  <script src="https://hyperclayjs.com/hyperclay.js?edit-mode,save-system,save-toast,ask"></script>
 </head>
 <body data-project="{{PROJECT}}" data-agent="{{AGENT}}" data-updated="{{ISO8601}}">
   <header>
@@ -18,12 +16,10 @@
     </p>
   </header>
   <main id="content">
-    <!-- Agent: replace this block only. Keep header/footer structure. -->
     <p>{{CONTENT_PLACEHOLDER}}</p>
   </main>
   <footer>
-    Nearly-headless artifact · <code>.hyperspace/</code> ·
-    Open with <code>hyperspace-open-report &lt;slug&gt;</code>
+    <code>.hyperspace/</code> · <code>hyperspace-open-report &lt;slug&gt;</code>
   </footer>
 </body>
 </html>

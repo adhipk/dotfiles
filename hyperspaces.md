@@ -1,8 +1,10 @@
 ## Nearly-headless profile (implemented)
 
-Presentation layer for headless agents lives in `home/dot_agents/profiles/nearly-headless/`:
-HTML templates + HyperClay + skills (`$html-artifact`, `$hyperspace-status`).
-See `home/dot_agents/docs/nearly-headless.md` and `TASKS.md` for runtime work remaining.
+Presentation layer: `home/dot_agents/profiles/nearly-headless/` (HTML + HyperClay + skills).
+
+Runtime layer (phase 2): `hyperspace` CLI in `home/bin/`, `~/.config/sesh/sesh.toml`,
+`~/.config/hyperspaces/agents.json`, tmux hooks in `dot_tmux.conf`, skhd bindings in
+`dot_skhdrc`. Phase 3 (`hyperspace watch`) — see `TASKS.md`.
 
 ---
 

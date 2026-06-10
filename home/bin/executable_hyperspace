@@ -1,0 +1,1334 @@
+#!/usr/bin/env bash
+# Hyperspace: one project per tmux session, one runtime per tmux window.
+
+set -euo pipefail
+
+CONFIG_DIR="${HYPERSPACE_CONFIG_DIR:-$HOME/.config/hyperspaces}"
+HYPERSPACE_CONFIG_FILE="${HYPERSPACE_CONFIG_FILE:-$CONFIG_DIR/config.json}"
+PIN_FILE="${HYPERSPACE_PIN_FILE:-$CONFIG_DIR/pins.json}"
+LEGACY_PIN_FILE="${HYPERSPACE_LEGACY_PIN_FILE:-$HOME/.config/sesh/hyperspaces.json}"
+QUERY_FILTER="${HYPERSPACE_QUERY_FILTER:-hs-}"
+STATE_DIR="${HYPERSPACE_STATE_DIR:-$HOME/.local/state/hyperspaces}"
+SESSION_DIR_FILE="${HYPERSPACE_SESSION_DIR_FILE:-$STATE_DIR/sessions.json}"
+EVENT_LOG_FILE="${HYPERSPACE_EVENT_LOG_FILE:-$STATE_DIR/events.jsonl}"
+
+CONFIG_FILE="${HYPERSPACE_ENV_FILE:-$HOME/.config/sesh/hyperspace.env}"
+if [ -r "$CONFIG_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$CONFIG_FILE"
+fi
+
+RAYCAST_DEEPLINK="${RAYCAST_HYPERSPACE_DEEPLINK:-}"
+
+USAGE() {
+  cat <<'EOF_HELP'
+Usage:
+  hyperspace [project] [window]
+  hyperspace status
+  hyperspace end [project|all] [window]
+  hyperspace windows [project]
+  hyperspace events [limit]
+  hyperspace serve [start|stop|status|open] [--port N]
+
+Default:
+  hyperspace starts the configured/default project, starts its default window, opens
+  the live doc server, and connects to the tmux window.
+
+Model:
+  one project = one tmux session
+  one provider chat = one tmux window
+
+EOF_HELP
+}
+
+require_sesh() {
+  if ! command -v sesh >/dev/null 2>&1; then
+    notify "Hyperspace" "sesh is not installed. Install with: brew install sesh"
+    exit 1
+  fi
+}
+
+require_tmux() {
+  if ! command -v tmux >/dev/null 2>&1; then
+    notify "Hyperspace" "tmux is not installed"
+    exit 1
+  fi
+}
+
+notify() {
+  local title="$1"
+  local body="$2"
+
+  /usr/bin/osascript - "$title" "$body" <<'APPLESCRIPT'
+on run argv
+  display notification item 2 of argv with title item 1 of argv
+end run
+APPLESCRIPT
+}
+
+hyperspace_die() {
+  local msg="$1"
+  printf 'hyperspace: %s\n' "$msg" >&2
+  notify "Hyperspace" "$msg"
+  exit 1
+}
+
+hyperspace_log() {
+  printf 'hyperspace: %s\n' "$1" >&2
+}
+
+session_name_for_project() {
+  printf 'hs-%s' "$1"
+}
+
+now_iso() {
+  date -u +"%Y-%m-%dT%H:%M:%SZ"
+}
+
+valid_project_slug() {
+  local id="$1"
+  local home_base
+  home_base=$(basename "$HOME")
+
+  [[ "$id" =~ ^[a-zA-Z][a-zA-Z0-9._-]*$ ]] || return 1
+  [[ "$id" != "_" && "$id" != "." && "$id" != ".." && "$id" != "$home_base" ]] || return 1
+  [[ "$id" != */* ]] || return 1
+  return 0
+}
+
+normalize_project_id() {
+  local arg="$1"
+  local key configured resolved slug
+
+  if [ -f "$HYPERSPACE_CONFIG_FILE" ] && command -v jq >/dev/null 2>&1; then
+    if jq -e --arg p "$arg" '.projects[$p]' "$HYPERSPACE_CONFIG_FILE" >/dev/null 2>&1; then
+      printf '%s\n' "$arg"
+      return 0
+    fi
+  fi
+
+  if ! resolved=$(project_path "$arg" 2>/dev/null); then
+    if valid_project_slug "$arg"; then
+      printf '%s\n' "$arg"
+      return 0
+    fi
+    notify "Hyperspace" "Unknown project: $arg (add to config.json or use a standard name like dotfiles)"
+    exit 1
+  fi
+
+  if [ -f "$HYPERSPACE_CONFIG_FILE" ] && command -v jq >/dev/null 2>&1; then
+    while IFS= read -r key; do
+      [ -z "$key" ] && continue
+      configured=$(jq -r --arg k "$key" '.projects[$k].path // empty' "$HYPERSPACE_CONFIG_FILE")
+      configured=$(expand_path "$configured")
+      if [ "$configured" = "$resolved" ]; then
+        printf '%s\n' "$key"
+        return 0
+      fi
+    done < <(jq -r '.projects | keys[]?' "$HYPERSPACE_CONFIG_FILE" 2>/dev/null)
+  fi
+
+  slug=$(basename "$resolved")
+  if valid_project_slug "$slug"; then
+    printf '%s\n' "$slug"
+    return 0
+  fi
+
+  notify "Hyperspace" "Could not resolve project name for $arg — configure it in config.json"
+  exit 1
+}
+
+expand_path() {
+  local path="$1"
+  local home_tilde="${HOME}/~/"
+  if [[ "$path" == "$home_tilde"* ]]; then
+    printf '%s/%s' "$HOME" "${path#"$home_tilde"}"
+    return 0
+  fi
+  case "$path" in
+    "~") printf '%s' "$HOME" ;;
+    "~/"*) printf '%s/%s' "$HOME" "${path#~/}" ;;
+    *) printf '%s' "$path" ;;
+  esac
+}
+
+project_path() {
+  local project="$1"
+  local override="${2:-}"
+  local configured=""
+
+  if [ -n "$override" ]; then
+    expand_path "$override"
+    return 0
+  fi
+
+  if [ -f "$HYPERSPACE_CONFIG_FILE" ]; then
+    configured=$(jq -r --arg project "$project" '
+      .projects[$project].path // empty
+    ' "$HYPERSPACE_CONFIG_FILE" 2>/dev/null || true)
+  fi
+
+  if [ -n "$configured" ] && [ "$configured" != "null" ]; then
+    local expanded
+    expanded=$(expand_path "$configured")
+    if [ -d "$expanded" ]; then
+      cd "$expanded" && pwd -P
+    else
+      printf '%s\n' "$expanded"
+    fi
+    return 0
+  fi
+
+  if [ -d "$HOME/$project" ]; then
+    printf '%s\n' "$HOME/$project"
+    return 0
+  fi
+
+  if [ -d "$project" ]; then
+    cd "$project" && pwd
+    return 0
+  fi
+
+  return 1
+}
+
+window_launch_command() {
+  local project="$1"
+  local window="$2"
+
+  if [ ! -f "$HYPERSPACE_CONFIG_FILE" ]; then
+    return 1
+  fi
+
+  jq -r --arg project "$project" --arg window "$window" '
+    (.projects[$project].windows[$window].launch //
+     .defaults[$window].launch // empty)
+  ' "$HYPERSPACE_CONFIG_FILE"
+}
+
+window_provider() {
+  local project="$1"
+  local window="$2"
+
+  if [ ! -f "$HYPERSPACE_CONFIG_FILE" ]; then
+    printf 'shell'
+    return 0
+  fi
+
+  jq -r --arg project "$project" --arg window "$window" '
+    (.projects[$project].windows[$window].provider //
+     .defaults[$window].provider // "shell")
+  ' "$HYPERSPACE_CONFIG_FILE"
+}
+
+session_route() {
+  local project="$1"
+
+  if [ -f "$HYPERSPACE_CONFIG_FILE" ]; then
+    jq -r --arg project "$project" '.projects[$project].route // $project' "$HYPERSPACE_CONFIG_FILE" 2>/dev/null || printf '%s\n' "$project"
+    return 0
+  fi
+
+  printf '%s\n' "$project"
+}
+
+configured_windows() {
+  local project="$1"
+
+  if [ ! -f "$HYPERSPACE_CONFIG_FILE" ]; then
+    return 0
+  fi
+
+  jq -r --arg project "$project" '
+    .projects[$project].liveDocWindow // empty,
+    (.projects[$project].windows // {} | keys[]?),
+    (.defaults // {} | keys[]?)
+  ' "$HYPERSPACE_CONFIG_FILE" 2>/dev/null
+}
+
+default_window_for_project() {
+  local project="$1"
+  local first
+
+  first=$(configured_windows "$project" | awk 'NF && !seen[$0]++ { print; exit }')
+  if [ -n "$first" ]; then
+    printf '%s\n' "$first"
+    return 0
+  fi
+
+  printf 'shell\n'
+}
+
+default_project() {
+  local first
+
+  if [ -f "$HYPERSPACE_CONFIG_FILE" ]; then
+    first=$(jq -r '.projects | keys[0] // empty' "$HYPERSPACE_CONFIG_FILE" 2>/dev/null)
+    if [ -n "$first" ] && [ "$first" != "null" ]; then
+      printf '%s\n' "$first"
+      return 0
+    fi
+  fi
+
+  basename "$(pwd -P)"
+}
+
+ensure_session_directory() {
+  mkdir -p "$STATE_DIR"
+  if [ -f "$SESSION_DIR_FILE" ]; then
+    return 0
+  fi
+  printf '%s\n' '{"version":1,"sessions":{}}' > "$SESSION_DIR_FILE"
+}
+
+append_runtime_event() {
+  local type="$1"
+  local project="${2:-}"
+  local window="${3:-}"
+  local status="${4:-}"
+  local message="${5:-}"
+
+  mkdir -p "$STATE_DIR"
+  jq -nc \
+    --arg at "$(now_iso)" \
+    --arg type "$type" \
+    --arg project "$project" \
+    --arg window "$window" \
+    --arg status "$status" \
+    --arg message "$message" '
+      {
+        at: $at,
+        type: $type
+      }
+      + (if $project != "" then {project: $project} else {} end)
+      + (if $window != "" then {window: $window} else {} end)
+      + (if $status != "" then {status: $status} else {} end)
+      + (if $message != "" then {message: $message} else {} end)
+    ' >> "$EVENT_LOG_FILE"
+}
+
+record_session_state() {
+  local project="$1"
+  local path="$2"
+  local status="$3"
+  local session route tmp
+
+  ensure_session_directory
+  path=$(expand_path "$path")
+  if [ -d "$path" ]; then
+    path=$(cd "$path" && pwd -P)
+  fi
+  session=$(session_name_for_project "$project")
+  route=$(session_route "$project")
+  tmp=$(mktemp)
+
+  jq \
+    --arg project "$project" \
+    --arg route "$route" \
+    --arg path "$path" \
+    --arg session "$session" \
+    --arg status "$status" \
+    --arg updatedAt "$(now_iso)" '
+      .version = 1
+      | .sessions[$project] = (
+          (.sessions[$project] // {windows:{}})
+          + {
+              project: $project,
+              route: $route,
+              path: $path,
+              session: $session,
+              status: $status,
+              updatedAt: $updatedAt
+            }
+        )
+      | .sessions[$project].windows = (.sessions[$project].windows // {})
+    ' "$SESSION_DIR_FILE" > "$tmp"
+  mv "$tmp" "$SESSION_DIR_FILE"
+}
+
+delete_session_state() {
+  local project="$1"
+  local tmp
+
+  ensure_session_directory
+  tmp=$(mktemp)
+  jq --arg project "$project" 'del(.sessions[$project])' "$SESSION_DIR_FILE" > "$tmp"
+  mv "$tmp" "$SESSION_DIR_FILE"
+}
+
+session_has_provider_binding() {
+  local project="$1"
+
+  ensure_session_directory
+  jq -e --arg project "$project" '
+    [.sessions[$project].windows[]?.providerSessionId // empty]
+    | map(select(. != ""))
+    | length > 0
+  ' "$SESSION_DIR_FILE" >/dev/null 2>&1
+}
+
+set_session_status() {
+  local project="$1"
+  local status="$2"
+  local tmp
+
+  ensure_session_directory
+  tmp=$(mktemp)
+  jq --arg project "$project" --arg status "$status" --arg updatedAt "$(now_iso)" '
+    if .sessions[$project] then
+      .sessions[$project].status = $status
+      | .sessions[$project].updatedAt = $updatedAt
+    else
+      .
+    end
+  ' "$SESSION_DIR_FILE" > "$tmp"
+  mv "$tmp" "$SESSION_DIR_FILE"
+}
+
+normalize_session_path() {
+  local project="$1"
+  local current tmp
+
+  ensure_session_directory
+  current=$(jq -r --arg project "$project" '.sessions[$project].path // empty' "$SESSION_DIR_FILE" 2>/dev/null)
+  [ -n "$current" ] || return 0
+  current=$(expand_path "$current")
+  tmp=$(mktemp)
+  jq --arg project "$project" --arg path "$current" '
+    if .sessions[$project] then
+      .sessions[$project].path = $path
+    else
+      .
+    end
+  ' "$SESSION_DIR_FILE" > "$tmp"
+  mv "$tmp" "$SESSION_DIR_FILE"
+}
+
+set_window_status() {
+  local project="$1"
+  local window="$2"
+  local status="$3"
+  local tmp
+
+  ensure_session_directory
+  tmp=$(mktemp)
+  jq --arg project "$project" --arg window "$window" --arg status "$status" --arg updatedAt "$(now_iso)" '
+    if .sessions[$project].windows[$window] then
+      .sessions[$project].windows[$window].status = $status
+      | .sessions[$project].windows[$window].updatedAt = $updatedAt
+    else
+      .
+    end
+  ' "$SESSION_DIR_FILE" > "$tmp"
+  mv "$tmp" "$SESSION_DIR_FILE"
+}
+
+state_projects() {
+  ensure_session_directory
+  jq -r '.sessions | keys[]?' "$SESSION_DIR_FILE" 2>/dev/null
+}
+
+tmux_hyperspace_sessions() {
+  if ! command -v tmux >/dev/null 2>&1; then
+    return 0
+  fi
+  tmux list-sessions -F '#{session_name}' 2>/dev/null | rg '^hs-' || true
+}
+
+reconcile_state_with_tmux() {
+  local project session window status path
+
+  ensure_session_directory
+
+  while IFS= read -r project; do
+    [ -z "$project" ] && continue
+    session=$(session_name_for_project "$project")
+
+    if ! session_exists "$session"; then
+      if session_has_provider_binding "$project"; then
+        set_session_status "$project" "detached"
+        normalize_session_path "$project"
+        while IFS= read -r window; do
+          [ -z "$window" ] && continue
+          set_window_status "$project" "$window" "detached"
+        done < <(jq -r --arg project "$project" '.sessions[$project].windows | keys[]?' "$SESSION_DIR_FILE" 2>/dev/null)
+      else
+        delete_session_state "$project"
+      fi
+      continue
+    fi
+
+    path=$(project_path "$project" 2>/dev/null || tmux display -p -t "${session}:shell" '#{pane_current_path}' 2>/dev/null || printf '')
+    record_session_state "$project" "$path" "open"
+
+    while IFS= read -r window; do
+      [ -z "$window" ] && continue
+      if window_exists "$session" "$window"; then
+        set_window_status "$project" "$window" "$(pane_status "${session}:${window}")"
+      else
+        set_window_status "$project" "$window" "detached"
+      fi
+    done < <(jq -r --arg project "$project" '.sessions[$project].windows | keys[]?' "$SESSION_DIR_FILE" 2>/dev/null)
+  done < <(state_projects)
+
+  while IFS= read -r session; do
+    [ -z "$session" ] && continue
+    project="${session#hs-}"
+    if ! jq -e --arg project "$project" '.sessions[$project]' "$SESSION_DIR_FILE" >/dev/null 2>&1; then
+      path=$(tmux display -p -t "${session}:shell" '#{pane_current_path}' 2>/dev/null || printf '')
+      [ -z "$path" ] && path=$(tmux display -p -t "$session" '#{pane_current_path}' 2>/dev/null || printf '')
+      record_session_state "$project" "$path" "open"
+    fi
+
+    while IFS='|' read -r window _active; do
+      [ -z "$window" ] && continue
+      [ "$window" = "shell" ] && continue
+      status=$(pane_status "${session}:${window}")
+      record_window_state "$project" "$window" "$status"
+    done < <(tmux list-windows -t "$session" -F '#{window_name}|#{window_active}' 2>/dev/null || true)
+  done < <(tmux_hyperspace_sessions)
+}
+
+record_window_state() {
+  local project="$1"
+  local window="$2"
+  local status="$3"
+  local provider launch session tmp
+
+  ensure_session_directory
+  provider=$(window_provider "$project" "$window")
+  launch=$(window_launch_command "$project" "$window" || true)
+  session=$(session_name_for_project "$project")
+  tmp=$(mktemp)
+
+  jq \
+    --arg project "$project" \
+    --arg window "$window" \
+    --arg provider "$provider" \
+    --arg launch "$launch" \
+    --arg session "$session" \
+    --arg status "$status" \
+    --arg updatedAt "$(now_iso)" '
+      .version = 1
+      | .sessions[$project] = (.sessions[$project] // {project: $project, windows: {}})
+      | .sessions[$project].windows = (.sessions[$project].windows // {})
+      | .sessions[$project].windows[$window] = (
+          (.sessions[$project].windows[$window] // {})
+          + {
+              id: $window,
+              provider: $provider,
+              launch: $launch,
+              session: $session,
+              window: $window,
+              status: $status,
+              updatedAt: $updatedAt
+            }
+        )
+    ' "$SESSION_DIR_FILE" > "$tmp"
+  mv "$tmp" "$SESSION_DIR_FILE"
+}
+
+resolve_launch_command() {
+  local launch="$1"
+  local launcher
+
+  if [[ "$launch" != hyperspace-window-launch* ]]; then
+    printf '%s' "$launch"
+    return 0
+  fi
+
+  launcher=$(command -v hyperspace-window-launch 2>/dev/null || printf '%s/bin/hyperspace-window-launch' "$HOME")
+  printf '%s%s' "$launcher" "${launch#hyperspace-window-launch}"
+}
+
+ensure_pin_database() {
+  mkdir -p "$(dirname "$PIN_FILE")"
+  if [ -f "$PIN_FILE" ]; then
+    return 0
+  fi
+  if [ -f "$LEGACY_PIN_FILE" ]; then
+    cp "$LEGACY_PIN_FILE" "$PIN_FILE"
+    return 0
+  fi
+  printf '%s\n' "{}" > "$PIN_FILE"
+}
+
+validate_slot() {
+  local slot="$1"
+  if [[ ! "$slot" =~ ^[1-9]$ ]]; then
+    notify "Hyperspace" "Invalid slot: $slot (use 1-9)."
+    exit 1
+  fi
+}
+
+slot_session() {
+  local slot="$1"
+  jq -r --arg slot "$slot" '.[$slot] // empty' "$PIN_FILE"
+}
+
+set_slot() {
+  local slot="$1"
+  local session="$2"
+  local tmp
+
+  ensure_pin_database
+  tmp=$(mktemp)
+  jq --arg slot "$slot" --arg session "$session" '.[$slot] = $session' "$PIN_FILE" > "$tmp"
+  mv "$tmp" "$PIN_FILE"
+}
+
+clear_slot() {
+  local slot="$1"
+  local tmp
+
+  ensure_pin_database
+  tmp=$(mktemp)
+  jq --arg slot "$slot" 'del(.[$slot])' "$PIN_FILE" > "$tmp"
+  mv "$tmp" "$PIN_FILE"
+}
+
+current_tmux_session() {
+  if [ -z "${TMUX:+x}" ]; then
+    return 1
+  fi
+  tmux display-message -p '#S' 2>/dev/null || return 1
+}
+
+configure_hyperspace_session() {
+  local session="$1"
+  tmux set-option -t "$session" exit-empty off 2>/dev/null || true
+}
+
+session_exists() {
+  local session="$1"
+  tmux has-session -t "$session" 2>/dev/null
+}
+
+window_exists() {
+  local session="$1"
+  local window="$2"
+  tmux list-windows -t "$session" -F '#{window_name}' 2>/dev/null | rg -Fx -- "$window" >/dev/null
+}
+
+focus_terminal_app() {
+  if command -v open >/dev/null 2>&1; then
+    open -a Ghostty 2>/dev/null || true
+  fi
+}
+
+connect_session() {
+  local session="$1"
+
+  if [ -n "${TMUX:-}" ]; then
+    local current=""
+    current=$(tmux display-message -p '#S' 2>/dev/null || true)
+    if [ "$current" = "$session" ]; then
+      return 0
+    fi
+    if tmux switch-client -t "$session" 2>/dev/null; then
+      return 0
+    fi
+    hyperspace_die "Could not switch tmux client to $session"
+  fi
+
+  exec tmux attach -t "$session"
+}
+
+focus_window() {
+  local session="$1"
+  local window="$2"
+
+  if ! tmux select-window -t "${session}:${window}" 2>/dev/null; then
+    hyperspace_die "Could not focus window ${session}:${window}"
+  fi
+}
+
+pane_status() {
+  local target="$1"
+  local title cmd
+
+  title=$(tmux display -p -t "$target" '#{pane_title}' 2>/dev/null || true)
+  cmd=$(tmux display -p -t "$target" '#{pane_current_command}' 2>/dev/null || true)
+
+  if printf '%s' "$title" | rg -qi 'action required|approve'; then
+    printf 'needs-input'
+    return 0
+  fi
+
+  case "$cmd" in
+    ''|bash|zsh|sh|login|'-zsh'|'-bash')
+      printf 'idle'
+      ;;
+    codex|claude|cursor-agent|opencode|node|npm|python|uv|go|cargo)
+      printf 'running'
+      ;;
+    *)
+      if [ -n "$cmd" ]; then
+        printf 'running'
+      else
+        printf 'unknown'
+      fi
+      ;;
+  esac
+}
+
+ensure_project_session() {
+  local project="$1"
+  local path_override="${2:-}"
+  local session path
+
+  require_tmux
+  session=$(session_name_for_project "$project")
+
+  if ! path=$(project_path "$project" "$path_override"); then
+    return 1
+  fi
+
+  if session_exists "$session"; then
+    return 0
+  fi
+
+  tmux new-session -d -s "$session" -n shell -c "$path"
+  configure_hyperspace_session "$session"
+}
+
+open_project() {
+  local project="$1"
+  local path_override="${2:-}"
+  local session path
+
+  project=$(normalize_project_id "$project")
+
+  if ! ensure_project_session "$project" "$path_override"; then
+    notify "Hyperspace" "Could not resolve path for project: $project"
+    exit 1
+  fi
+
+  session=$(session_name_for_project "$project")
+  path=$(project_path "$project" "$path_override")
+  record_session_state "$project" "$path" "open"
+  append_runtime_event "hyperspace.opened" "$project" "" "open" "$session"
+  printf 'opened %-24s %s\n' "$session" "$path"
+  notify "Hyperspace" "Opened $session"
+}
+
+close_project() {
+  local project="$1"
+  local keep="${2:-false}"
+  local session
+
+  project=$(normalize_project_id "$project")
+  require_tmux
+  session=$(session_name_for_project "$project")
+
+  if [ "$keep" != "true" ] && session_exists "$session"; then
+    tmux kill-session -t "$session"
+  fi
+
+  if [ "$keep" = "true" ]; then
+    record_session_state "$project" "$(project_path "$project" 2>/dev/null || printf '')" "kept"
+    append_runtime_event "hyperspace.closed" "$project" "" "kept" "$session"
+  else
+    delete_session_state "$project"
+    append_runtime_event "hyperspace.ended" "$project" "" "ended" "$session"
+  fi
+  prune_pins_for_session "$session"
+  printf '%s %-24s\n' "$([ "$keep" = "true" ] && printf kept || printf ended)" "$session"
+  notify "Hyperspace" "Closed $session"
+}
+
+end_target() {
+  local project="$1"
+  local window="${2:-}"
+
+  if [ -n "$window" ]; then
+    window_stop "$project" "$window"
+    return 0
+  fi
+
+  close_project "$project" false
+}
+
+end_all_sessions() {
+  local sessions project tmp
+
+  require_tmux
+  sessions=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | rg '^hs-' || true)
+  if [ -n "$sessions" ]; then
+    while IFS= read -r session; do
+      [ -z "$session" ] && continue
+      tmux kill-session -t "$session" 2>/dev/null || true
+      prune_pins_for_session "$session"
+      append_runtime_event "hyperspace.ended" "${session#hs-}" "" "ended" "$session"
+      printf 'ended %-24s\n' "$session"
+    done <<< "$sessions"
+  fi
+
+  ensure_session_directory
+  tmp=$(mktemp)
+  jq '.sessions = {}' "$SESSION_DIR_FILE" > "$tmp"
+  mv "$tmp" "$SESSION_DIR_FILE"
+}
+
+prune_pins_for_session() {
+  local session="$1"
+  local slot tmp changed=false
+
+  ensure_pin_database
+  for slot in 1 2 3 4 5 6 7 8 9; do
+    if [ "$(slot_session "$slot")" = "$session" ]; then
+      changed=true
+      break
+    fi
+  done
+
+  if [ "$changed" = false ]; then
+    return 0
+  fi
+
+  tmp=$(mktemp)
+  jq --arg session "$session" '
+    with_entries(select(.value != $session))
+  ' "$PIN_FILE" > "$tmp"
+  mv "$tmp" "$PIN_FILE"
+}
+
+window_start() {
+  local project="$1"
+  local window="${2:-}"
+  local attach="${3:-false}"
+  local session path launch target
+
+  project=$(normalize_project_id "$project")
+  if [ -z "$window" ] || [ "$window" = "--attach" ]; then
+    if [ "$window" = "--attach" ]; then
+      attach=true
+    fi
+    window=$(default_window_for_project "$project")
+  fi
+  require_tmux
+  if ! ensure_project_session "$project"; then
+    notify "Hyperspace" "Could not resolve path for project: $project"
+    exit 1
+  fi
+
+  session=$(session_name_for_project "$project")
+  path=$(project_path "$project")
+  launch=$(window_launch_command "$project" "$window" || true)
+
+  if [ -z "$launch" ] || [ "$launch" = "null" ]; then
+    notify "Hyperspace" "No launch command for window $window (check $HYPERSPACE_CONFIG_FILE)"
+    exit 1
+  fi
+
+  launch=$(resolve_launch_command "$launch")
+
+  export HYPERSPACE_PROJECT="$project"
+  export HYPERSPACE_PROJECT_PATH="$path"
+  export HYPERSPACE_WINDOW_ID="$window"
+  export HYPERSPACE_CONFIG_FILE
+  export HYPERSPACE_STATE_DIR
+  export HYPERSPACE_SESSION_DIR_FILE
+  export HYPERSPACE_EVENT_LOG_FILE
+
+  local pane_cmd="exec env HYPERSPACE_PROJECT=${project} HYPERSPACE_PROJECT_PATH=${path} HYPERSPACE_WINDOW_ID=${window} HYPERSPACE_CONFIG_FILE=${HYPERSPACE_CONFIG_FILE} HYPERSPACE_STATE_DIR=${STATE_DIR} HYPERSPACE_SESSION_DIR_FILE=${SESSION_DIR_FILE} HYPERSPACE_EVENT_LOG_FILE=${EVENT_LOG_FILE} ${launch}"
+
+  if window_exists "$session" "$window"; then
+    target="${session}:${window}"
+    tmux respawn-pane -k -t "$target" -c "$path" -e "HYPERSPACE_PROJECT=$project" -e "HYPERSPACE_PROJECT_PATH=$path" -e "HYPERSPACE_WINDOW_ID=$window" -e "HYPERSPACE_CONFIG_FILE=$HYPERSPACE_CONFIG_FILE" -e "HYPERSPACE_STATE_DIR=$STATE_DIR" -e "HYPERSPACE_SESSION_DIR_FILE=$SESSION_DIR_FILE" -e "HYPERSPACE_EVENT_LOG_FILE=$EVENT_LOG_FILE" "$launch" 2>/dev/null || \
+      tmux send-keys -t "$target" C-c "$pane_cmd" Enter
+  else
+    tmux new-window -t "$session" -n "$window" -c "$path" -e "HYPERSPACE_PROJECT=$project" -e "HYPERSPACE_PROJECT_PATH=$path" -e "HYPERSPACE_WINDOW_ID=$window" -e "HYPERSPACE_CONFIG_FILE=$HYPERSPACE_CONFIG_FILE" -e "HYPERSPACE_STATE_DIR=$STATE_DIR" -e "HYPERSPACE_SESSION_DIR_FILE=$SESSION_DIR_FILE" -e "HYPERSPACE_EVENT_LOG_FILE=$EVENT_LOG_FILE" "$launch"
+    target="${session}:${window}"
+  fi
+
+  tmux setw -t "$target" monitor-bell on 2>/dev/null || true
+  record_session_state "$project" "$path" "open"
+  record_window_state "$project" "$window" "running"
+  append_runtime_event "window.started" "$project" "$window" "running" "$target"
+  printf 'started window %-16s in %-24s %s\n' "$window" "$session" "$path"
+  notify "Hyperspace" "Started $window in $session"
+
+  if [ "$attach" = "true" ]; then
+    window_focus "$project" "$window"
+  fi
+}
+
+window_focus() {
+  local project="$1"
+  local window="${2:-}"
+  local session
+
+  project=$(normalize_project_id "$project")
+  if [ -z "$window" ]; then
+    window=$(default_window_for_project "$project")
+  fi
+  require_tmux
+  session=$(session_name_for_project "$project")
+
+  if ! session_exists "$session"; then
+    hyperspace_die "Session $session does not exist. Run: hyperspace $project"
+  fi
+
+  if ! window_exists "$session" "$window"; then
+    hyperspace_log "Window $window not in $session - starting it"
+    window_start "$project" "$window" false
+  elif [ "$(pane_status "${session}:${window}")" = "idle" ]; then
+    hyperspace_log "Restarting idle $window window"
+    window_start "$project" "$window" false
+  fi
+
+  connect_session "$session"
+  focus_window "$session" "$window"
+  append_runtime_event "window.focused" "$project" "$window" "$(pane_status "${session}:${window}")" "${session}:${window}"
+  printf 'focused window %-16s in %s\n' "$window" "$session"
+  focus_terminal_app
+}
+
+window_stop() {
+  local project="$1"
+  local window="$2"
+  local session
+
+  project=$(normalize_project_id "$project")
+  require_tmux
+  session=$(session_name_for_project "$project")
+
+  if ! window_exists "$session" "$window"; then
+    notify "Hyperspace" "Window $window not found in $session"
+    exit 0
+  fi
+
+  tmux kill-window -t "${session}:${window}"
+  record_window_state "$project" "$window" "stopped"
+  append_runtime_event "window.stopped" "$project" "$window" "stopped" "${session}:${window}"
+  printf 'stopped window %-16s in %s\n' "$window" "$session"
+  notify "Hyperspace" "Stopped $window in $session"
+}
+
+server_running() {
+  local pid_file="${HYPERSPACE_SERVE_PID_FILE:-$HOME/.local/state/hyperspaces/serve.pid}"
+  [ -f "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null
+}
+
+ensure_server() {
+  local port="${HYPERSPACE_SERVE_PORT:-4200}"
+  local host="${HYPERSPACE_SERVE_HOST:-127.0.0.1}"
+
+  if server_running; then
+    printf 'server  http://%s:%s\n' "$host" "$port"
+    return 0
+  fi
+
+  if ! command -v hyperspace-serve >/dev/null 2>&1; then
+    hyperspace_die "hyperspace-serve not found in PATH"
+  fi
+
+  hyperspace-serve start >/dev/null
+  printf 'server  http://%s:%s\n' "$host" "$port"
+}
+
+project_url() {
+  local project="$1"
+  local route
+  local port="${HYPERSPACE_SERVE_PORT:-4200}"
+  local host="${HYPERSPACE_SERVE_HOST:-127.0.0.1}"
+
+  route=$(session_route "$project")
+  printf 'http://%s:%s/%s/\n' "$host" "$port" "$route"
+}
+
+work_project() {
+  local project="$1"
+  local window="${2:-}"
+
+  project=$(normalize_project_id "$project")
+  if [ -z "$window" ]; then
+    window=$(default_window_for_project "$project")
+  fi
+
+  boot_project "$project" "$window" true
+}
+
+boot_project() {
+  local project="${1:-}"
+  local window="${2:-}"
+  local focus="${3:-false}"
+  local url
+
+  if [ -z "$project" ]; then
+    project=$(default_project)
+  fi
+
+  project=$(normalize_project_id "$project")
+  if [ -z "$window" ]; then
+    window=$(default_window_for_project "$project")
+  fi
+
+  ensure_server
+  open_project "$project"
+  window_start "$project" "$window" false
+  url=$(project_url "$project")
+  printf 'live    %s\n' "$url"
+
+  if [ "$focus" = "true" ]; then
+    window_focus "$project" "$window"
+  fi
+}
+
+window_status() {
+  local project="${1:-}"
+
+  require_tmux
+
+  if [ -n "$project" ]; then
+    print_project_status "$project"
+    return 0
+  fi
+
+  local sessions
+  sessions=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | rg '^hs-' || true)
+  if [ -z "$sessions" ]; then
+    printf '%s\n' "No hyperspace sessions (hs-*) running."
+    return 0
+  fi
+
+  while IFS= read -r session; do
+    [ -z "$session" ] && continue
+    print_session_status "${session#hs-}" "$session"
+    printf '\n'
+  done <<< "$sessions"
+}
+
+print_project_status() {
+  local project="$1"
+  local session
+
+  project=$(normalize_project_id "$project")
+  session=$(session_name_for_project "$project")
+  print_session_status "$project" "$session"
+}
+
+session_window_summary() {
+  local project="$1"
+  local session="$2"
+  local windows=""
+
+  if session_exists "$session"; then
+    while IFS='|' read -r window active; do
+      [ -z "$window" ] && continue
+      [ "$window" = "shell" ] && continue
+      local status marker
+      status=$(pane_status "${session}:${window}")
+      marker="$([ "$active" = "1" ] && printf '*' || true)"
+      windows="${windows}${windows:+,}${window}:${status}${marker}"
+    done < <(tmux list-windows -t "$session" -F '#{window_name}|#{window_active}' 2>/dev/null)
+  fi
+
+  if [ -n "$windows" ]; then
+    printf '%s\n' "$windows"
+    return 0
+  fi
+
+  ensure_session_directory
+  jq -r --arg project "$project" '
+    (.sessions[$project].windows // {})
+    | to_entries
+    | map("\(.key):\(.value.status // "unknown")")
+    | join(",")
+  ' "$SESSION_DIR_FILE"
+}
+
+live_doc_window_summary() {
+  local project="$1"
+  local root meta window status
+
+  root=$(project_path "$project" 2>/dev/null || true)
+  if [ -z "$root" ]; then
+    ensure_session_directory
+    root=$(jq -r --arg project "$project" '.sessions[$project].path // empty' "$SESSION_DIR_FILE" 2>/dev/null)
+  fi
+
+  meta="$root/.hyperspace/live-doc.json"
+  if [ -f "$meta" ]; then
+    window=$(jq -r '.window // empty' "$meta" 2>/dev/null)
+    status=$(jq -r '.status // empty' "$meta" 2>/dev/null)
+    if [ -n "$window" ]; then
+      if [ -n "$status" ]; then
+        printf '%s:%s\n' "$window" "$status"
+      else
+        printf '%s\n' "$window"
+      fi
+      return 0
+    fi
+  fi
+
+  if [ -f "$HYPERSPACE_CONFIG_FILE" ]; then
+    jq -r --arg project "$project" '
+      .projects[$project].liveDocWindow //
+      (.projects[$project].windows | keys[0]) //
+      empty
+    ' "$HYPERSPACE_CONFIG_FILE" 2>/dev/null
+  fi
+}
+
+session_overall_state() {
+  local session="$1"
+  local statuses=""
+
+  if ! session_exists "$session"; then
+    printf 'offline'
+    return 0
+  fi
+
+  while IFS= read -r window; do
+    [ -z "$window" ] && continue
+    [ "$window" = "shell" ] && continue
+    statuses="${statuses} $(pane_status "${session}:${window}")"
+  done < <(tmux list-windows -t "$session" -F '#{window_name}' 2>/dev/null)
+
+  if printf '%s' "$statuses" | rg -q 'needs-input'; then
+    printf 'needs-input'
+  elif printf '%s' "$statuses" | rg -q 'running'; then
+    printf 'working'
+  elif [ -n "${statuses// /}" ]; then
+    printf 'idle'
+  else
+    printf 'open'
+  fi
+}
+
+print_session_status() {
+  local project="$1"
+  local session="$2"
+  local path
+
+  if ! session_exists "$session"; then
+    printf '%s: (not running)\n' "$project"
+    return 0
+  fi
+
+  path=$(project_path "$project" 2>/dev/null || printf 'unknown')
+
+  printf '%s [%s]\n' "$project" "$session"
+  printf '  path: %s\n' "$path"
+
+  while IFS='|' read -r window active; do
+    [ -z "$window" ] && continue
+    local status
+    status=$(pane_status "${session}:${window}")
+    printf '  %-16s %s %s\n' "$window" "$status" "$([ "$active" = "1" ] && printf '(active)' || true)"
+  done < <(tmux list-windows -t "$session" -F '#{window_name}|#{window_active}' 2>/dev/null)
+}
+
+pin() {
+  local slot="$1"
+  local session="${2:-}"
+
+  validate_slot "$slot"
+  if [ -z "$session" ]; then
+    session=$(current_tmux_session || true)
+  fi
+
+  if [ -z "$session" ]; then
+    notify "Hyperspace" "Could not detect active session. Run from tmux or pass session name."
+    exit 1
+  fi
+
+  set_slot "$slot" "$session"
+  notify "Hyperspace" "Pinned '$session' to slot $slot"
+}
+
+unpin() {
+  local slot="$1"
+  local session
+
+  validate_slot "$slot"
+  ensure_pin_database
+  session=$(slot_session "$slot")
+
+  if [ -z "$session" ] || [ "$session" = "null" ]; then
+    notify "Hyperspace" "Slot $slot is already empty"
+    exit 0
+  fi
+
+  clear_slot "$slot"
+  notify "Hyperspace" "Unpinned '$session' from slot $slot"
+}
+
+connect() {
+  local slot="$1"
+  local session
+
+  validate_slot "$slot"
+  ensure_pin_database
+  session=$(slot_session "$slot")
+
+  if [ -z "$session" ] || [ "$session" = "null" ]; then
+    notify "Hyperspace" "No session pinned to slot $slot"
+    exit 0
+  fi
+
+  connect_session "$session"
+}
+
+search() {
+  local query="${1:-$QUERY_FILTER}"
+
+  if [ -n "$RAYCAST_DEEPLINK" ]; then
+    if command -v open >/dev/null 2>&1; then
+      open "$RAYCAST_DEEPLINK"
+      exit 0
+    fi
+  fi
+
+  if ! [ -t 0 ]; then
+    notify "Hyperspace" "No TTY and no Raycast deeplink configured."
+    exit 0
+  fi
+
+  require_sesh
+
+  if ! command -v fzf >/dev/null 2>&1; then
+    notify "Hyperspace" "fzf is required for local fallback picker"
+    exit 1
+  fi
+
+  local selected
+  selected=$(sesh list -t 2>/dev/null | rg -i -- "$query" | fzf --height 40% --reverse --border --prompt="Hyperspace: " || true)
+
+  if [ -z "$selected" ]; then
+    exit 0
+  fi
+
+  exec sesh connect --switch "$selected"
+}
+
+list_pins() {
+  ensure_pin_database
+  jq -r 'to_entries | sort_by(.key)[] | "\(.key): \(.value // "<empty>")"' "$PIN_FILE"
+}
+
+list_sessions() {
+  require_tmux
+  tmux list-sessions -F '#{session_name}' 2>/dev/null | rg '^hs-' || printf '%s\n' "(none)"
+}
+
+list_state() {
+  ensure_session_directory
+  jq -r '
+    .sessions
+    | to_entries
+    | sort_by(.key)[]
+    | "\(.key) [\(.value.session // "unknown")] \(.value.status // "unknown") \(.value.path // "")"
+  ' "$SESSION_DIR_FILE"
+}
+
+list_events() {
+  local limit="${1:-20}"
+  if [ ! -f "$EVENT_LOG_FILE" ]; then
+    printf '%s\n' "(no events)"
+    return 0
+  fi
+  tail -n "$limit" "$EVENT_LOG_FILE"
+}
+
+overall_status() {
+  local projects=""
+  local session project path state windows live_doc
+
+  ensure_session_directory
+  reconcile_state_with_tmux
+
+  projects=$(jq -r '.sessions | keys[]?' "$SESSION_DIR_FILE" 2>/dev/null || true)
+  if command -v tmux >/dev/null 2>&1; then
+    while IFS= read -r session; do
+      [ -z "$session" ] && continue
+      project="${session#hs-}"
+      if ! printf '%s\n' "$projects" | rg -Fx -- "$project" >/dev/null 2>&1; then
+        if [ -n "$projects" ]; then
+          projects="${projects}
+${project}"
+        else
+          projects="$project"
+        fi
+      fi
+    done < <(tmux list-sessions -F '#{session_name}' 2>/dev/null | rg '^hs-' || true)
+  fi
+
+  if [ -z "$projects" ]; then
+    printf '%s\n' "No hyperspace sessions."
+    printf '%s\n' "Start everything with: hyperspace"
+    return 0
+  fi
+
+  printf '%-18s %-18s %-12s %-34s %-22s %s\n' "PROJECT" "TMUX SESSION" "STATE" "WINDOWS" "LIVE DOC" "PATH"
+  printf '%-18s %-18s %-12s %-34s %-22s %s\n' "-------" "------------" "-----" "-------" "--------" "----"
+
+  while IFS= read -r project; do
+    [ -z "$project" ] && continue
+    session=$(session_name_for_project "$project")
+    path=$(project_path "$project" 2>/dev/null || jq -r --arg project "$project" '.sessions[$project].path // ""' "$SESSION_DIR_FILE")
+    path=$(expand_path "$path")
+    state=$(session_overall_state "$session")
+    if [ "$state" = "offline" ]; then
+      state=$(jq -r --arg project "$project" '.sessions[$project].status // "offline"' "$SESSION_DIR_FILE" 2>/dev/null)
+    fi
+    windows=$(session_window_summary "$project" "$session")
+    [ -z "$windows" ] && windows="-"
+    live_doc=$(live_doc_window_summary "$project")
+    [ -z "$live_doc" ] && live_doc="-"
+    printf '%-18s %-18s %-12s %-34s %-22s %s\n' "$project" "$session" "$state" "$windows" "$live_doc" "$path"
+  done <<< "$(printf '%s\n' "$projects" | sort -u)"
+
+  printf '\n'
+  printf 'Pinned slots:\n'
+  list_pins
+}
+
+main() {
+  local command="${1:-}"
+  shift || true
+
+  case "$command" in
+    "")
+      work_project "$(default_project)" ""
+      ;;
+    end)
+      if [ $# -lt 1 ]; then
+        end_target "$(default_project)" ""
+        exit 0
+      fi
+      if [ "$1" = "*" ] || [ "$1" = "all" ] || [ "$1" = "--all" ] || [ $# -gt 2 ]; then
+        end_all_sessions
+      else
+        end_target "$1" "${2:-}"
+      fi
+      ;;
+    windows)
+      window_status "${1:-}"
+      ;;
+    events)
+      list_events "${1:-20}"
+      ;;
+    status)
+      overall_status
+      ;;
+    serve)
+      if command -v hyperspace-serve >/dev/null 2>&1; then
+        hyperspace-serve "$@"
+      else
+        notify "Hyperspace" "hyperspace-serve not found in PATH"
+        exit 1
+      fi
+      ;;
+    help|-h|--help)
+      USAGE
+      ;;
+    *)
+      work_project "$command" "${1:-}"
+      ;;
+  esac
+}
+
+main "$@"

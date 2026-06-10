@@ -1,0 +1,25 @@
+{
+  "defaults": {
+    "codex-main": {
+      "provider": "codex",
+      "launch": "hyperspace-window-launch codex"
+    },
+    "claude-review": {
+      "provider": "claude",
+      "launch": "hyperspace-window-launch claude"
+    }
+  },
+  "projects": {
+    "dotfiles": {
+      "path": "~/dotfiles",
+      "route": "dotfiles",
+      "liveDocWindow": "codex-main",
+      "windows": {
+        "codex-main": {
+          "provider": "codex",
+          "launch": "hyperspace-window-launch codex"
+        }
+      }
+    }
+  }
+}

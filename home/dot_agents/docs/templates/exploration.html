@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Exploration — {{PROJECT}}</title>
+  <link rel="stylesheet" href="shared/hyperspace.css">
+</head>
+<body data-project="{{PROJECT}}" data-agent="{{AGENT}}" data-updated="{{ISO8601}}">
+  <header>
+    <h1>{{TITLE}}</h1>
+    <p class="meta">Compare approaches · pick one to implement</p>
+  </header>
+  <main id="content">
+    <section class="callout">
+      <p><strong>Question:</strong> {{QUESTION}}</p>
+    </section>
+    <!-- Compose from components/comparison-columns.html or custom cards -->
+    <section>
+      <h2>Approaches</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(14rem,1fr));gap:1rem;">
+        <article class="finding severity-low">
+          <h3>Option A</h3>
+          <p>{{OPTION_A}}</p>
+        </article>
+        <article class="finding severity-low">
+          <h3>Option B</h3>
+          <p>{{OPTION_B}}</p>
+        </article>
+      </div>
+    </section>
+    <section>
+      <h2>Recommendation</h2>
+      <p>{{RECOMMENDATION}}</p>
+    </section>
+  </main>
+</body>
+</html>

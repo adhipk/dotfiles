@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live doc</title>
+  <link rel="stylesheet" href="shared/hyperspace-components.css">
+</head>
+<body data-hyperspace-live-doc>
+  <main class="live-doc-canvas">
+    <!-- blank canvas — use hs-* web components or plain HTML -->
+  </main>
+  <script src="shared/hyperspace-components.js"></script>
+</body>
+</html>

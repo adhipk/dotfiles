@@ -9,7 +9,9 @@ Task checklist: `home/dot_agents/profiles/nearly-headless/TASKS.md`
 - [x] HTML templates + HyperClay patterns in `home/dot_agents/docs/templates/`
 - [x] Skills `$html-artifact`, `$hyperspace-status`
 - [x] `nearly-headless` and `hyperspace-open-report` commands
-- [ ] tmux/sesh hyperspace runtime (phase 2 in TASKS.md)
+- [x] tmux/sesh hyperspace runtime (phase 2 in TASKS.md)
+- [x] hyperspace serve localhost :4200 (phase 3 in TASKS.md)
+- [ ] hyperspace watch + notification HTML paths (phase 3 in TASKS.md)
 
 ## quick terminal (scratchpad) window.
  - Launch with tmux

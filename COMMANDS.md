@@ -25,6 +25,8 @@ These commands are installed into `~/bin`, which `home/dot_zshrc` adds to
 | `watch-sync` | Watch the chezmoi source state with `fswatch` and apply it after changes. | [`home/bin/executable_watch-sync`](home/bin/executable_watch-sync) |
 | `nearly-headless` | Show, print, or initialize the nearly-headless agent profile (HTML artifacts, headless hyperspaces). | [`home/bin/executable_nearly-headless`](home/bin/executable_nearly-headless) |
 | `hyperspace-open-report` | Open `<project>/.hyperspace/<slug>.html` in the default browser. | [`home/bin/executable_hyperspace-open-report`](home/bin/executable_hyperspace-open-report) |
+| `hyperspace` | Open project tmux sessions, manage agents, pin slots, connect via sesh. | [`home/bin/executable_hyperspace`](home/bin/executable_hyperspace) |
+| `hyperspace-serve` | Serve `.hyperspace/` artifacts at `http://127.0.0.1:4200` (index + per-session routes). | [`home/bin/executable_hyperspace-serve`](home/bin/executable_hyperspace-serve) |
 
 `default-apps` is installed as a symlink by
 [`home/bin/symlink_default-apps.tmpl`](home/bin/symlink_default-apps.tmpl).
@@ -86,7 +88,17 @@ nearly-headless init-project
 nearly-headless init-project ~/my-project
 hyperspace-open-report status
 hyperspace-open-report pr-142 --project ~/dotfiles
+hyperspace open dotfiles
+hyperspace agent start dotfiles codex-main
+hyperspace agent focus dotfiles codex-main
+hyperspace agent status dotfiles
+hyperspace connect 2
+hyperspace serve start
+hyperspace serve open
+hyperspace serve stop
 ```
+
+Local server: `http://127.0.0.1:4200/dotfiles/` edits `.hyperspace/live-doc.html` in place. Save runs `hyperspace-run-live-doc` (`codex exec`) — agent writes back into the same file. See `AGENTS.md` § Hyperspace live doc.
 
 Profile docs: [`home/dot_agents/docs/nearly-headless.md`](home/dot_agents/docs/nearly-headless.md).
 Task list: [`home/dot_agents/profiles/nearly-headless/TASKS.md`](home/dot_agents/profiles/nearly-headless/TASKS.md).
@@ -220,10 +232,9 @@ operations to these shortcuts:
 | `Alt+r` | Restart yabai and skhd. |
 | `Alt+/` | Toggle the `whichkey` overlay. |
 
-Experimental hyper bindings, including hyperspace session slots and the
-Spotlight scratchpad shortcut, are kept in
-[`home/dot_config/skhd/modules/hyperspace.skhdrc`](home/dot_config/skhd/modules/hyperspace.skhdrc)
-and are not loaded by default.
+Hyperspace hyper bindings (`hyper+1-9` connect, `hyper++` pin, `hyper+-` unpin,
+`hyper+space` search, `hyper+n` spotlight scratchpad) are in
+[`home/dot_skhdrc`](home/dot_skhdrc). See [`hyperspace`](home/bin/executable_hyperspace).
 
 ## Configuration Utilities
 
