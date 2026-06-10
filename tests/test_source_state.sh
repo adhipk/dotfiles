@@ -88,11 +88,13 @@ echo ""
 echo "Testing managed helper commands..."
 for file in \
     executable_watch-sync \
+    executable_defuddle-clipboard-url \
     executable_ghostty-startup-bench \
     executable_lucide-icons-excalidraw.tmpl \
     executable_reload-colors \
     executable_hotkeys \
     executable_scratchpads \
+    executable_serve_md \
     symlink_default-apps.tmpl \
     executable_tmux-session-picker \
     executable_tmux-sessionizer-zoxide \

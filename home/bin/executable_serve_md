@@ -1,0 +1,815 @@
+#!/usr/bin/env bash
+# Render a Markdown file or folder into /tmp/serve-html/<name> and serve it with
+# a small Caddy instance managed by this script.
+
+set -euo pipefail
+
+PROGRAM="$(basename "$0")"
+DEFAULT_ROOT="/tmp/serve-html"
+DEFAULT_PORT="7331"
+DEFAULT_BIND="127.0.0.1"
+DEFAULT_HOST="docs.localhost"
+DEFAULT_ADMIN="127.0.0.1:2031"
+
+out_root="${SERVE_MD_ROOT:-$DEFAULT_ROOT}"
+port="${SERVE_MD_PORT:-$DEFAULT_PORT}"
+bind_addr="${SERVE_MD_BIND:-$DEFAULT_BIND}"
+host_name="${SERVE_MD_HOST:-$DEFAULT_HOST}"
+admin_addr="${SERVE_MD_ADMIN:-$DEFAULT_ADMIN}"
+clean_output=1
+open_browser=0
+start_server=1
+
+usage() {
+  cat <<EOF
+Usage:
+  $PROGRAM [options] <markdown-file-or-folder> [name]
+  $PROGRAM status
+  $PROGRAM stop
+  $PROGRAM caddyfile
+
+Options:
+  -p, --port <port>       HTTP port for the managed Caddy server.
+                           Default: $DEFAULT_PORT or SERVE_MD_PORT.
+  -b, --bind <address>    Bind address. Default: $DEFAULT_BIND.
+  -H, --host <host>       Friendly host in the generated URL.
+                           Default: $DEFAULT_HOST or SERVE_MD_HOST.
+  -o, --out-root <dir>    Output root. Default: $DEFAULT_ROOT or SERVE_MD_ROOT.
+  --admin <addr:port>     Caddy admin address. Default: $DEFAULT_ADMIN.
+  --render-only           Render files and write the Caddyfile, but do not start Caddy.
+  --no-clean              Keep stale files in the site output directory.
+  --open                  Open the site URL after rendering.
+  -h, --help              Show this help.
+
+Examples:
+  $PROGRAM README.md
+  $PROGRAM docs project-docs
+  $PROGRAM --host docs.local --port 8080 ~/notes notes
+  $PROGRAM stop
+
+Output:
+  Markdown is rendered into:
+    $DEFAULT_ROOT/<name>/
+
+  The managed Caddy server serves all rendered sites from:
+    http://$DEFAULT_HOST:$DEFAULT_PORT/<name>/
+EOF
+}
+
+die() {
+  printf '%s: %s\n' "$PROGRAM" "$*" >&2
+  exit 1
+}
+
+info() {
+  printf '%s\n' "$*" >&2
+}
+
+need_command() {
+  command -v "$1" >/dev/null 2>&1 || die "$1 is required. Install it and try again."
+}
+
+abs_path() {
+  local path="$1"
+  local dir base
+
+  if [[ -d "$path" ]]; then
+    (cd "$path" && pwd -P)
+    return
+  fi
+
+  dir="$(dirname "$path")"
+  base="$(basename "$path")"
+  printf '%s/%s\n' "$(cd "$dir" && pwd -P)" "$base"
+}
+
+slugify() {
+  local raw="$1"
+  local strip_ext="${2:-0}"
+  local slug
+
+  raw="${raw%/}"
+  raw="${raw##*/}"
+  if [[ "$strip_ext" == "1" ]]; then
+    raw="${raw%.*}"
+  fi
+  slug="$(printf '%s' "$raw" \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+//; s/-+$//')"
+
+  [[ -n "$slug" ]] || slug="site"
+  printf '%s\n' "$slug"
+}
+
+html_escape() {
+  sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/"/\&quot;/g'
+}
+
+state_dir() {
+  printf '%s/.serve-md\n' "$out_root"
+}
+
+caddyfile_path() {
+  printf '%s/Caddyfile\n' "$(state_dir)"
+}
+
+pid_file() {
+  printf '%s/caddy.pid\n' "$(state_dir)"
+}
+
+log_file() {
+  printf '%s/caddy.log\n' "$(state_dir)"
+}
+
+is_running() {
+  local pid_path pid
+  pid_path="$(pid_file)"
+  [[ -f "$pid_path" ]] || return 1
+  pid="$(cat "$pid_path" 2>/dev/null || true)"
+  [[ -n "$pid" ]] || return 1
+  kill -0 "$pid" >/dev/null 2>&1
+}
+
+site_url() {
+  local name="$1"
+  local display_host="$host_name"
+  [[ -n "$display_host" ]] || display_host="127.0.0.1"
+  printf 'http://%s:%s/%s/\n' "$display_host" "$port" "$name"
+}
+
+dest_for_markdown_rel() {
+  local rel="$1"
+  local dir base lower
+
+  dir="$(dirname "$rel")"
+  base="$(basename "$rel")"
+  lower="$(printf '%s' "$base" | tr '[:upper:]' '[:lower:]')"
+  [[ "$dir" == "." ]] && dir=""
+
+  case "$lower" in
+    readme.md|readme.markdown|index.md|index.markdown)
+      printf '%sindex.html\n' "${dir:+$dir/}"
+      ;;
+    *.markdown)
+      printf '%s.html\n' "${rel%.markdown}"
+      ;;
+    *.md)
+      printf '%s.html\n' "${rel%.md}"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+first_heading() {
+  awk '
+    /^#[[:space:]]+/ {
+      sub(/^#[[:space:]]+/, "")
+      print
+      exit
+    }
+  ' "$1"
+}
+
+write_support_files() {
+  local support_dir filter_path css_path
+
+  support_dir="$out_root/_serve_md"
+  filter_path="$support_dir/rewrite-md-links.lua"
+  css_path="$support_dir/serve-md.css"
+  mkdir -p "$support_dir"
+
+  cat >"$filter_path" <<'EOF'
+local function split_fragment(target)
+  local hash = target:find("#", 1, true)
+  if hash == nil then
+    return target, ""
+  end
+  return target:sub(1, hash - 1), target:sub(hash)
+end
+
+function Link(el)
+  local path, fragment = split_fragment(el.target)
+  local lower = path:lower()
+
+  if lower:match("%.md$") or lower:match("%.markdown$") then
+    local basename = lower:match("([^/]+)$") or lower
+    if basename == "readme.md" or basename == "readme.markdown" or basename == "index.md" or basename == "index.markdown" then
+      path = path:gsub("[^/]+$", "index.html")
+    else
+      path = path:gsub("%.markdown$", ".html")
+      path = path:gsub("%.md$", ".html")
+    end
+    el.target = path .. fragment
+    return el
+  end
+end
+EOF
+
+  cat >"$css_path" <<'EOF'
+:root {
+  color-scheme: light dark;
+  --bg: #f7f7f3;
+  --fg: #1f2328;
+  --muted: #69707a;
+  --line: #d8dbdf;
+  --link: #0f5e9c;
+  --code-bg: #eceff1;
+  --code-fg: #24292f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111315;
+    --fg: #e8eaed;
+    --muted: #a8adb4;
+    --line: #343941;
+    --link: #7cc4ff;
+    --code-bg: #1e2329;
+    --code-fg: #e8eaed;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0 auto;
+  max-width: 82ch;
+  padding: 44px 22px 72px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 17px/1.65 ui-serif, Georgia, Cambria, "Times New Roman", serif;
+}
+
+main {
+  min-width: 0;
+}
+
+a {
+  color: var(--link);
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.16em;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.18;
+  margin: 1.7em 0 0.5em;
+}
+
+h1 {
+  margin-top: 0;
+  font-size: 2.1rem;
+}
+
+h2 {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.18em;
+}
+
+p,
+ul,
+ol,
+blockquote,
+pre,
+table {
+  margin: 1em 0;
+}
+
+blockquote {
+  border-left: 4px solid var(--line);
+  color: var(--muted);
+  padding-left: 1rem;
+}
+
+code,
+kbd,
+pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+code,
+kbd {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  border-radius: 4px;
+  padding: 0.1em 0.28em;
+  font-size: 0.9em;
+}
+
+pre {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--code-bg);
+  padding: 1rem;
+}
+
+pre code {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+
+img,
+video {
+  max-width: 100%;
+  height: auto;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  border: 1px solid var(--line);
+  padding: 0.45rem 0.6rem;
+  vertical-align: top;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 2rem 0;
+}
+
+.serve-md-index {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.serve-md-index ul {
+  padding-left: 1.2rem;
+}
+
+@media (max-width: 640px) {
+  body {
+    font-size: 16px;
+    padding: 28px 16px 56px;
+  }
+
+  h1 {
+    font-size: 1.8rem;
+  }
+}
+EOF
+}
+
+write_caddyfile() {
+  local state labels caddyfile
+
+  state="$(state_dir)"
+  caddyfile="$(caddyfile_path)"
+  mkdir -p "$state"
+
+  labels="http://127.0.0.1:$port, http://localhost:$port"
+  if [[ -n "$host_name" && "$host_name" != "127.0.0.1" && "$host_name" != "localhost" ]]; then
+    labels="$labels, http://$host_name:$port"
+  fi
+
+  cat >"$caddyfile" <<EOF
+{
+	admin $admin_addr
+	auto_https off
+}
+
+$labels {
+	bind $bind_addr
+	root * "$out_root"
+	encode zstd gzip
+	try_files {path} {path}/ {path}/index.html
+	file_server browse
+	header {
+		X-Content-Type-Options nosniff
+	}
+}
+EOF
+}
+
+write_root_index() {
+  local index tmp name url escaped_name
+
+  index="$out_root/index.html"
+  tmp="$index.tmp"
+
+  {
+    cat <<'EOF'
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>serve_md sites</title>
+  <link rel="stylesheet" href="/_serve_md/serve-md.css">
+</head>
+<body class="serve-md-index">
+<main>
+  <h1>serve_md sites</h1>
+  <ul>
+EOF
+
+    find "$out_root" -mindepth 1 -maxdepth 1 -type d \
+      ! -name '.serve-md' ! -name '_serve_md' -print 2>/dev/null \
+      | sort \
+      | while IFS= read -r dir; do
+          name="$(basename "$dir")"
+          escaped_name="$(printf '%s' "$name" | html_escape)"
+          url="./$name/"
+          printf '    <li><a href="%s">%s</a></li>\n' "$url" "$escaped_name"
+        done
+
+    cat <<'EOF'
+  </ul>
+</main>
+</body>
+</html>
+EOF
+  } >"$tmp"
+
+  mv "$tmp" "$index"
+}
+
+write_site_index_if_missing() {
+  local site_dir="$1"
+  local site_name="$2"
+  local index="$site_dir/index.html"
+  local tmp file rel escaped
+
+  [[ ! -f "$index" ]] || return 0
+  tmp="$index.tmp"
+
+  {
+    cat <<EOF
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>$site_name</title>
+  <link rel="stylesheet" href="/_serve_md/serve-md.css">
+</head>
+<body class="serve-md-index">
+<main>
+  <h1>$site_name</h1>
+  <ul>
+EOF
+
+    find "$site_dir" -type f -name '*.html' ! -name 'index.html' -print \
+      | sort \
+      | while IFS= read -r file; do
+          rel="${file#$site_dir/}"
+          escaped="$(printf '%s' "$rel" | html_escape)"
+          printf '    <li><a href="./%s">%s</a></li>\n' "$rel" "$escaped"
+        done
+
+    cat <<'EOF'
+  </ul>
+</main>
+</body>
+</html>
+EOF
+  } >"$tmp"
+
+  mv "$tmp" "$index"
+}
+
+copy_assets() {
+  local input_dir="$1"
+  local site_dir="$2"
+
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a \
+      --exclude '.git/' \
+      --exclude '*.md' \
+      --exclude '*.MD' \
+      --exclude '*.markdown' \
+      --exclude '*.MARKDOWN' \
+      "$input_dir"/ "$site_dir"/
+    return
+  fi
+
+  (cd "$input_dir" && find . -type f \
+    ! -iname '*.md' \
+    ! -iname '*.markdown' \
+    ! -path './.git/*' -print) \
+    | while IFS= read -r rel; do
+        mkdir -p "$site_dir/$(dirname "$rel")"
+        cp "$input_dir/$rel" "$site_dir/$rel"
+      done
+}
+
+render_markdown_file() {
+  local source_file="$1"
+  local dest_file="$2"
+  local site_name="$3"
+  local title filter
+
+  filter="$out_root/_serve_md/rewrite-md-links.lua"
+  title="$(first_heading "$source_file" || true)"
+  [[ -n "$title" ]] || title="$site_name"
+
+  mkdir -p "$(dirname "$dest_file")"
+  pandoc \
+    --standalone \
+    --from gfm+smart \
+    --to html5 \
+    --metadata "title=$title" \
+    --css "/_serve_md/serve-md.css" \
+    --lua-filter "$filter" \
+    --output "$dest_file" \
+    "$source_file"
+}
+
+clean_site_dir() {
+  local site_dir="$1"
+
+  [[ -n "$site_dir" ]] || die "Refusing to clean an empty output path."
+  [[ "$site_dir" == "$out_root/"* ]] || die "Refusing to clean outside $out_root: $site_dir"
+  rm -rf "$site_dir"
+}
+
+render_input() {
+  local input_path="$1"
+  local site_name="$2"
+  local site_dir="$out_root/$site_name"
+  local source rel dest_rel
+
+  need_command pandoc
+  mkdir -p "$out_root"
+  write_support_files
+
+  if [[ "$clean_output" -eq 1 ]]; then
+    clean_site_dir "$site_dir"
+  fi
+  mkdir -p "$site_dir"
+
+  if [[ -f "$input_path" ]]; then
+    case "$input_path" in
+      *.md|*.MD|*.markdown|*.MARKDOWN)
+        render_markdown_file "$input_path" "$site_dir/index.html" "$site_name"
+        ;;
+      *)
+        die "Input file is not Markdown: $input_path"
+        ;;
+    esac
+  elif [[ -d "$input_path" ]]; then
+    copy_assets "$input_path" "$site_dir"
+    while IFS= read -r -d '' source; do
+      rel="${source#$input_path/}"
+      dest_rel="$(dest_for_markdown_rel "$rel")"
+      render_markdown_file "$source" "$site_dir/$dest_rel" "$site_name"
+    done < <(find "$input_path" -type f \( -iname '*.md' -o -iname '*.markdown' \) -print0)
+  else
+    die "Input does not exist: $input_path"
+  fi
+
+  write_site_index_if_missing "$site_dir" "$site_name"
+  write_root_index
+  write_caddyfile
+}
+
+start_caddy() {
+  local caddyfile pid_path log_path state data_home config_home pid
+
+  need_command caddy
+  caddyfile="$(caddyfile_path)"
+  pid_path="$(pid_file)"
+  log_path="$(log_file)"
+  state="$(state_dir)"
+  data_home="$state/data"
+  config_home="$state/config"
+  mkdir -p "$state" "$data_home" "$config_home"
+
+  if is_running; then
+    if XDG_DATA_HOME="$data_home" XDG_CONFIG_HOME="$config_home" \
+      caddy reload --config "$caddyfile" --adapter caddyfile >/dev/null; then
+      return
+    fi
+
+    info "Caddy reload failed; restarting the managed server."
+    pid="$(cat "$pid_path" 2>/dev/null || true)"
+    [[ -n "$pid" ]] && kill "$pid" >/dev/null 2>&1 || true
+    rm -f "$pid_path"
+  fi
+
+  : >"$log_path"
+  (
+    export XDG_DATA_HOME="$data_home"
+    export XDG_CONFIG_HOME="$config_home"
+    nohup caddy run --config "$caddyfile" --adapter caddyfile >"$log_path" 2>&1 &
+    printf '%s\n' "$!" >"$pid_path"
+  )
+
+  sleep 0.7
+  if ! is_running; then
+    cat "$log_path" >&2 || true
+    die "Caddy did not start. See $log_path"
+  fi
+}
+
+stop_caddy() {
+  local pid_path pid
+
+  pid_path="$(pid_file)"
+  if ! is_running; then
+    rm -f "$pid_path"
+    info "serve_md Caddy server is not running."
+    return
+  fi
+
+  pid="$(cat "$pid_path")"
+  kill "$pid"
+  rm -f "$pid_path"
+  info "Stopped serve_md Caddy server (pid $pid)."
+}
+
+print_status() {
+  local pid="<none>"
+
+  if [[ -f "$(pid_file)" ]]; then
+    pid="$(cat "$(pid_file)" 2>/dev/null || printf '<unreadable>')"
+  fi
+
+  printf 'root:      %s\n' "$out_root"
+  printf 'caddyfile: %s\n' "$(caddyfile_path)"
+  printf 'log:       %s\n' "$(log_file)"
+  printf 'pid:       %s\n' "$pid"
+  if is_running; then
+    printf 'status:    running\n'
+    printf 'index:     http://%s:%s/\n' "${host_name:-127.0.0.1}" "$port"
+  else
+    printf 'status:    stopped\n'
+  fi
+}
+
+parse_args() {
+  input_arg=""
+  name_arg=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      -p|--port)
+        [[ -n "${2:-}" ]] || die "--port requires a value"
+        port="$2"
+        shift 2
+        ;;
+      --port=*)
+        port="${1#*=}"
+        shift
+        ;;
+      -b|--bind)
+        [[ -n "${2:-}" ]] || die "--bind requires a value"
+        bind_addr="$2"
+        shift 2
+        ;;
+      --bind=*)
+        bind_addr="${1#*=}"
+        shift
+        ;;
+      -H|--host)
+        [[ -n "${2:-}" ]] || die "--host requires a value"
+        host_name="$2"
+        shift 2
+        ;;
+      --host=*)
+        host_name="${1#*=}"
+        shift
+        ;;
+      -o|--out-root)
+        [[ -n "${2:-}" ]] || die "--out-root requires a value"
+        out_root="$2"
+        shift 2
+        ;;
+      --out-root=*)
+        out_root="${1#*=}"
+        shift
+        ;;
+      --admin)
+        [[ -n "${2:-}" ]] || die "--admin requires a value"
+        admin_addr="$2"
+        shift 2
+        ;;
+      --admin=*)
+        admin_addr="${1#*=}"
+        shift
+        ;;
+      --render-only)
+        start_server=0
+        shift
+        ;;
+      --no-clean)
+        clean_output=0
+        shift
+        ;;
+      --open)
+        open_browser=1
+        shift
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        die "Unknown option: $1"
+        ;;
+      *)
+        if [[ -z "$input_arg" ]]; then
+          input_arg="$1"
+        elif [[ -z "$name_arg" ]]; then
+          name_arg="$1"
+        else
+          die "Unexpected argument: $1"
+        fi
+        shift
+        ;;
+    esac
+  done
+
+  while [[ $# -gt 0 ]]; do
+    if [[ -z "$input_arg" ]]; then
+      input_arg="$1"
+    elif [[ -z "$name_arg" ]]; then
+      name_arg="$1"
+    else
+      die "Unexpected argument: $1"
+    fi
+    shift
+  done
+}
+
+main() {
+  local command="${1:-}"
+  local input_abs site_name url
+
+  case "$command" in
+    status)
+      shift
+      parse_args "$@"
+      print_status
+      exit 0
+      ;;
+    stop)
+      shift
+      parse_args "$@"
+      stop_caddy
+      exit 0
+      ;;
+    caddyfile)
+      shift
+      parse_args "$@"
+      printf '%s\n' "$(caddyfile_path)"
+      exit 0
+      ;;
+  esac
+
+  parse_args "$@"
+  [[ -n "$input_arg" ]] || {
+    usage >&2
+    exit 2
+  }
+
+  mkdir -p "$out_root"
+  out_root="$(abs_path "$out_root")"
+  input_abs="$(abs_path "$input_arg")"
+  if [[ -n "$name_arg" ]]; then
+    site_name="$(slugify "$name_arg")"
+  elif [[ -f "$input_abs" ]]; then
+    site_name="$(slugify "$input_abs" 1)"
+  else
+    site_name="$(slugify "$input_abs")"
+  fi
+
+  [[ "$port" =~ ^[0-9]+$ ]] || die "Port must be numeric: $port"
+
+  render_input "$input_abs" "$site_name"
+
+  if [[ "$start_server" -eq 1 ]]; then
+    start_caddy
+  fi
+
+  url="$(site_url "$site_name")"
+  printf 'Rendered: %s\n' "$out_root/$site_name"
+  if [[ "$start_server" -eq 1 ]]; then
+    printf 'Serving:  %s\n' "$url"
+    printf 'Index:    http://%s:%s/\n' "${host_name:-127.0.0.1}" "$port"
+  else
+    printf 'Caddyfile: %s\n' "$(caddyfile_path)"
+  fi
+
+  if [[ "$open_browser" -eq 1 ]]; then
+    command -v open >/dev/null 2>&1 && open "$url"
+  fi
+}
+
+main "$@"

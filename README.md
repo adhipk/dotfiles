@@ -155,6 +155,7 @@ bundle ID.
 - `alt + backtick` / `alt + ~`: focus Ghostty, skipping task windows titled like `nvim`, `vim`, `codex`, `claude`, or Codex's `Action Required` status
 - `alt + r`: restart yabai and skhd
 - `alt + /`: show the keybinding cheat sheet
+- `hyper + d`: defuddle the URL in the clipboard into readable HTML, keeping original CSS links, save it to `~/Downloads/defuddled-pages`, copy it, and open it
 
 Hyperspace hyper bindings (`hyper+1-9` connect, `hyper++` pin, `hyper+-` unpin,
 `hyper+space` search) are in `home/dot_skhdrc`. The `hyperspace` command

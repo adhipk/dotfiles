@@ -136,6 +136,12 @@ alt - 0x2A : ~/bin/hotkeys presentation toggle  # alt + backslash
 alt + shift - 0x32 : ~/.config/skhd/focus_app.sh "Ghostty"  # alt + tilde
 
 # ============================================================
+# Page capture
+# ============================================================
+
+ctrl + alt + cmd - d : ~/bin/defuddle-clipboard-url
+
+# ============================================================
 # Window close / minimize
 # ============================================================
 

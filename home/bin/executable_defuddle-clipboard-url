@@ -1,0 +1,309 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+OUTPUT_DIR="${DEFUDDLE_OUTPUT_DIR:-$HOME/Downloads/defuddled-pages}"
+OPEN_RESULT="${DEFUDDLE_OPEN_RESULT:-1}"
+ORIGINAL_CSS="${DEFUDDLE_ORIGINAL_CSS:-1}"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  defuddle-clipboard-url [--open|--no-open] [--original-css|--no-original-css] [--output-dir DIR] [URL]
+
+Reads an http(s) URL from the clipboard when URL is omitted, extracts the
+readable page HTML with Defuddle, saves it under ~/Downloads/defuddled-pages,
+copies the cleaned HTML to the clipboard, and opens the saved file. By default
+the saved document keeps the original page's CSS links and inline style blocks,
+but excludes scripts.
+
+Environment:
+  DEFUDDLE_OUTPUT_DIR     Override the output directory.
+  DEFUDDLE_OPEN_RESULT    Set to 0 to avoid opening the saved HTML file.
+  DEFUDDLE_ORIGINAL_CSS   Set to 0 to save only Defuddle's cleaned fragment.
+EOF
+}
+
+notify() {
+  local title="$1"
+  local message="$2"
+
+  if command -v osascript >/dev/null 2>&1; then
+    /usr/bin/osascript - "$title" "$message" <<'APPLESCRIPT' >/dev/null 2>&1 || true
+on run argv
+  display notification item 2 of argv with title item 1 of argv
+end run
+APPLESCRIPT
+  fi
+}
+
+fail() {
+  local message="$1"
+  printf 'defuddle-clipboard-url: %s\n' "$message" >&2
+  notify "Defuddle" "$message"
+  exit 1
+}
+
+trim() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+make_slug() {
+  local url="$1"
+  local slug
+
+  slug=$(
+    printf '%s' "$url" \
+      | sed -E 's#^https?://##; s#[/?#&=:+%]+#-#g; s#[^A-Za-z0-9._-]+#-#g; s#^-+##; s#-+$##' \
+      | cut -c 1-80
+  )
+
+  if [ -z "$slug" ]; then
+    slug="page"
+  fi
+
+  printf '%s' "$slug"
+}
+
+run_defuddle() {
+  local url="$1"
+  local output_file="$2"
+  local original_css="$3"
+  local args=(parse "$url" --output "$output_file")
+
+  if [ "$original_css" != "0" ]; then
+    # Debug mode preserves class/id/data attributes, which lets the original
+    # CSS match the cleaned content more often. CLI logs still go to stdout.
+    args+=(--debug)
+  fi
+
+  if command -v defuddle >/dev/null 2>&1; then
+    defuddle "${args[@]}"
+    return
+  fi
+
+  if command -v npx >/dev/null 2>&1; then
+    npx --yes defuddle "${args[@]}"
+    return
+  fi
+
+  fail "Install npm/npx or a global defuddle command first."
+}
+
+fetch_original_html() {
+  local url="$1"
+  local output_file="$2"
+
+  if ! command -v curl >/dev/null 2>&1; then
+    return 1
+  fi
+
+  curl --fail --location --silent --show-error --compressed \
+    --user-agent "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari" \
+    "$url" \
+    --output "$output_file"
+}
+
+wrap_with_original_css() {
+  local raw_file="$1"
+  local content_file="$2"
+  local output_file="$3"
+  local url="$4"
+
+  if ! command -v node >/dev/null 2>&1; then
+    return 1
+  fi
+
+  node - "$raw_file" "$content_file" "$output_file" "$url" <<'NODE'
+const fs = require('node:fs');
+
+const [rawPath, contentPath, outputPath, url] = process.argv.slice(2);
+const raw = fs.readFileSync(rawPath, 'utf8');
+const content = fs.readFileSync(contentPath, 'utf8').trim();
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replaceAll('"', '&quot;');
+}
+
+function attr(tag, name) {
+  const re = new RegExp(`\\s${name}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i');
+  const match = tag.match(re);
+  return match ? (match[2] ?? match[3] ?? match[4] ?? '') : '';
+}
+
+function keepMeta(tag) {
+  return /\scharset\s*=/i.test(tag) || /\sname\s*=\s*["']?viewport["']?/i.test(tag);
+}
+
+function keepLink(tag) {
+  const rel = attr(tag, 'rel').toLowerCase();
+  const as = attr(tag, 'as').toLowerCase();
+  return /\bstylesheet\b/.test(rel)
+    || (/\bpreload\b/.test(rel) && as === 'style')
+    || /\bpreconnect\b/.test(rel)
+    || /\bdns-prefetch\b/.test(rel);
+}
+
+function pickedAttrs(sourceAttrs, names) {
+  return names
+    .map((name) => {
+      const value = attr(`<x ${sourceAttrs}>`, name);
+      return value ? `${name}="${escapeAttr(value)}"` : '';
+    })
+    .filter(Boolean)
+    .join(' ');
+}
+
+const head = raw.match(/<head\b[^>]*>([\s\S]*?)<\/head>/i)?.[1] ?? '';
+const htmlAttrs = raw.match(/<html\b([^>]*)>/i)?.[1] ?? '';
+const bodyAttrs = raw.match(/<body\b([^>]*)>/i)?.[1] ?? '';
+const title = raw.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/\s+/g, ' ').trim() || url;
+
+const headParts = [];
+headParts.push('<meta charset="utf-8">');
+headParts.push('<meta name="viewport" content="width=device-width, initial-scale=1">');
+headParts.push(`<base href="${escapeAttr(url)}">`);
+headParts.push(`<title>${escapeHtml(title)}</title>`);
+
+for (const match of head.matchAll(/<meta\b[^>]*>/gi)) {
+  if (keepMeta(match[0]) && !/\scharset\s*=/i.test(match[0]) && !/\sname\s*=\s*["']?viewport["']?/i.test(match[0])) {
+    headParts.push(match[0]);
+  }
+}
+
+for (const match of head.matchAll(/<link\b[^>]*>/gi)) {
+  if (keepLink(match[0])) {
+    headParts.push(match[0]);
+  }
+}
+
+for (const match of head.matchAll(/<style\b[^>]*>[\s\S]*?<\/style>/gi)) {
+  headParts.push(match[0]);
+}
+
+const htmlAttrText = pickedAttrs(htmlAttrs, ['lang', 'dir']);
+const bodyAttrText = pickedAttrs(bodyAttrs, ['id', 'class', 'dir']);
+
+const document = `<!doctype html>
+<html${htmlAttrText ? ` ${htmlAttrText}` : ''}>
+<head>
+${headParts.join('\n')}
+</head>
+<body${bodyAttrText ? ` ${bodyAttrText}` : ''}>
+${content}
+</body>
+</html>
+`;
+
+fs.writeFileSync(outputPath, document);
+NODE
+}
+
+url=""
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --open)
+      OPEN_RESULT=1
+      ;;
+    --no-open)
+      OPEN_RESULT=0
+      ;;
+    --original-css)
+      ORIGINAL_CSS=1
+      ;;
+    --no-original-css)
+      ORIGINAL_CSS=0
+      ;;
+    --output-dir)
+      shift
+      if [ "$#" -eq 0 ]; then
+        fail "--output-dir requires a directory"
+      fi
+      OUTPUT_DIR="$1"
+      ;;
+    -*)
+      fail "Unknown option: $1"
+      ;;
+    *)
+      if [ -n "$url" ]; then
+        fail "Only one URL can be defuddled at a time."
+      fi
+      url="$1"
+      ;;
+  esac
+  shift
+done
+
+if [ -z "$url" ]; then
+  if ! command -v pbpaste >/dev/null 2>&1; then
+    fail "pbpaste is required when URL is omitted."
+  fi
+  url="$(pbpaste)"
+fi
+
+url="$(trim "$url")"
+
+case "$url" in
+  http://*|https://*) ;;
+  *)
+    fail "Clipboard does not contain an http(s) URL."
+    ;;
+esac
+
+if ! command -v pbcopy >/dev/null 2>&1; then
+  fail "pbcopy is required to copy the cleaned HTML."
+fi
+
+mkdir -p "$OUTPUT_DIR"
+
+timestamp="$(date '+%Y%m%d-%H%M%S')"
+slug="$(make_slug "$url")"
+output_file="$OUTPUT_DIR/${timestamp}-${slug}.html"
+tmp_file="$(mktemp "${TMPDIR:-/tmp}/defuddle-clipboard-url.XXXXXX.html")"
+raw_file="$(mktemp "${TMPDIR:-/tmp}/defuddle-clipboard-url.raw.XXXXXX.html")"
+
+cleanup() {
+  rm -f "$tmp_file" "$raw_file"
+}
+trap cleanup EXIT
+
+notify "Defuddle" "Cleaning page HTML..."
+
+run_defuddle "$url" "$tmp_file" "$ORIGINAL_CSS" >/dev/null
+
+if [ ! -s "$tmp_file" ]; then
+  fail "Defuddle did not produce HTML."
+fi
+
+if [ "$ORIGINAL_CSS" != "0" ] \
+  && fetch_original_html "$url" "$raw_file" >/dev/null 2>&1 \
+  && [ -s "$raw_file" ] \
+  && wrap_with_original_css "$raw_file" "$tmp_file" "$output_file" "$url"; then
+  :
+else
+  mv "$tmp_file" "$output_file"
+fi
+
+pbcopy < "$output_file"
+
+if [ "$OPEN_RESULT" != "0" ]; then
+  open "$output_file" >/dev/null 2>&1 || true
+fi
+
+notify "Defuddle" "Saved and copied $(basename "$output_file")"
+printf '%s\n' "$output_file"

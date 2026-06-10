@@ -12,11 +12,13 @@ These commands are installed into `~/bin`, which `home/dot_zshrc` adds to
 | Command | Purpose | Source |
 | --- | --- | --- |
 | `default-apps` | Inspect and change macOS default handlers for file extensions and URL schemes. | [`scripts/default-apps.sh`](scripts/default-apps.sh) |
+| `defuddle-clipboard-url` | Read an http(s) URL from the clipboard, save Defuddle-cleaned HTML under `~/Downloads/defuddled-pages`, keep original CSS links by default, copy that HTML to the clipboard, and open the saved file. | [`home/bin/executable_defuddle-clipboard-url`](home/bin/executable_defuddle-clipboard-url) |
 | `kit` | Speak text with KittenTTS, either from arguments or stdin, and optionally write WAV output. | [`home/bin/executable_kit`](home/bin/executable_kit) |
 | `kit-watch` | Watch a text file with `fswatch` and read its contents with `kit` whenever it changes. | [`home/bin/executable_kit-watch`](home/bin/executable_kit-watch) |
 | `lucide-icons-excalidraw` | Start the external Raycast development command for the Lucide Excalidraw picker. Additional arguments are passed to `npm run dev`. | [`home/bin/executable_lucide-icons-excalidraw.tmpl`](home/bin/executable_lucide-icons-excalidraw.tmpl) |
 | `reload-colors` | Restart yabai and skhd, then reload tmux configuration when tmux is running. | [`home/bin/executable_reload-colors`](home/bin/executable_reload-colors) |
 | `reset-yabai` | Reinstall and pin `yabai@7.1.16`, update its scripting-addition sudoers entry, and restart its service. This uses `sudo` and changes Homebrew packages and `/etc/sudoers.d/yabai`. | [`home/bin/executable_reset-yabai`](home/bin/executable_reset-yabai) |
+| `serve_md` | Render a Markdown file or folder with Pandoc and serve it from a managed local Caddy site. | [`home/bin/executable_serve_md`](home/bin/executable_serve_md) |
 | `tmux-session-picker` | Select and switch to an existing tmux session with `sesh` + `fzf`. | [`home/bin/executable_tmux-session-picker`](home/bin/executable_tmux-session-picker) |
 | `tmux-sessionizer-zoxide` | Pick from existing tmux sessions or zoxide-ranked directories and connect via `sesh`. | [`home/bin/executable_tmux-sessionizer-zoxide`](home/bin/executable_tmux-sessionizer-zoxide) |
 | `tmux-sessionizer` | Compatibility wrapper for `-s <index>` and interactive selection, backed by `sesh`. | [`home/bin/executable_tmux-sessionizer`](home/bin/executable_tmux-sessionizer) |
@@ -55,6 +57,35 @@ requires `duti`, which is installed from the `Brewfile`.
 printf 'line one\\nline two\\tvalue\\n' | unescape-buffer
 printf 'line one\\nline two\\tvalue\\n' | unescape-string
 ```
+
+### Markdown Preview Server
+
+```bash
+serve_md README.md
+serve_md docs project-docs
+serve_md --host docs.local --port 8080 ~/notes notes
+serve_md status
+serve_md stop
+```
+
+`serve_md` renders Markdown to `/tmp/serve-html/<name>/` with Pandoc, rewrites
+local Markdown links to HTML links, and serves the rendered sites through a
+small Caddy instance on `http://docs.localhost:7331/` by default.
+
+### Defuddle HTML Capture
+
+```bash
+defuddle-clipboard-url
+defuddle-clipboard-url --no-open
+defuddle-clipboard-url --no-original-css
+defuddle-clipboard-url --output-dir ~/Documents/ReadablePages https://example.com/article
+```
+
+`defuddle-clipboard-url` uses a globally installed `defuddle` command when
+available, otherwise it runs `npx --yes defuddle`. It keeps the result as HTML;
+it does not pass Defuddle's Markdown flag. By default it wraps the cleaned
+content with the original page's stylesheet links and inline `<style>` blocks,
+but does not keep the original scripts.
 
 ### Text To Speech
 
@@ -228,6 +259,7 @@ operations to these shortcuts:
 | `Alt+n` | Create and focus a new space. |
 | `Alt+k` | Close empty spaces. |
 | `Alt+Backtick`, `Alt+~`, `Alt+1..4` | Focus Ghostty, the default browser, the default Markdown editor, Teams, or Slack. Ghostty focus skips task windows titled like `nvim`, `vim`, `codex`, `claude`, or Codex's `Action Required` status. |
+| `Hyper+d` | Defuddle the URL in the clipboard into cleaned HTML, keep original CSS links, save it under `~/Downloads/defuddled-pages`, copy it to the clipboard, and open it. |
 | `Ctrl+Alt+w`, `Ctrl+Alt+z` | Close or minimize the current window. |
 | `Alt+r` | Restart yabai and skhd. |
 | `Alt+/` | Toggle the `whichkey` overlay. |
