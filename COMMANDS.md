@@ -25,10 +25,11 @@ These commands are installed into `~/bin`, which `home/dot_zshrc` adds to
 | `unescape-buffer` | Read escaped text from stdin and write unescaped newlines, tabs, carriage returns, quotes, and backslashes to stdout. Implemented in Node.js. | [`home/bin/executable_unescape-buffer`](home/bin/executable_unescape-buffer) |
 | `unescape-string` | Read escaped text from stdin and write an unescaped version to stdout. Implemented with `sed`. | [`home/bin/executable_unescape-string`](home/bin/executable_unescape-string) |
 | `watch-sync` | Watch the chezmoi source state with `fswatch` and apply it after changes. | [`home/bin/executable_watch-sync`](home/bin/executable_watch-sync) |
-| `nearly-headless` | Show, print, or initialize the nearly-headless agent profile (HTML artifacts, headless hyperspaces). | [`home/bin/executable_nearly-headless`](home/bin/executable_nearly-headless) |
-| `hyperspace-open-report` | Open `<project>/.hyperspace/<slug>.html` in the default browser. | [`home/bin/executable_hyperspace-open-report`](home/bin/executable_hyperspace-open-report) |
-| `hyperspace` | Open project tmux sessions, manage agents, pin slots, connect via sesh. | [`home/bin/executable_hyperspace`](home/bin/executable_hyperspace) |
-| `hyperspace-serve` | Serve `.hyperspace/` artifacts at `http://127.0.0.1:4200` (index + per-session routes). | [`home/bin/executable_hyperspace-serve`](home/bin/executable_hyperspace-serve) |
+| `headless-artifacts` | Compatibility alias for `nearly-headless`. | [`home/bin/executable_headless-artifacts`](home/bin/executable_headless-artifacts) |
+| `nearly-headless` | Shim into the standalone TypeScript app at `~/.local/share/nearly-headless`. | [`home/bin/executable_nearly-headless`](home/bin/executable_nearly-headless) |
+| `hyperspace-open-report` | Compatibility alias for `nearly-headless open`. | [`home/bin/executable_hyperspace-open-report`](home/bin/executable_hyperspace-open-report) |
+| `hyperspace` | Hyperspace tmux workspace manager: project terminals, agent panes, editors, pins, and connect/search helpers. | [`home/bin/executable_hyperspace`](home/bin/executable_hyperspace) |
+| `hyperspace-serve` | Compatibility alias for `nearly-headless serve`. | [`home/bin/executable_hyperspace-serve`](home/bin/executable_hyperspace-serve) |
 
 `default-apps` is installed as a symlink by
 [`home/bin/symlink_default-apps.tmpl`](home/bin/symlink_default-apps.tmpl).
@@ -109,7 +110,7 @@ watching at the current end of the file.
 higher quality voice-cloned readback and accepts a reference WAV with
 `--voice-ref`.
 
-### Nearly-headless (HTML artifacts)
+### Nearly-Headless
 
 ```bash
 nearly-headless info
@@ -117,19 +118,39 @@ nearly-headless print-agents
 nearly-headless tasks
 nearly-headless init-project
 nearly-headless init-project ~/my-project
+nearly-headless serve start
+nearly-headless serve open
+nearly-headless open status
+headless-artifacts info
 hyperspace-open-report status
 hyperspace-open-report pr-142 --project ~/dotfiles
+hyperspace-serve start
+hyperspace-serve open
+hyperspace-serve stop
+```
+
+Local server: `http://127.0.0.1:4200/<route>/` is the nearly-headless workspace: create tasks, watch progress, inspect artifacts, and answer agent-generated interactive inputs. See [`home/dot_agents/docs/nearly-headless.md`](home/dot_agents/docs/nearly-headless.md).
+
+Dotfiles only installs shims for nearly-headless. The app source/build should
+live in the external project `~/.local/share/nearly-headless`.
+
+### Hyperspace
+
+```bash
+hyperspace
 hyperspace open dotfiles
+hyperspace start dotfiles codex-main
+hyperspace focus dotfiles codex-main
+hyperspace stop dotfiles codex-main
 hyperspace agent start dotfiles codex-main
 hyperspace agent focus dotfiles codex-main
 hyperspace agent status dotfiles
 hyperspace connect 2
-hyperspace serve start
-hyperspace serve open
-hyperspace serve stop
+hyperspace pin 2
+hyperspace search
 ```
 
-Local server: `http://127.0.0.1:4200/dotfiles/` edits `.hyperspace/live-doc.html` in place. Save runs `hyperspace-run-live-doc` (`codex exec`) — agent writes back into the same file. See `AGENTS.md` § Hyperspace live doc.
+`hyperspace` is the tmux workspace manager for local project windows/panes. It is a separate idea from nearly-headless. See [`home/dot_agents/docs/tmux-session-manager.md`](home/dot_agents/docs/tmux-session-manager.md).
 
 Profile docs: [`home/dot_agents/docs/nearly-headless.md`](home/dot_agents/docs/nearly-headless.md).
 Task list: [`home/dot_agents/profiles/nearly-headless/TASKS.md`](home/dot_agents/profiles/nearly-headless/TASKS.md).
@@ -266,7 +287,8 @@ operations to these shortcuts:
 
 Hyperspace hyper bindings (`hyper+1-9` connect, `hyper++` pin, `hyper+-` unpin,
 `hyper+space` search, `hyper+n` spotlight scratchpad) are in
-[`home/dot_skhdrc`](home/dot_skhdrc). See [`hyperspace`](home/bin/executable_hyperspace).
+[`home/dot_skhdrc`](home/dot_skhdrc). These bindings target the tmux session
+manager. See [`hyperspace`](home/bin/executable_hyperspace).
 
 ## Configuration Utilities
 

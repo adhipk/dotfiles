@@ -11,7 +11,8 @@ description: >-
 
 Produce single `.html` files the user opens in a browser. **Nearly-headless profile only.**
 
-Read `~/.agents/docs/html-artifacts.md` first.
+Read `~/.agents/docs/html-artifacts.md` and
+`~/.agents/docs/headless-html-artifacts.md` first.
 
 ## When to use HTML
 
@@ -28,7 +29,7 @@ Prefer Markdown for short notes. Prefer HTML when the [html-effectiveness](https
 3. Ensure `<project>/.hyperspace/` exists (`nearly-headless init-project`).
 4. Copy `shared/hyperspace.css` into `.hyperspace/shared/` if missing.
 5. Write `<project>/.hyperspace/<slug>.html`.
-6. Tell the user: `hyperspace-open-report <slug>` or `http://127.0.0.1:4200/<route>/<slug>` if `hyperspace serve` is running.
+6. Tell the user: `hyperspace-open-report <slug>` or `http://127.0.0.1:4200/<route>/<slug>` if `hyperspace-serve` is running.
 
 ## Templates
 

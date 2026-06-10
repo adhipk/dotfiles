@@ -17,7 +17,7 @@ is unchanged unless you activate a profile (e.g. `nearly-headless print-agents`)
 
 | Profile | Purpose |
 |---------|---------|
-| `nearly-headless` | Headless tmux agents, HTML artifacts, hyperspace integration |
+| `nearly-headless` | Browser task workspace where agents stream progress and build interactive surfaces |
 
 See `profiles/nearly-headless/README.md` and `docs/nearly-headless.md`.
 
@@ -32,3 +32,7 @@ See `profiles/nearly-headless/README.md` and `docs/nearly-headless.md`.
 
 - Use `~/.agents/docs` for durable machine-level documentation that should be available across projects.
 - Keep project-specific notes in the project or in `~/notes` unless they describe default agent behavior.
+- `nearly-headless`: task dispatch, progress, artifacts, comments, approvals,
+  provider sessions, and agent-created UI.
+- `hyperspace`: separate tmux workspace manager for terminals, agents, and
+  project editors.

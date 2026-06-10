@@ -24,15 +24,22 @@ USAGE() {
   cat <<'EOF_HELP'
 Usage:
   hyperspace [project] [window]
+  hyperspace open [project]
+  hyperspace start [project] [window]
+  hyperspace focus [project] [window]
+  hyperspace stop [project] [window]
+  hyperspace agent start|focus|stop|status [project] [window]
+  hyperspace pin <slot> [session]
+  hyperspace unpin <slot>
+  hyperspace connect <slot>
+  hyperspace search [query]
   hyperspace status
   hyperspace end [project|all] [window]
   hyperspace windows [project]
   hyperspace events [limit]
-  hyperspace serve [start|stop|status|open] [--port N]
 
 Default:
-  hyperspace starts the configured/default project, starts its default window, opens
-  the live doc server, and connects to the tmux window.
+  hyperspace starts/focuses a tmux session and window only.
 
 Model:
   one project = one tmux session
@@ -906,38 +913,6 @@ window_stop() {
   notify "Hyperspace" "Stopped $window in $session"
 }
 
-server_running() {
-  local pid_file="${HYPERSPACE_SERVE_PID_FILE:-$HOME/.local/state/hyperspaces/serve.pid}"
-  [ -f "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null
-}
-
-ensure_server() {
-  local port="${HYPERSPACE_SERVE_PORT:-4200}"
-  local host="${HYPERSPACE_SERVE_HOST:-127.0.0.1}"
-
-  if server_running; then
-    printf 'server  http://%s:%s\n' "$host" "$port"
-    return 0
-  fi
-
-  if ! command -v hyperspace-serve >/dev/null 2>&1; then
-    hyperspace_die "hyperspace-serve not found in PATH"
-  fi
-
-  hyperspace-serve start >/dev/null
-  printf 'server  http://%s:%s\n' "$host" "$port"
-}
-
-project_url() {
-  local project="$1"
-  local route
-  local port="${HYPERSPACE_SERVE_PORT:-4200}"
-  local host="${HYPERSPACE_SERVE_HOST:-127.0.0.1}"
-
-  route=$(session_route "$project")
-  printf 'http://%s:%s/%s/\n' "$host" "$port" "$route"
-}
-
 work_project() {
   local project="$1"
   local window="${2:-}"
@@ -947,33 +922,9 @@ work_project() {
     window=$(default_window_for_project "$project")
   fi
 
-  boot_project "$project" "$window" true
-}
-
-boot_project() {
-  local project="${1:-}"
-  local window="${2:-}"
-  local focus="${3:-false}"
-  local url
-
-  if [ -z "$project" ]; then
-    project=$(default_project)
-  fi
-
-  project=$(normalize_project_id "$project")
-  if [ -z "$window" ]; then
-    window=$(default_window_for_project "$project")
-  fi
-
-  ensure_server
   open_project "$project"
   window_start "$project" "$window" false
-  url=$(project_url "$project")
-  printf 'live    %s\n' "$url"
-
-  if [ "$focus" = "true" ]; then
-    window_focus "$project" "$window"
-  fi
+  window_focus "$project" "$window"
 }
 
 window_status() {
@@ -1258,7 +1209,7 @@ ${project}"
 
   if [ -z "$projects" ]; then
     printf '%s\n' "No hyperspace sessions."
-    printf '%s\n' "Start everything with: hyperspace"
+    printf '%s\n' "Start a tmux project session with: hyperspace"
     return 0
   fi
 
@@ -1288,11 +1239,70 @@ ${project}"
 
 main() {
   local command="${1:-}"
+  local subcommand target_project target_window
   shift || true
 
   case "$command" in
     "")
       work_project "$(default_project)" ""
+      ;;
+    open)
+      open_project "${1:-$(default_project)}"
+      ;;
+    start)
+      window_start "${1:-$(default_project)}" "${2:-}" false
+      ;;
+    focus)
+      window_focus "${1:-$(default_project)}" "${2:-}"
+      ;;
+    stop)
+      target_project="${1:-$(default_project)}"
+      target_window="${2:-$(default_window_for_project "$target_project")}"
+      window_stop "$target_project" "$target_window"
+      ;;
+    agent)
+      subcommand="${1:-status}"
+      shift || true
+      case "$subcommand" in
+        start)
+          window_start "${1:-$(default_project)}" "${2:-}" false
+          ;;
+        focus)
+          window_focus "${1:-$(default_project)}" "${2:-}"
+          ;;
+        stop)
+          target_project="${1:-$(default_project)}"
+          target_window="${2:-$(default_window_for_project "$target_project")}"
+          window_stop "$target_project" "$target_window"
+          ;;
+        status)
+          window_status "${1:-}"
+          ;;
+        *)
+          hyperspace_die "Unknown agent subcommand: $subcommand"
+          ;;
+      esac
+      ;;
+    pin)
+      pin "${1:?slot required}" "${2:-}"
+      ;;
+    unpin)
+      unpin "${1:?slot required}"
+      ;;
+    connect)
+      connect "${1:?slot required}"
+      ;;
+    search)
+      search "${1:-$QUERY_FILTER}"
+      ;;
+    pins)
+      list_pins
+      ;;
+    sessions)
+      list_sessions
+      ;;
+    state)
+      list_state
       ;;
     end)
       if [ $# -lt 1 ]; then
@@ -1313,14 +1323,6 @@ main() {
       ;;
     status)
       overall_status
-      ;;
-    serve)
-      if command -v hyperspace-serve >/dev/null 2>&1; then
-        hyperspace-serve "$@"
-      else
-        notify "Hyperspace" "hyperspace-serve not found in PATH"
-        exit 1
-      fi
       ;;
     help|-h|--help)
       USAGE

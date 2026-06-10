@@ -9,12 +9,17 @@
   const statusEl = document.getElementById("doc-status");
   const saveMetaEl = document.getElementById("save-meta");
   const saveBtn = document.getElementById("save-btn");
-  const clearBtn = document.getElementById("clear-btn");
-  const insertButtons = [...document.querySelectorAll("[data-insert-component]")];
+  const commentBtn = document.getElementById("comment-btn");
+  const messageForm = document.getElementById("message-form");
+  const messageInput = document.getElementById("message-input");
+  const messageSend = document.getElementById("message-send");
   const artifactListEl = document.getElementById("artifact-list");
 
   let dirty = false;
   let saving = false;
+  let commentMode = false;
+  let selectedCommentTarget = null;
+  let composerEl = null;
   let pollTimer = null;
   let lastVersion = 0;
 
@@ -45,19 +50,56 @@
 
   function setCanvasEnabled(value) {
     const disabled = !activeRoute || saving || !value;
-    if (clearBtn) clearBtn.disabled = disabled;
-    for (const button of insertButtons) button.disabled = disabled;
+    if (commentBtn) commentBtn.disabled = disabled;
+    if (messageInput) messageInput.disabled = disabled;
+    if (messageSend) messageSend.disabled = disabled || !messageInput.value.trim();
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function persistControlState(rootEl) {
+    for (const input of rootEl.querySelectorAll("input")) {
+      if (input.type === "checkbox" || input.type === "radio") {
+        input.toggleAttribute("checked", input.checked);
+      } else {
+        input.setAttribute("value", input.value);
+      }
+    }
+    for (const textarea of rootEl.querySelectorAll("textarea")) {
+      textarea.textContent = textarea.value;
+    }
+    for (const select of rootEl.querySelectorAll("select")) {
+      for (const option of select.options) {
+        option.toggleAttribute("selected", option.selected);
+      }
+    }
   }
 
   function normalizeCanvasHtml(raw) {
     const template = document.createElement("template");
     template.innerHTML = raw || "";
+    persistControlState(template.content);
 
     const allowed = new Set([
-      "A", "B", "BLOCKQUOTE", "BR", "CODE", "DIV", "EM", "H1", "H2", "H3", "H4",
-      "HR", "I", "IMG", "LI", "OL", "P", "PRE", "SCRIPT", "SPAN", "STRONG",
-      "TABLE", "TBODY", "TD", "TH", "THEAD", "TR", "UL",
-      "HS-CALLOUT", "HS-COMPARISON", "HS-DETAILS", "HS-FINDING", "HS-OPTION",
+      "A", "ARTICLE", "ASIDE", "B", "BLOCKQUOTE", "BR", "BUTTON", "CANVAS",
+      "CAPTION", "CODE", "COL", "COLGROUP", "DATALIST", "DD", "DETAILS",
+      "DIV", "DL", "DT", "EM", "FIELDSET", "FIGCAPTION", "FIGURE", "FORM",
+      "G", "H1", "H2", "H3", "H4", "H5", "H6", "HR", "I", "IFRAME", "IMG",
+      "INPUT", "LABEL", "LEGEND", "LI", "LINE", "MAIN", "MARKER", "METER",
+      "NAV", "OL", "OPTGROUP", "OPTION", "OUTPUT", "P", "PATH", "POLYGON",
+      "POLYLINE", "PRE", "PROGRESS", "RECT", "SCRIPT", "SECTION", "SELECT",
+      "SMALL", "SPAN", "STRONG", "STYLE", "SUB", "SUMMARY", "SUP", "SVG",
+      "TABLE", "TBODY", "TD", "TEXT", "TEXTAREA", "TFOOT", "TH", "THEAD",
+      "TIME", "TITLE", "TR", "UL",
+      "HS-CALLOUT", "HS-COMMENT", "HS-COMMENTS", "HS-COMPARISON", "HS-DETAILS",
+      "HS-FINDING", "HS-MESSAGE", "HS-OPTION",
     ]);
     const rename = new Map([
       ["B", "strong"],
@@ -78,7 +120,7 @@
         return;
       }
 
-      if (!allowed.has(el.tagName)) {
+      if (!allowed.has(el.tagName) && !el.tagName.includes("-")) {
         const fragment = document.createDocumentFragment();
         while (el.firstChild) fragment.appendChild(el.firstChild);
         el.replaceWith(fragment);
@@ -87,79 +129,6 @@
 
     for (const child of [...template.content.children]) normalizeElement(child);
     return template.innerHTML.trim();
-  }
-
-  function componentTemplate(type) {
-    switch (type) {
-      case "callout":
-        return '<hs-callout variant="info" label="Note"><p>New note.</p></hs-callout>';
-      case "finding":
-        return '<hs-finding severity="low"><h3>Finding</h3><p>What changed and why it matters.</p></hs-finding>';
-      case "details":
-        return '<hs-details summary="Details"><p>Add supporting context here.</p></hs-details>';
-      case "comparison":
-        return [
-          '<hs-comparison title="Options">',
-          '<hs-option title="Option A"><p>Describe the first path.</p></hs-option>',
-          '<hs-option title="Option B"><p>Describe the second path.</p></hs-option>',
-          "</hs-comparison>",
-        ].join("");
-      case "section":
-        return "<h2>Section</h2><p>Start writing here.</p>";
-      default:
-        return "";
-    }
-  }
-
-  function selectionInsideCanvas() {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0 || !canvasEl) return null;
-    const range = selection.getRangeAt(0);
-    if (!canvasEl.contains(range.commonAncestorContainer)) return null;
-    return range;
-  }
-
-  function placeCursorAfter(node) {
-    const selection = window.getSelection();
-    if (!selection || !node?.parentNode) return;
-    const range = document.createRange();
-    range.setStartAfter(node);
-    range.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(range);
-  }
-
-  function insertComponent(type) {
-    if (!canvasEl || !activeRoute || saving) return;
-
-    const html = componentTemplate(type);
-    if (!html) return;
-
-    canvasEl.className = "live-canvas live-doc-canvas";
-    canvasEl.contentEditable = "true";
-
-    const activeRange = selectionInsideCanvas();
-    const range = activeRange || document.createRange();
-    if (!activeRange) {
-      range.selectNodeContents(canvasEl);
-      range.collapse(false);
-    }
-
-    const fragment = range.createContextualFragment(html);
-    const inserted = fragment.lastElementChild || fragment.lastChild;
-    range.deleteContents();
-    range.insertNode(fragment);
-    canvasEl.focus();
-
-    if (inserted?.isConnected) {
-      placeCursorAfter(inserted);
-    } else {
-      const last = canvasEl.lastElementChild || canvasEl.lastChild;
-      placeCursorAfter(last);
-    }
-
-    setDirty(true);
-    setCanvasEnabled(true);
   }
 
   function renderArtifacts(session) {
@@ -185,7 +154,6 @@
   function showEmpty(message) {
     stopPoll();
     if (canvasEl) {
-      canvasEl.contentEditable = "false";
       canvasEl.className = "empty-state";
       canvasEl.innerHTML = message;
     }
@@ -196,8 +164,8 @@
   function applyDoc(data, force) {
     if (canvasEl && (force || !dirty)) {
       canvasEl.className = "live-canvas live-doc-canvas";
-      canvasEl.contentEditable = "true";
       canvasEl.innerHTML = data.html || "";
+      hydrateCommentAnchors();
       setCanvasEnabled(true);
     }
     lastVersion = data.version || lastVersion;
@@ -254,7 +222,8 @@
     if (!canvasEl || saving) return;
     saving = true;
     if (saveBtn) saveBtn.disabled = true;
-    if (clearBtn) clearBtn.disabled = true;
+    if (commentBtn) commentBtn.disabled = true;
+    setCanvasEnabled(false);
     saveMetaEl.textContent = "Saving…";
 
     try {
@@ -285,19 +254,201 @@
     }
   }
 
-  function clearCanvas() {
-    if (!canvasEl || !activeRoute || saving) return;
-    stopPoll();
-    canvasEl.className = "live-canvas live-doc-canvas";
-    canvasEl.contentEditable = "true";
-    canvasEl.innerHTML = "";
-    canvasEl.focus();
+  function setCommentMode(value) {
+    commentMode = Boolean(value);
+    canvasEl?.classList.toggle("comment-mode", commentMode);
+    if (commentBtn) {
+      commentBtn.classList.toggle("active", commentMode);
+      commentBtn.textContent = commentMode ? "Select" : "Comment";
+    }
+    if (saveMetaEl && commentMode) {
+      saveMetaEl.className = "doc-meta";
+      saveMetaEl.textContent = "Select part of the artifact";
+    }
+    if (!commentMode) closeCommentComposer();
+  }
+
+  function commentTargetFrom(eventTarget) {
+    if (!canvasEl || !(eventTarget instanceof Element)) return null;
+    if (eventTarget.closest("hs-comment, hs-message, .hs-user-comment, .hs-user-message, .comment-composer")) return null;
+    const target = eventTarget.closest([
+      "[data-commentable]",
+      "hs-callout", "hs-comparison", "hs-details", "hs-finding", "hs-option",
+      "article", "section", "aside", "form", "table", "figure", "details", "blockquote",
+      "pre", "canvas", "svg", "h1", "h2", "h3", "h4", "p", "li",
+    ].join(","));
+    if (!target || target === canvasEl || !canvasEl.contains(target)) return null;
+    return target;
+  }
+
+  function ensureDomId(target) {
+    if (target.id) return `#${target.id}`;
+    if (!target.dataset.hsId) {
+      target.dataset.hsId = `hs-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+    return `@dom:${target.dataset.hsId}`;
+  }
+
+  function insertAtCursor(textarea, text) {
+    const start = textarea.selectionStart ?? textarea.value.length;
+    const end = textarea.selectionEnd ?? textarea.value.length;
+    const before = textarea.value.slice(0, start);
+    const after = textarea.value.slice(end);
+    const prefix = before && !/\s$/.test(before) ? " " : "";
+    const suffix = after && !/^\s/.test(after) ? " " : "";
+    textarea.value = `${before}${prefix}${text}${suffix}${after}`;
+    const next = start + prefix.length + text.length + suffix.length;
+    textarea.setSelectionRange(next, next);
+    textarea.focus();
+    setCanvasEnabled(Boolean(activeRoute));
+  }
+
+  function isMessageAddressing() {
+    return document.activeElement === messageInput;
+  }
+
+  function ensureCommentId(target) {
+    if (!target.dataset.commentId) {
+      target.dataset.commentId = `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+    return target.dataset.commentId;
+  }
+
+  function commentsContainer() {
+    let container = canvasEl.querySelector(":scope > hs-comments");
+    if (!container) {
+      container = document.createElement("hs-comments");
+      container.setAttribute("aria-label", "User comments");
+      canvasEl.appendChild(container);
+    }
+    return container;
+  }
+
+  function hydrateCommentAnchors() {
+    if (!canvasEl) return;
+    canvasEl.querySelectorAll("[data-comment-count]").forEach((el) => {
+      el.removeAttribute("data-comment-count");
+    });
+    const counts = new Map();
+    for (const comment of canvasEl.querySelectorAll("hs-comment[data-comment-for]")) {
+      const id = comment.getAttribute("data-comment-for");
+      counts.set(id, (counts.get(id) || 0) + 1);
+    }
+    for (const [id, count] of counts) {
+      const target = canvasEl.querySelector(`[data-comment-id="${CSS.escape(id)}"]`);
+      if (target) target.setAttribute("data-comment-count", String(count));
+    }
+  }
+
+  function targetLabel(target) {
+    const explicit = target.getAttribute("aria-label") || target.getAttribute("data-label");
+    if (explicit) return explicit;
+    const heading = target.querySelector?.("h1, h2, h3, h4, summary");
+    const text = (heading?.textContent || target.textContent || target.tagName.toLowerCase()).trim();
+    return text.length > 80 ? `${text.slice(0, 77)}...` : text;
+  }
+
+  function ensureCommentComposer() {
+    if (composerEl) return composerEl;
+    composerEl = document.createElement("div");
+    composerEl.className = "comment-composer";
+    composerEl.innerHTML = [
+      '<div class="comment-composer__header">',
+      '  <div>',
+      '    <strong>Comment</strong>',
+      '    <span data-comment-context></span>',
+      '  </div>',
+      '  <button type="button" class="icon-btn" data-comment-close aria-label="Close">×</button>',
+      '</div>',
+      '<textarea rows="4" placeholder="Leave feedback for the agent"></textarea>',
+      '<div class="comment-composer__actions">',
+      '  <button type="button" class="secondary" data-comment-cancel>Cancel</button>',
+      '  <button type="button" data-comment-add>Add Comment</button>',
+      '</div>',
+    ].join("");
+    document.body.appendChild(composerEl);
+    composerEl.querySelector("[data-comment-close]").addEventListener("click", () => {
+      closeCommentComposer();
+      setCommentMode(false);
+    });
+    composerEl.querySelector("[data-comment-cancel]").addEventListener("click", () => {
+      closeCommentComposer();
+      setCommentMode(false);
+    });
+    composerEl.querySelector("[data-comment-add]").addEventListener("click", commitComment);
+    composerEl.querySelector("textarea").addEventListener("keydown", (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+        event.preventDefault();
+        commitComment();
+      }
+    });
+    return composerEl;
+  }
+
+  function positionComposer(target) {
+    if (!composerEl || !target) return;
+    const rect = target.getBoundingClientRect();
+    const width = Math.min(360, window.innerWidth - 24);
+    const left = Math.min(Math.max(12, rect.right + 12), window.innerWidth - width - 12);
+    const top = Math.min(Math.max(12, rect.top), window.innerHeight - 260);
+    composerEl.style.width = `${width}px`;
+    composerEl.style.left = `${left}px`;
+    composerEl.style.top = `${top}px`;
+  }
+
+  function openCommentComposer(target) {
+    canvasEl.querySelectorAll(".hs-comment-target").forEach((el) => el.classList.remove("hs-comment-target"));
+    selectedCommentTarget = target;
+    target.classList.add("hs-comment-target");
+    const composer = ensureCommentComposer();
+    composer.querySelector("[data-comment-context]").textContent = targetLabel(target);
+    composer.querySelector("textarea").value = "";
+    composer.classList.add("is-open");
+    positionComposer(target);
+    requestAnimationFrame(() => composer.querySelector("textarea").focus());
+  }
+
+  function closeCommentComposer() {
+    selectedCommentTarget?.classList.remove("hs-comment-target");
+    selectedCommentTarget = null;
+    composerEl?.classList.remove("is-open");
+  }
+
+  function commitComment() {
+    if (!selectedCommentTarget || !composerEl) return;
+    const textarea = composerEl.querySelector("textarea");
+    const text = textarea.value;
+    if (!text || !text.trim()) {
+      textarea.focus();
+      return;
+    }
+    const target = selectedCommentTarget;
+    const commentId = ensureCommentId(target);
+    const comment = document.createElement("hs-comment");
+    comment.className = "hs-user-comment";
+    comment.setAttribute("data-comment-for", commentId);
+    comment.setAttribute("data-created-at", new Date().toISOString());
+    comment.innerHTML = `<strong>User comment</strong><p>${escapeHtml(text.trim())}</p>`;
+    commentsContainer().appendChild(comment);
+    hydrateCommentAnchors();
     setDirty(true);
-    setCanvasEnabled(true);
+    setCommentMode(false);
     if (saveMetaEl) {
       saveMetaEl.className = "doc-meta dirty";
-      saveMetaEl.textContent = "Cleared, not saved";
+      saveMetaEl.textContent = "Comment added, not saved";
     }
+  }
+
+  async function sendMessage() {
+    if (!canvasEl || !activeRoute || saving || !messageInput?.value.trim()) return;
+    const message = document.createElement("hs-message");
+    message.className = "hs-user-message";
+    message.setAttribute("data-created-at", new Date().toISOString());
+    message.innerHTML = `<strong>User message</strong><p>${escapeHtml(messageInput.value.trim())}</p>`;
+    canvasEl.appendChild(message);
+    messageInput.value = "";
+    setDirty(true);
+    await saveDoc(activeRoute);
   }
 
   function bootSession(route) {
@@ -312,7 +463,6 @@
     loadDoc(route).catch(() => {
       if (canvasEl) {
         canvasEl.className = "live-canvas live-doc-canvas";
-        canvasEl.contentEditable = "true";
         canvasEl.innerHTML = "";
       }
       setDirty(false);
@@ -321,26 +471,73 @@
   }
 
   canvasEl?.addEventListener("input", () => setDirty(true));
+  canvasEl?.addEventListener("change", () => setDirty(true));
 
-  canvasEl?.addEventListener("paste", (event) => {
-    const text = event.clipboardData?.getData("text/plain");
-    if (!text) return;
+  canvasEl?.addEventListener("pointerdown", (event) => {
+    if (!isMessageAddressing()) return;
+    const target = commentTargetFrom(event.target);
+    if (!target) return;
     event.preventDefault();
-    document.execCommand("insertText", false, text);
-    setDirty(true);
+    event.stopPropagation();
+    insertAtCursor(messageInput, ensureDomId(target));
+    target.classList.add("hs-reference-target");
+    window.setTimeout(() => target.classList.remove("hs-reference-target"), 700);
   });
+
+  canvasEl?.addEventListener("click", (event) => {
+    if (isMessageAddressing()) return;
+    if (!commentMode) return;
+    const target = commentTargetFrom(event.target);
+    if (!target) return;
+    event.preventDefault();
+    event.stopPropagation();
+    openCommentComposer(target);
+  });
+
+  window.addEventListener("resize", () => positionComposer(selectedCommentTarget));
+  document.addEventListener("scroll", () => positionComposer(selectedCommentTarget), true);
 
   saveBtn?.addEventListener("click", () => {
     if (activeRoute) saveDoc(activeRoute);
   });
 
-  clearBtn?.addEventListener("click", clearCanvas);
+  commentBtn?.addEventListener("click", () => setCommentMode(!commentMode));
 
-  for (const button of insertButtons) {
-    button.addEventListener("click", () => insertComponent(button.dataset.insertComponent));
-  }
+  messageInput?.addEventListener("input", () => setCanvasEnabled(Boolean(activeRoute)));
+
+  messageInput?.addEventListener("focus", () => {
+    canvasEl?.classList.add("reference-mode");
+    if (saveMetaEl) {
+      saveMetaEl.className = "doc-meta";
+      saveMetaEl.textContent = "Click artifact elements to reference them";
+    }
+  });
+
+  messageInput?.addEventListener("blur", () => {
+    window.setTimeout(() => {
+      if (document.activeElement !== messageInput) canvasEl?.classList.remove("reference-mode");
+    }, 0);
+  });
+
+  messageInput?.addEventListener("keydown", (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      event.preventDefault();
+      sendMessage();
+    }
+  });
+
+  messageForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    sendMessage();
+  });
 
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && commentMode) {
+      event.preventDefault();
+      closeCommentComposer();
+      setCommentMode(false);
+      return;
+    }
     if ((event.metaKey || event.ctrlKey) && event.key === "s") {
       event.preventDefault();
       if (activeRoute && dirty) saveDoc(activeRoute);

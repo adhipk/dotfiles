@@ -1,17 +1,28 @@
 # Nearly Headless Profile
 
-Headless agent runtime: tmux + sesh for sessions, HTML + HyperClay for presentation.
+Nearly-headless profile: users create agent tasks in a browser workspace,
+agents stream progress, and when they need input they create the right
+interactive elements in the page. Runtime continuity should be based on
+provider sessions.
+
+The app is a standalone TypeScript project expected at
+`~/.local/share/nearly-headless`. Dotfiles installs shims and profile docs only.
 
 ## Why a separate profile?
 
-Default agent behavior stays unchanged. This profile adds HTML artifact conventions,
-hyperspace integration, and skills that only apply when you opt in.
+Default agent behavior stays unchanged. This profile adds task/artifact surface
+conventions and skills that only apply when you opt in.
 
 ## Quick start
 
 ```bash
 # Print profile instructions (paste into agent context or Cursor rule)
 nearly-headless print-agents
+
+# Initialize and serve the nearly-headless workspace
+nearly-headless init-project
+nearly-headless serve start
+nearly-headless serve open
 
 # Open an agent-written report in the default browser
 hyperspace-open-report status
@@ -29,10 +40,11 @@ nearly-headless tasks
 Add a project rule or paste `nearly-headless print-agents` into context when starting a
 headless session. Point the agent at `~/.agents/profiles/nearly-headless/AGENTS.md`.
 
-### Codex (tmux)
+### Codex
 
-Start Codex in a hyperspace tmux window and invoke `$html-artifact` or
-`$hyperspace-status` for profile skills. Personal skills live in `~/.agents/skills/`.
+Start Codex through the renderer runner or your preferred provider session and
+invoke `$html-artifact` for profile skills. `$hyperspace-status` is only for the
+separate tmux utility. Personal skills live in `~/.agents/skills/`.
 
 ### Claude Code
 
@@ -49,6 +61,8 @@ merge into the repo root `CLAUDE.md` unless the whole project is nearly-headless
 │   └── TASKS.md       # implementation checklist
 ├── docs/
 │   ├── nearly-headless.md
+│   ├── headless-html-artifacts.md
+│   ├── tmux-session-manager.md
 │   ├── hyperclay-patterns.md
 │   └── templates/     # HTML shells
 └── skills/

@@ -1,138 +1,33 @@
 #!/usr/bin/env bash
-# Nearly-headless agent profile helper.
+# Shim into the standalone nearly-headless project.
 
 set -euo pipefail
 
-AGENTS_ROOT="${AGENTS_ROOT:-$HOME/.agents}"
-PROFILE_DIR="$AGENTS_ROOT/profiles/nearly-headless"
-PROFILE_AGENTS="$PROFILE_DIR/AGENTS.md"
-PROFILE_TASKS="$PROFILE_DIR/TASKS.md"
-PROFILE_README="$PROFILE_DIR/README.md"
-TEMPLATES_DIR="$AGENTS_ROOT/docs/templates"
+PROJECT_DIR="${NEARLY_HEADLESS_PROJECT_DIR:-$HOME/.local/share/nearly-headless}"
+BIN="${NEARLY_HEADLESS_BIN:-$PROJECT_DIR/bin/nearly-headless}"
+NODE_ENTRY="${NEARLY_HEADLESS_NODE_ENTRY:-$PROJECT_DIR/dist/cli.js}"
 
-usage() {
-  cat <<'EOF'
-Usage:
-  nearly-headless info
-  nearly-headless print-agents
-  nearly-headless tasks
-  nearly-headless templates
-  nearly-headless init-project [directory]
+if [ -x "$BIN" ]; then
+  exec "$BIN" "$@"
+fi
 
-Nearly-headless: headless tmux agents + HTML artifacts (HyperClay).
-Does not change default ~/.agents/AGENTS.md behavior.
+if [ -f "$NODE_ENTRY" ]; then
+  exec node "$NODE_ENTRY" "$@"
+fi
+
+cat >&2 <<EOF
+nearly-headless standalone app is not installed.
+
+Expected compiled binary:
+  $BIN
+
+This dotfiles repo only wires the command. The app source lives in:
+  git@github.com:adhipk/nearly-headless.git
+
+After chezmoi applies externals, run:
+  cd $PROJECT_DIR
+  pnpm install --frozen-lockfile
+  pnpm build
 EOF
-}
 
-require_profile() {
-  if [ ! -f "$PROFILE_AGENTS" ]; then
-    echo "nearly-headless profile not found at $PROFILE_AGENTS" >&2
-    echo "Apply dotfiles with chezmoi so home/dot_agents maps to ~/.agents" >&2
-    exit 1
-  fi
-}
-
-info() {
-  require_profile
-  cat <<EOF
-Nearly-headless profile
-=======================
-Profile:    $PROFILE_DIR
-Agents:     $PROFILE_AGENTS
-Tasks:      $PROFILE_TASKS
-Templates:  $TEMPLATES_DIR
-Docs:       $AGENTS_ROOT/docs/nearly-headless.md
-
-Skills:     \$html-artifact, \$hyperspace-status
-
-Activate:
-  nearly-headless print-agents    # paste into Cursor/Codex context
-  Invoke \$html-artifact when writing HTML reports
-
-Open reports:
-  hyperspace-open-report <slug> [--project DIR]
-EOF
-}
-
-print_agents() {
-  require_profile
-  cat "$PROFILE_AGENTS"
-}
-
-tasks() {
-  require_profile
-  if [ -f "$PROFILE_TASKS" ]; then
-    cat "$PROFILE_TASKS"
-  else
-    echo "No TASKS.md at $PROFILE_TASKS" >&2
-    exit 1
-  fi
-}
-
-templates() {
-  if [ ! -d "$TEMPLATES_DIR" ]; then
-    echo "Templates directory not found: $TEMPLATES_DIR" >&2
-    exit 1
-  fi
-  find "$TEMPLATES_DIR" -type f | sort
-}
-
-init_project() {
-  local target="${1:-.}"
-  target=$(cd "$target" && pwd)
-  local hyperspace="$target/.hyperspace"
-  local shared="$hyperspace/shared"
-
-  mkdir -p "$shared"
-  if [ -f "$TEMPLATES_DIR/shared/hyperspace.css" ]; then
-    cp "$TEMPLATES_DIR/shared/hyperspace.css" "$shared/hyperspace.css"
-  fi
-  touch "$hyperspace/.gitkeep"
-
-  local gitignore="$target/.gitignore"
-  if [ -f "$gitignore" ]; then
-    if ! rg -q '^\.hyperspace/' "$gitignore" 2>/dev/null; then
-      printf '\n# nearly-headless artifacts\n.hyperspace/\n!.hyperspace/.gitkeep\n' >> "$gitignore"
-      echo "Appended .hyperspace/ to $gitignore"
-    fi
-  else
-    cat "$TEMPLATES_DIR/gitignore-snippet" > "$gitignore"
-    echo "Created $gitignore"
-  fi
-
-  echo "Initialized $hyperspace"
-  echo "Run: hyperspace-open-report status (after agent writes status.html)"
-}
-
-main() {
-  local command="${1:-info}"
-  shift || true
-
-  case "$command" in
-    help|-h|--help)
-      usage
-      ;;
-    info)
-      info
-      ;;
-    print-agents|agents|print)
-      print_agents
-      ;;
-    tasks|task-list)
-      tasks
-      ;;
-    templates|ls-templates)
-      templates
-      ;;
-    init-project|init)
-      init_project "${1:-.}"
-      ;;
-    *)
-      echo "Unknown command: $command" >&2
-      usage >&2
-      exit 1
-      ;;
-  esac
-}
-
-main "$@"
+exit 127

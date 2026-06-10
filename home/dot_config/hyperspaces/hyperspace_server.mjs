@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 /**
- * Nearly-headless artifact server.
- * GET /              → live doc canvas (session picker)
- * GET /:route/       → editable canvas for that project
- * GET /:route/*      → files under <project>/.hyperspace/
- * GET/POST /api/:route/doc → load/save livedoc.html for sessions
- * GET /:route/preview/   → standalone livedoc.html
+ * Nearly-headless local app server.
+ * GET /              -> project picker + live doc shell
+ * GET /:route/       -> interaction/comment surface for that project
+ * GET /:route/*      -> files under <project>/.hyperspace/
+ * GET/POST /api/:route/doc -> load/save livedoc.html for a project
+ * GET /:route/preview/ -> standalone livedoc.html
+ *
+ * This server runs against generic repos using provider sessions and
+ * app-owned settings. External session managers are out of core.
  */
 
 const LIVE_DOC_SOURCE = "livedoc.html";
@@ -22,12 +25,19 @@ import { spawn, spawnSync } from "node:child_process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const PORT = Number(process.env.HYPERSPACE_SERVE_PORT || process.argv.find((a) => a.startsWith("--port="))?.split("=")[1] || 4200);
-const HOST = process.env.HYPERSPACE_SERVE_HOST || "127.0.0.1";
-const CONFIG_FILE = process.env.HYPERSPACE_CONFIG_FILE || path.join(process.env.HOME, ".config/hyperspaces/config.json");
-const STATE_DIR = process.env.HYPERSPACE_STATE_DIR || path.join(process.env.HOME, ".local/state/hyperspaces");
-const SESSION_DIR_FILE = process.env.HYPERSPACE_SESSION_DIR_FILE || path.join(STATE_DIR, "sessions.json");
-const EVENT_LOG_FILE = process.env.HYPERSPACE_EVENT_LOG_FILE || path.join(STATE_DIR, "events.jsonl");
+const PORT = Number(process.env.NEARLY_HEADLESS_PORT || process.env.HEADLESS_ARTIFACTS_PORT || process.env.HYPERSPACE_SERVE_PORT || process.argv.find((a) => a.startsWith("--port="))?.split("=")[1] || 4200);
+const HOST = process.env.NEARLY_HEADLESS_HOST || process.env.HEADLESS_ARTIFACTS_HOST || process.env.HYPERSPACE_SERVE_HOST || "127.0.0.1";
+const CONFIG_FILE = process.env.NEARLY_HEADLESS_CONFIG_FILE || process.env.HEADLESS_ARTIFACTS_CONFIG_FILE || path.join(process.env.HOME, ".config/nearly-headless/config.json");
+const LEGACY_TMUX_DISCOVERY = process.env.HEADLESS_ARTIFACTS_ENABLE_LEGACY_TMUX === "1";
+const STATE_DIR = process.env.NEARLY_HEADLESS_STATE_DIR || process.env.HEADLESS_ARTIFACTS_STATE_DIR || path.join(process.env.HOME, ".local/state/nearly-headless");
+const SESSION_DIR_FILE = process.env.HEADLESS_ARTIFACTS_PROJECTS_FILE || (LEGACY_TMUX_DISCOVERY && process.env.HYPERSPACE_SESSION_DIR_FILE) || path.join(STATE_DIR, "projects.json");
+const EVENT_LOG_FILE = process.env.HEADLESS_ARTIFACTS_EVENT_LOG_FILE || (LEGACY_TMUX_DISCOVERY && process.env.HYPERSPACE_EVENT_LOG_FILE) || path.join(STATE_DIR, "events.jsonl");
+const SETTINGS_FILE = process.env.NEARLY_HEADLESS_SETTINGS_FILE || process.env.HEADLESS_ARTIFACTS_SETTINGS_FILE || path.join(STATE_DIR, "settings.json");
+const PROVIDER_SESSIONS_FILE = process.env.NEARLY_HEADLESS_PROVIDER_SESSIONS_FILE || process.env.HEADLESS_ARTIFACTS_PROVIDER_SESSIONS_FILE || path.join(STATE_DIR, "provider-sessions.json");
+const CURRENT_PROJECT_PATH = expandHome(process.env.NEARLY_HEADLESS_PROJECT_PATH || process.env.HEADLESS_ARTIFACTS_PROJECT_PATH || process.cwd());
+const CURRENT_PROJECT_PATH_EXPLICIT = Boolean(process.env.NEARLY_HEADLESS_PROJECT_PATH || process.env.HEADLESS_ARTIFACTS_PROJECT_PATH);
+const CURRENT_PROJECT_ID = process.env.NEARLY_HEADLESS_PROJECT || process.env.HEADLESS_ARTIFACTS_PROJECT || "";
+const TMUX_DISCOVERY = LEGACY_TMUX_DISCOVERY;
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -62,6 +72,126 @@ function readSessionDirectory() {
   } catch {
     return { sessions: {} };
   }
+}
+
+function defaultSettings(config) {
+  const projects = {};
+  for (const [id, project] of Object.entries(config.projects || {})) {
+    projects[id] = {
+      path: project.path || "",
+      route: project.route || id,
+      defaultProvider: project.defaultProvider || "codex",
+    };
+  }
+
+  return {
+    version: 1,
+    runtime: {
+      primary: "provider-sessions",
+    },
+    defaultModelSelection: {
+      instanceId: "codex",
+      model: "default",
+      options: {},
+    },
+    providerInstances: {
+      codex: {
+        driver: "codex",
+        enabled: true,
+        kind: "cli",
+        command: "codex",
+        sessionMode: "native",
+      },
+      claude: {
+        driver: "claude",
+        enabled: true,
+        kind: "cli",
+        command: "claude",
+        sessionMode: "native",
+      },
+    },
+    projects,
+  };
+}
+
+function readSettings(config = readHyperspaceConfig()) {
+  const defaults = defaultSettings(config);
+  try {
+    const parsed = JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8"));
+    return {
+      ...defaults,
+      ...parsed,
+      runtime: {
+        ...defaults.runtime,
+        ...(parsed.runtime || {}),
+        primary: "provider-sessions",
+      },
+      providerInstances: {
+        ...defaults.providerInstances,
+        ...(parsed.providers || {}),
+        ...(parsed.providerInstances || {}),
+      },
+      projects: {
+        ...defaults.projects,
+        ...(parsed.projects || {}),
+      },
+    };
+  } catch {
+    return defaults;
+  }
+}
+
+function writeSettings(settings) {
+  const next = {
+    ...settings,
+    version: 1,
+    runtime: {
+      ...(settings.runtime || {}),
+      primary: "provider-sessions",
+    },
+  };
+  fs.mkdirSync(path.dirname(SETTINGS_FILE), { recursive: true });
+  fs.writeFileSync(SETTINGS_FILE, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  return next;
+}
+
+function readEffectiveConfig() {
+  const config = readHyperspaceConfig();
+  const settings = readSettings(config);
+  return {
+    ...config,
+    projects: {
+      ...(config.projects || {}),
+      ...(settings.projects || {}),
+    },
+  };
+}
+
+function readProviderSessionStore() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(PROVIDER_SESSIONS_FILE, "utf8"));
+    if (Array.isArray(parsed)) return { version: 1, sessions: parsed };
+    if (parsed && typeof parsed === "object") {
+      return {
+        version: parsed.version || 1,
+        sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
+      };
+    }
+  } catch {
+    /* no provider sessions yet */
+  }
+  return { version: 1, sessions: [] };
+}
+
+function providerSessionsForProject(project, projectPath) {
+  const root = projectPath ? path.resolve(expandHome(projectPath)) : "";
+  return readProviderSessionStore().sessions
+    .filter((session) => {
+      if (session.project && session.project === project) return true;
+      if (session.cwd && root && path.resolve(expandHome(session.cwd)) === root) return true;
+      return false;
+    })
+    .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
 }
 
 function isValidProjectSlug(id) {
@@ -129,6 +259,45 @@ function makeSessionRecord(session, project, basePath, config) {
   };
 }
 
+function makeStandaloneProjectRecord(project, basePath, config, source = "local") {
+  if (!isValidProjectSlug(project)) return null;
+  if (!basePath || !fs.existsSync(basePath)) return null;
+
+  return {
+    route: sessionRoute(project, config),
+    project,
+    session: source,
+    path: path.resolve(basePath),
+    artifactDir: path.join(path.resolve(basePath), ".hyperspace"),
+    status: "available",
+    standalone: true,
+    managed: false,
+    live: false,
+    windows: [],
+    liveDocWindow: liveDocWindow(project, config),
+  };
+}
+
+function configuredProjectRecords(config) {
+  return Object.keys(config.projects || {})
+    .map((project) => {
+      const basePath = projectPath(project, config);
+      const record = basePath ? makeStandaloneProjectRecord(project, basePath, config, "configured") : null;
+      return record ? { ...record, configured: true } : null;
+    })
+    .filter(Boolean);
+}
+
+function currentProjectRecord(config) {
+  const basePath = path.resolve(CURRENT_PROJECT_PATH);
+  if (!fs.existsSync(basePath)) return null;
+
+  const project = CURRENT_PROJECT_ID || projectIdFromPath(basePath, config);
+  if (!project) return null;
+
+  return makeStandaloneProjectRecord(project, basePath, config, "current-repo");
+}
+
 function liveDocWindow(project, config) {
   const configured = config?.projects?.[project]?.liveDocWindow;
   if (configured) return configured;
@@ -194,6 +363,7 @@ function resolveSession(session, config) {
 }
 
 function tmuxLines(args) {
+  if (!TMUX_DISCOVERY) return "";
   const result = spawnSync("tmux", args, { encoding: "utf8" });
   if (result.status !== 0) return "";
   return (result.stdout || "").trim();
@@ -461,16 +631,48 @@ function triggerLiveDocRun(session) {
 
 /** @returns {Array<{route, project, session, path, artifactDir, windows, status}>} */
 function discoverSessions() {
-  const config = readHyperspaceConfig();
+  const config = readEffectiveConfig();
   const directory = readSessionDirectory();
   const raw = tmuxLines(["list-sessions", "-F", "#{session_name}"]);
 
   const entries = new Map();
 
+  for (const project of configuredProjectRecords(config)) {
+    entries.set(project.project, project);
+  }
+
+  const currentProject = currentProjectRecord(config);
+  if (currentProject) {
+    const existing = entries.get(currentProject.project) || {};
+    if (CURRENT_PROJECT_PATH_EXPLICIT || !entries.has(currentProject.project)) {
+      entries.set(currentProject.project, {
+        ...existing,
+        ...currentProject,
+        configured: Boolean(existing.configured),
+      });
+    }
+  }
+
   for (const [project, stateEntry] of Object.entries(directory.sessions || {})) {
     const managed = makeStateSessionRecord(project, stateEntry, config);
     if (!managed) continue;
-    entries.set(managed.project, managed);
+    const existing = entries.get(managed.project) || {};
+    const keepExplicitProjectPath = CURRENT_PROJECT_PATH_EXPLICIT && existing.standalone;
+    const merged = {
+      ...existing,
+      ...managed,
+      configured: Boolean(existing.configured),
+      standalone: Boolean(existing.standalone),
+      managed: true,
+      windows: mergeWindows(existing.windows, managed.windows),
+    };
+    if (keepExplicitProjectPath) {
+      merged.path = existing.path;
+      merged.artifactDir = existing.artifactDir;
+      merged.route = existing.route;
+      merged.session = existing.session;
+    }
+    entries.set(managed.project, merged);
   }
 
   for (const session of (raw || "").split("\n")) {
@@ -493,8 +695,8 @@ function discoverSessions() {
   }
 
   return Array.from(entries.values())
-    .filter((entry) => entry.live || hasProviderBinding(entry))
-    .map((entry) => (entry.live ? entry : detachedSession(entry)))
+    .filter((entry) => entry.live || entry.standalone || entry.configured || hasProviderBinding(entry))
+    .map((entry) => (entry.live || entry.standalone || entry.configured ? entry : detachedSession(entry)))
     .sort((a, b) => a.project.localeCompare(b.project));
 }
 
@@ -537,9 +739,12 @@ function sessionsPayload(sessions) {
     status: s.status,
     path: s.path,
     live: Boolean(s.live),
+    standalone: Boolean(s.standalone),
+    configured: Boolean(s.configured),
     managed: Boolean(s.managed),
     updatedAt: s.updatedAt || null,
     liveDocWindow: s.liveDocWindow || null,
+    providerSessions: providerSessionsForProject(s.project, s.path),
     windows: payloadWindows(s),
     artifacts: listArtifacts(s.artifactDir)
       .filter((f) => f.rel.endsWith(".html"))
@@ -565,27 +770,146 @@ function readEvents(limit = 50) {
     });
 }
 
-function renderLiveDocPage(sessions, activeRoute = "") {
-  const sessionItems = sessions
+function renderProjectNav(sessions, activeRoute = "", settingsActive = false) {
+  const settingsItem = `<li><a href="/settings/" class="${settingsActive ? "active" : ""}">
+    <strong>Settings</strong>
+    <span class="status">providers, projects, runtime</span>
+  </a></li>`;
+
+  const projectItems = sessions
     .map((s) => {
       const active = s.route === activeRoute ? " active" : "";
       const windows = (s.windows || []).map((a) => `${a.name}:${a.status || "unknown"}`).join(" ");
+      const providerCount = (s.providerSessions || []).length;
       const windowLine = windows ? `<span class="windows">${escapeHtml(windows)}</span>` : "";
-      const liveDocLine = s.liveDocWindow ? `<span class="status">live doc -> ${escapeHtml(s.liveDocWindow)}</span>` : "";
+      const providerLine = providerCount > 0 ? `<span class="windows">${providerCount} provider session${providerCount === 1 ? "" : "s"}</span>` : "";
+      const runtime = s.live ? s.session : s.configured ? "configured project" : "local project";
       return `<li><a href="/${encodeURIComponent(s.route)}/" class="${active}">
         <strong>${escapeHtml(s.project)}</strong>
-        <span class="status">${escapeHtml(s.session)} · ${escapeHtml(s.status)}</span>
+        <span class="status">${escapeHtml(runtime)} · ${escapeHtml(s.status)}</span>
+        ${providerLine}
         ${windowLine}
-        ${liveDocLine}
       </a></li>`;
     })
     .join("");
 
-  const emptySidebar =
+  const emptyProjects =
     sessions.length === 0
-      ? '<li style="padding:0.65rem;color:var(--subtext);font-size:0.85rem;">No sessions — run <code>hyperspace dotfiles</code></li>'
-      : sessionItems;
+      ? '<li class="empty-sidebar">No projects - run from a repo or add one in Settings.</li>'
+      : projectItems;
 
+  return `${settingsItem}${emptyProjects}`;
+}
+
+function renderSettingsPage(sessions) {
+  const config = readHyperspaceConfig();
+  const settings = readSettings(config);
+  const providerSessions = readProviderSessionStore().sessions;
+  const providerInstances = Object.entries(settings.providerInstances || {})
+    .map(([id, provider]) => `<tr>
+      <td><code>${escapeHtml(id)}</code></td>
+      <td><code>${escapeHtml(provider.driver || id)}</code></td>
+      <td>${provider.enabled === false ? "disabled" : "enabled"}</td>
+      <td>${escapeHtml(provider.kind || "cli")}</td>
+      <td><code>${escapeHtml(provider.command || "")}</code></td>
+      <td>${escapeHtml(provider.sessionMode || "native")}</td>
+    </tr>`)
+    .join("");
+  const sessionRows = providerSessions
+    .map((session) => `<tr>
+      <td>${escapeHtml(session.project || "")}</td>
+      <td><code>${escapeHtml(session.providerInstanceId || session.instanceId || session.provider || "")}</code></td>
+      <td><code>${escapeHtml(session.threadId || session.sessionId || session.id || "")}</code></td>
+      <td>${escapeHtml(session.status || "")}</td>
+      <td>${escapeHtml(session.updatedAt || "")}</td>
+    </tr>`)
+    .join("");
+  const settingsJson = escapeHtml(JSON.stringify(settings, null, 2));
+  const navItems = renderProjectNav(sessions, "", true);
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Settings - Nearly-Headless</title>
+  <link rel="stylesheet" href="/_hyperspace/hyperspace_live.css">
+</head>
+<body>
+  <div class="hyperspace-app settings-app">
+    <aside class="sidebar">
+      <h2>Projects</h2>
+      <ul class="session-list">${navItems}</ul>
+    </aside>
+    <main class="settings-main">
+      <header class="doc-header">
+        <h1>Settings</h1>
+        <span class="badge running">provider sessions</span>
+        <span id="settings-status" class="doc-meta">Ready</span>
+      </header>
+      <div class="settings-scroll">
+        <section class="settings-section">
+          <h2>Provider Sessions</h2>
+          <p>Threads own provider-native sessions. Provider instance selection routes each thread to the right adapter and model.</p>
+          <table class="settings-table">
+            <thead><tr><th>Project</th><th>Instance</th><th>Thread</th><th>Status</th><th>Updated</th></tr></thead>
+            <tbody>${sessionRows || '<tr><td colspan="5">No provider sessions recorded yet.</td></tr>'}</tbody>
+          </table>
+        </section>
+        <section class="settings-section">
+          <h2>Provider Instances</h2>
+          <table class="settings-table">
+            <thead><tr><th>Instance</th><th>Driver</th><th>Enabled</th><th>Kind</th><th>Command</th><th>Session mode</th></tr></thead>
+            <tbody>${providerInstances}</tbody>
+          </table>
+        </section>
+        <section class="settings-section">
+          <h2>Raw Settings</h2>
+          <p>Edit app-owned settings. The app forces <code>runtime.primary</code> to <code>provider-sessions</code>.</p>
+          <form id="settings-form">
+            <textarea id="settings-json" spellcheck="false">${settingsJson}</textarea>
+            <div class="settings-actions">
+              <button type="submit">Save Settings</button>
+            </div>
+          </form>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script>
+    (() => {
+      const form = document.getElementById("settings-form");
+      const textarea = document.getElementById("settings-json");
+      const status = document.getElementById("settings-status");
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        status.textContent = "Saving...";
+        status.className = "doc-meta dirty";
+        try {
+          const settings = JSON.parse(textarea.value);
+          const response = await fetch("/api/settings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ settings }),
+          });
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.error || "Save failed");
+          textarea.value = JSON.stringify(payload.settings, null, 2);
+          status.textContent = "Saved";
+          status.className = "doc-meta saved";
+        } catch (error) {
+          status.textContent = error.message || "Invalid settings";
+          status.className = "doc-meta dirty";
+        }
+      });
+    })();
+  </script>
+</body>
+</html>`;
+}
+
+function renderLiveDocPage(sessions, activeRoute = "") {
+  const navItems = renderProjectNav(sessions, activeRoute, false);
   const payload = JSON.stringify(sessionsPayload(sessions)).replace(/</g, "\\u003c");
 
   return `<!DOCTYPE html>
@@ -593,36 +917,33 @@ function renderLiveDocPage(sessions, activeRoute = "") {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hyperspace</title>
-  <link rel="stylesheet" href="/_hyperspace/hyperspace_live.css">
+  <title>Nearly-Headless</title>
   <link rel="stylesheet" href="/_hyperspace/hyperspace-components.css">
+  <link rel="stylesheet" href="/_hyperspace/hyperspace_live.css">
 </head>
 <body>
   <div class="hyperspace-app" data-sessions='${payload}' data-route="${escapeHtml(activeRoute)}">
     <aside class="sidebar">
       <h2>Projects</h2>
-      <ul class="session-list">${emptySidebar}</ul>
+      <ul class="session-list">${navItems}</ul>
     </aside>
     <section class="doc-main">
       <header class="doc-header">
-        <h1 id="doc-title">Hyperspace</h1>
+        <h1 id="doc-title">Nearly-Headless</h1>
         <span id="doc-status" class="badge idle">idle</span>
         <div class="doc-toolbar">
-          <div class="component-palette" aria-label="Insert component">
-            <button type="button" class="secondary" data-insert-component="callout" disabled>Callout</button>
-            <button type="button" class="secondary" data-insert-component="finding" disabled>Finding</button>
-            <button type="button" class="secondary" data-insert-component="details" disabled>Details</button>
-            <button type="button" class="secondary" data-insert-component="comparison" disabled>Compare</button>
-            <button type="button" class="secondary" data-insert-component="section" disabled>Section</button>
-          </div>
-          <button type="button" id="clear-btn" class="secondary" disabled>Clear</button>
+          <button type="button" id="comment-btn" class="secondary" disabled>Comment</button>
           <button type="button" id="save-btn" disabled>Save</button>
         </div>
         <span id="save-meta" class="doc-meta">Ready</span>
       </header>
       <div class="canvas-wrap">
-        <div id="live-canvas" class="live-canvas live-doc-canvas" contenteditable="true"></div>
+        <div id="live-canvas" class="live-canvas live-doc-canvas"></div>
       </div>
+      <form id="message-form" class="message-box">
+        <textarea id="message-input" rows="2" placeholder="Message the agent. Focus here, then click an artifact element to reference it."></textarea>
+        <button type="submit" id="message-send" disabled>Send</button>
+      </form>
     </section>
     <aside class="artifacts">
       <h2>Artifacts</h2>
@@ -669,6 +990,29 @@ function json(res, status, data) {
 function handleApi(req, res, parts, url) {
   if (parts[0] === "sessions" && req.method === "GET") {
     return json(res, 200, { sessions: sessionsPayload(discoverSessions()) });
+  }
+
+  if (parts[0] === "settings" && req.method === "GET") {
+    const config = readHyperspaceConfig();
+    return json(res, 200, {
+      settings: readSettings(config),
+      settingsFile: SETTINGS_FILE,
+      providerSessionsFile: PROVIDER_SESSIONS_FILE,
+    });
+  }
+
+  if (parts[0] === "settings" && req.method === "POST") {
+    return readBody(req)
+      .then((raw) => {
+        const body = JSON.parse(raw || "{}");
+        const settings = body.settings && typeof body.settings === "object" ? body.settings : body;
+        return json(res, 200, { ok: true, settings: writeSettings(settings) });
+      })
+      .catch(() => json(res, 400, { error: "invalid settings json" }));
+  }
+
+  if (parts[0] === "provider-sessions" && req.method === "GET") {
+    return json(res, 200, readProviderSessionStore());
   }
 
   if (parts[0] === "events" && req.method === "GET") {
@@ -746,6 +1090,12 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (parts[0] === "settings") {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(renderSettingsPage(sessions));
+    return;
+  }
+
   const route = parts[0];
   const session = findSession(route);
 
@@ -783,6 +1133,6 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`hyperspace serve http://${HOST}:${PORT}`);
+  console.log(`nearly-headless http://${HOST}:${PORT}`);
   console.log(`config file: ${CONFIG_FILE}`);
 });

@@ -8,7 +8,7 @@
 </head>
 <body data-hyperspace-live-doc>
   <main class="live-doc-canvas">
-    <!-- blank canvas — use hs-* web components or plain HTML -->
+    <!-- blank canvas: agent-authored artifact/tool; user comments and generated inputs are saved here -->
   </main>
   <script src="shared/hyperspace-components.js"></script>
 </body>

@@ -100,11 +100,12 @@ for file in \
     executable_tmux-sessionizer-zoxide \
     executable_unescape-buffer \
     executable_unescape-string \
+    executable_headless-artifacts \
     executable_nearly-headless \
     executable_hyperspace-open-report \
     executable_hyperspace \
     executable_hyperspace-serve \
-    executable_hyperspace-agent-launch \
+    executable_hyperspace-window-launch \
     executable_hyperspace-run-live-doc; do
     assert_file_exists "$DOTFILES_DIR/home/bin/$file" "$file is declared"
 done
@@ -116,14 +117,29 @@ assert_file_exists "$DOTFILES_DIR/home/dot_agents/skills/html-artifact/SKILL.md"
 assert_file_exists "$DOTFILES_DIR/home/dot_agents/skills/hyperspace-status/SKILL.md" "hyperspace-status skill exists"
 assert_file_exists "$DOTFILES_DIR/home/dot_agents/docs/templates/base.html" "HTML base template exists"
 assert_file_exists "$DOTFILES_DIR/home/dot_agents/docs/html-artifacts.md" "HTML artifacts guide exists"
+assert_file_exists "$DOTFILES_DIR/home/dot_agents/docs/headless-html-artifacts.md" "nearly-headless product guide exists"
+assert_file_exists "$DOTFILES_DIR/home/dot_agents/docs/nearly-headless-product.md" "nearly-headless product thesis exists"
+assert_file_exists "$DOTFILES_DIR/home/dot_agents/docs/tmux-session-manager.md" "tmux session manager guide exists"
+assert_file_exists "$DOTFILES_DIR/home/dot_config/nearly-headless/config.json" "nearly-headless config exists"
 assert_file_exists "$DOTFILES_DIR/home/dot_agents/docs/templates/components/finding.html" "HTML finding component exists"
 assert_not_contains "$DOTFILES_DIR/home/dot_agents/docs/templates/review.html" "hyperclay" "Review template is plain HTML"
 assert_contains "$DOTFILES_DIR/home/dot_agents/AGENTS.md" "profiles/" "Root agents docs mention profiles"
+assert_contains "$DOTFILES_DIR/home/bin/executable_nearly-headless" ".local/share/nearly-headless" "nearly-headless command shims to external project"
+assert_contains "$DOTFILES_DIR/home/bin/executable_hyperspace-serve" "nearly-headless serve" "hyperspace-serve is compatibility alias"
+assert_contains "$DOTFILES_DIR/home/bin/executable_hyperspace-open-report" "nearly-headless open" "open-report is compatibility alias"
+assert_contains "$DOTFILES_DIR/home/dot_agents/docs/nearly-headless-product.md" "chooses provider" "nearly-headless product thesis uses provider sessions"
+assert_contains "$DOTFILES_DIR/home/bin/executable_defuddle-clipboard-url" "npx --yes defuddle" "Defuddle helper can run through npx"
+assert_contains "$DOTFILES_DIR/home/bin/executable_defuddle-clipboard-url" "wrap_with_original_css" "Defuddle helper preserves original CSS"
+assert_contains "$DOTFILES_DIR/home/dot_skhdrc" "defuddle-clipboard-url" "skhd binds Defuddle clipboard helper"
+assert_contains "$DOTFILES_DIR/home/bin/executable_serve_md" "pandoc" "serve_md renders Markdown through pandoc"
+assert_contains "$DOTFILES_DIR/home/bin/executable_serve_md" "caddy" "serve_md serves rendered Markdown with caddy"
+assert_contains "$DOTFILES_DIR/Brewfile" "brew \"caddy\"" "Brewfile installs caddy for serve_md"
+assert_contains "$DOTFILES_DIR/Brewfile" "brew \"pandoc\"" "Brewfile installs pandoc for serve_md"
 
 echo ""
 echo "Testing hyperspace runtime..."
 assert_file_exists "$DOTFILES_DIR/home/dot_config/sesh/sesh.toml" "sesh.toml exists"
-assert_file_exists "$DOTFILES_DIR/home/dot_config/hyperspaces/agents.json" "hyperspace agents config exists"
+assert_file_exists "$DOTFILES_DIR/home/dot_config/hyperspaces/config.json" "hyperspace config exists"
 assert_file_exists "$DOTFILES_DIR/home/dot_config/hyperspaces/executable_notify.sh" "hyperspace notify script exists"
 assert_contains "$DOTFILES_DIR/home/dot_tmux.conf" "alert-bell" "tmux config wires alert-bell hook"
 assert_contains "$DOTFILES_DIR/home/dot_skhdrc" "hyperspace connect 1" "skhd loads hyperspace bindings"
@@ -148,8 +164,8 @@ assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs
 assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "live-doc-canvas" "live doc browser shows rendered editable canvas"
 assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "readRenderedCanvas" "live doc API serves canvas HTML"
 assert_not_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/hyperspace_server.mjs" "build-live-doc" "live doc has no astro build step"
-assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/agents.json" "hyperspace-agent-launch" "agents declare launch command"
-assert_contains "$DOTFILES_DIR/home/bin/executable_hyperspace-agent-launch" "exec codex" "agent launch starts interactive codex"
+assert_contains "$DOTFILES_DIR/home/dot_config/hyperspaces/config.json" "hyperspace-window-launch" "config declares launch command"
+assert_contains "$DOTFILES_DIR/home/bin/executable_hyperspace-window-launch" "exec codex" "window launch starts interactive codex"
 assert_contains "$DOTFILES_DIR/AGENTS.md" "Hyperspace live doc" "dotfiles AGENTS.md documents live doc"
 assert_file_exists "$DOTFILES_DIR/home/dot_agents/skills/live-doc/SKILL.md" "live-doc skill exists"
 assert_contains "$DOTFILES_DIR/home/bin/executable_hyperspace" "valid_project_slug" "hyperspace validates project slugs"
@@ -174,7 +190,9 @@ assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "name = \"gemma-gem\"" "C
 assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "buildCommand = \"pnpm build\"" "Chrome extension is built from source"
 assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "\\[\\[externalProjects\\]\\]" "External projects are declared"
 assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "name = \"raycast-lucide-excalidraw\"" "Lucide Raycast project is declared"
+assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "name = \"nearly-headless\"" "nearly-headless external project is declared"
 assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "npm run generate:excalidraw" "External project setup is declared"
+assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "git@github.com:adhipk/nearly-headless.git" "nearly-headless external project points at GitHub"
 assert_contains "$DOTFILES_DIR/home/.chezmoiexternal.toml.tmpl" "type = \"git-repo\"" "Extension repositories use chezmoi externals"
 assert_contains "$DOTFILES_DIR/home/.chezmoiexternal.toml.tmpl" "externalProjects" "External projects use chezmoi externals"
 assert_file_exists "$DOTFILES_DIR/home/.chezmoiscripts/run_onchange_after_install-vscode-extensions.sh.tmpl" "VS Code install hook exists"

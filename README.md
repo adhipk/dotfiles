@@ -89,11 +89,25 @@ as `externalProjects`. Chezmoi clones each project to its declared path as a
 required executables, runs the declared setup commands when the Git revision
 changes, and reruns setup if declared generated paths are missing.
 
+See [EXTERNAL-PROJECTS.md](EXTERNAL-PROJECTS.md) for the full workflow:
+register a tool as an external project first, then extract its source into a
+dedicated repository while dotfiles keeps only shims and machine wiring.
+
 The Lucide Excalidraw Raycast project is expected at:
 
 ```text
 ~/.local/share/raycast-extensions/raycast-lucide-excalidraw
 ```
+
+The standalone nearly-headless app is expected at:
+
+```text
+~/.local/share/nearly-headless
+```
+
+Dotfiles only wires commands and local configuration for nearly-headless. The
+app itself should live in `git@github.com:adhipk/nearly-headless.git` and build
+a compiled CLI at `bin/nearly-headless`.
 
 ## One-Time Setup
 
@@ -113,10 +127,22 @@ applies to `~/.agents/`. Use `home/dot_agents/skills/` for personal Codex
 skills and `home/dot_agents/docs/` for centralized agent-readable
 documentation.
 
-Optional **nearly-headless** profile (`home/dot_agents/profiles/nearly-headless/`)
-for headless tmux agents that produce HTML artifacts instead of a chat UI.
-Activate with `nearly-headless print-agents`; open reports with
-`hyperspace-open-report <slug>`. See `home/dot_agents/docs/nearly-headless.md`.
+Optional agent workflows are split into two independent projects:
+
+- **Nearly-headless** (`home/dot_agents/docs/nearly-headless.md`):
+  a browser workspace for creating agent tasks, sending them to provider
+  sessions, streaming progress, and letting agents build interactive UI when
+  they need input. Its HTML-first interaction model is based on
+  `articles/Unreasonable-Effectiveness-of-HTML.html`.
+- **Hyperspace** (`home/dot_agents/docs/tmux-session-manager.md`):
+  a tmux workspace manager for keeping project terminals, agent sessions, and
+  editors together with pinned keyboard navigation.
+
+The nearly-headless profile (`home/dot_agents/profiles/nearly-headless/`) adds
+artifact and live-doc authoring defaults. Activate with
+`nearly-headless print-agents`; run the local app with
+`nearly-headless serve start`. The installed command is a shim into the
+standalone TypeScript project.
 
 ## Shell Secrets
 
@@ -159,4 +185,5 @@ bundle ID.
 
 Hyperspace hyper bindings (`hyper+1-9` connect, `hyper++` pin, `hyper+-` unpin,
 `hyper+space` search) are in `home/dot_skhdrc`. The `hyperspace` command
-(`home/bin/executable_hyperspace`) manages tmux sessions and agents.
+(`home/bin/executable_hyperspace`) is the tmux workspace manager only.
+Nearly-headless runs separately through `nearly-headless serve`.

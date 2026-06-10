@@ -1,17 +1,24 @@
 # Planned changes
 This document tracks changes and behaviors I want to add to the dotfiles.
 
-## nearly-headless (HTML artifacts + headless agents)
+## nearly-headless
 
 Task checklist: `home/dot_agents/profiles/nearly-headless/TASKS.md`
 
 - [x] Agent profile `nearly-headless` under `home/dot_agents/profiles/`
 - [x] HTML templates + HyperClay patterns in `home/dot_agents/docs/templates/`
-- [x] Skills `$html-artifact`, `$hyperspace-status`
+- [x] Skills `$html-artifact`, `$live-doc`
 - [x] `nearly-headless` and `hyperspace-open-report` commands
+- [x] `nearly-headless serve` localhost :4200 workspace for repo `.hyperspace/`
+- [x] Workspace discovers configured/current repos without tmux sessions
+- [ ] Provider-session task backend and settings page
+- [ ] Task progress streaming and app-owned comments/actions
+
+## hyperspace
+
 - [x] tmux/sesh hyperspace runtime (phase 2 in TASKS.md)
-- [x] hyperspace serve localhost :4200 (phase 3 in TASKS.md)
-- [ ] hyperspace watch + notification HTML paths (phase 3 in TASKS.md)
+- [x] `hyperspace` default path is tmux workspace only
+- [ ] hyperspace watch + notification paths (phase 3 in TASKS.md)
 
 ## quick terminal (scratchpad) window.
  - Launch with tmux
@@ -67,7 +74,5 @@ can use its own tmux session? with windows?
 # Retrieved 2026-06-02, License - CC BY-SA 3.0
 
 tail -f outputfile | xargs -IL date +"%Y%m%d_%H%M%S:L"
-
-
 
 

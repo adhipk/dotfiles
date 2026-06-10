@@ -1,10 +1,25 @@
+## Project split (current direction)
+
+The old combined "hyperspace/nearly-headless" prototype is now treated as two
+independent projects:
+
+- Nearly-headless: browser task workspace, provider sessions, progress streams,
+  artifacts, comments/actions, and agent-created interactive UI. See
+  `home/dot_agents/docs/nearly-headless.md`.
+- Hyperspace: tmux workspace manager for project terminals, agent panes,
+  editors, pins, notifications, and optional skhd/Raycast bindings. See
+  `home/dot_agents/docs/tmux-session-manager.md`.
+
+The two projects should not depend on each other.
+
 ## Nearly-headless profile (implemented)
 
-Presentation layer: `home/dot_agents/profiles/nearly-headless/` (HTML + HyperClay + skills).
+Presentation layer: `home/dot_agents/profiles/nearly-headless/` (task/artifact
+surface instructions and skills).
 
-Runtime layer (phase 2): `hyperspace` CLI in `home/bin/`, `~/.config/sesh/sesh.toml`,
-`~/.config/hyperspaces/agents.json`, tmux hooks in `dot_tmux.conf`, skhd bindings in
-`dot_skhdrc`. Phase 3 (`hyperspace watch`) — see `TASKS.md`.
+Backend direction: fork/reuse T3 Code provider sessions, provider selection,
+runtime events, and orchestration rather than building session management from
+scratch.
 
 ---
 
@@ -332,4 +347,3 @@ project id
   -> Ghostty/yabai presentation
   -> event/status state
 That gives you the t3-code backend benefits without inheriting its chat-app complexity.
-
