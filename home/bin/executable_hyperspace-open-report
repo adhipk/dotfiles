@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
-# Compatibility alias. Nearly-headless owns artifact opening.
+# Compatibility alias. Hyperspace owns artifact opening.
 
 set -euo pipefail
+
+PROJECT_DIR="${HYPERSPACE_PROJECT_DIR:-${NEARLY_HEADLESS_PROJECT_DIR:-${HYPERSPACE_PERSONAL_DIR:-$HOME/dotfiles/extensions/nearly-headless}}}"
+BIN="${HYPERSPACE_BIN:-$PROJECT_DIR/bin/hyperspace}"
+
+if [ -x "$BIN" ]; then
+  exec "$BIN" open "$@"
+fi
 
 exec nearly-headless open "$@"

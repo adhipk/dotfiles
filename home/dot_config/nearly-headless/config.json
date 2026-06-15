@@ -1,3 +1,30 @@
 {
-  "projects": {}
+  "defaults": {
+    "codex-main": {
+      "provider": "codex"
+    },
+    "claude-review": {
+      "provider": "claude"
+    }
+  },
+  "projects": {
+    "nearly-headless-personal": {
+      "path": "~/dotfiles/extensions/nearly-headless",
+      "route": "nearly-headless"
+    },
+    "nearly-headless-dev": {
+      "path": "~/projects/nearly-headless",
+      "route": "nearly-headless-dev"
+    },
+    "dotfiles": {
+      "path": "~/dotfiles",
+      "route": "dotfiles",
+      "liveDocWindow": "codex-main",
+      "windows": {
+        "codex-main": {
+          "provider": "codex"
+        }
+      }
+    }
+  }
 }

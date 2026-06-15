@@ -103,13 +103,23 @@ copy as prompt, submit JSON, submit a selected option, save annotations, or
 apply a diff. The app should capture that output as session input instead of
 asking the user to paste it through a terminal.
 
-## Observer Agent
+## Manager agent
 
-Nearly-headless can include a tiny observer/narrator agent, but it should be
-read-only by default. It may read summaries, runtime events, pending prompts,
-checkpoint summaries, and artifact metadata. It should explain what is happening
-and surface when user input is needed. It should not edit repository files,
-approve actions, or steer the worker agent unless explicitly allowed.
+Nearly-headless hosts a **manager agent** separate from coding **worker**
+agents (Codex, Claude, etc.). Workers focus on repo work and stream raw
+progress. The manager watches worker events and maintains HTML artifacts —
+project dashboards, task summaries, decision forms — on milestones rather
+than every tool call.
+
+The manager may read session summaries, runtime events, pending prompts,
+checkpoint summaries, and artifact metadata. It updates `.hyperspace/` and
+surfaces when user input is needed. It does not edit repository files directly;
+steering goes back to workers as structured prompts routed through the app
+shell.
+
+Do not ask worker agents to generate HTML artifacts inline — that slows
+progress, burns tokens, and produces too many pages. Use a local model
+(gemma-gem or another harness) for lightweight artifact patches when useful.
 
 ## Product Direction
 

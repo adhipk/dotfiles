@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Session management — the problem and the stack</title>
+  <link rel="stylesheet" href="templates/shared/hyperspace.css">
+  <style>
+    :root { --max-width: 58rem; }
+
+    .nav-tabs {
+      display: flex; flex-wrap: wrap; gap: 0.35rem;
+      margin: 1.25rem 0 0.75rem;
+    }
+    .nav-tabs button {
+      font: inherit; cursor: pointer;
+      border: 1px solid var(--surface0); background: var(--mantle);
+      color: var(--subtext); padding: 0.4rem 0.75rem; border-radius: 999px;
+    }
+    .nav-tabs button.active {
+      background: var(--surface0); color: var(--blue);
+      border-color: var(--blue); font-weight: 600;
+    }
+
+    .panel { display: none; }
+    .panel.active { display: block; animation: fade 0.2s ease; }
+    @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: none; } }
+
+    .pain-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin: 1rem 0;
+    }
+    @media (max-width: 640px) { .pain-grid { grid-template-columns: 1fr; } }
+
+    .pain-card {
+      background: var(--mantle); border: 1px solid var(--surface0);
+      border-radius: var(--radius); padding: 0.85rem 1rem; font-size: 0.875rem;
+    }
+    .pain-card.bad { border-left: 4px solid var(--red); }
+    .pain-card.good { border-left: 4px solid var(--green); }
+
+    .stream-mock {
+      font-family: var(--mono); font-size: 0.68rem; line-height: 1.4;
+      background: #11111b; color: #6c7086; padding: 0.75rem;
+      border-radius: var(--radius); max-height: 11rem; overflow: hidden;
+      position: relative;
+    }
+    .stream-mock::after {
+      content: '… 847 more lines';
+      position: absolute; bottom: 0; left: 0; right: 0;
+      padding: 2rem 0.75rem 0.5rem;
+      background: linear-gradient(transparent, #11111b);
+      color: var(--red); font-size: 0.72rem;
+    }
+
+    .dash-mock {
+      font-size: 0.82rem; padding: 0.75rem;
+      background: var(--mantle); border-radius: var(--radius);
+      border: 1px solid var(--green);
+    }
+    .dash-mock .row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.35rem 0; border-bottom: 1px solid var(--surface0);
+    }
+    .dash-mock .row:last-child { border-bottom: none; }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 0.35rem;
+    }
+    .status-dot.busy { background: var(--yellow); }
+    .status-dot.waiting { background: var(--blue); }
+    .status-dot.done { background: var(--green); }
+
+    .stack-diagram {
+      font-family: var(--mono); font-size: 0.72rem; line-height: 1.45;
+      background: var(--mantle); border: 1px solid var(--surface0);
+      border-radius: var(--radius); padding: 1rem; overflow-x: auto; white-space: pre;
+      margin: 1rem 0;
+    }
+
+    .role-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+      gap: 0.85rem; margin: 1rem 0;
+    }
+    .role-card {
+      background: var(--mantle); border: 1px solid var(--surface0);
+      border-radius: var(--radius); padding: 0.85rem 1rem;
+    }
+    .role-card h3 { margin: 0 0 0.35rem; font-size: 0.95rem; }
+    .role-card.manager { border-color: var(--green); }
+    .role-card.manager h3 { color: var(--green); }
+    .role-card.worker { border-color: var(--blue); }
+    .role-card.worker h3 { color: var(--blue); }
+    .role-card p, .role-card ul { margin: 0; font-size: 0.85rem; color: var(--subtext); }
+    .role-card ul { margin-top: 0.4rem; padding-left: 1.1rem; }
+
+    .anti-pattern {
+      border-left: 4px solid var(--red);
+      background: rgba(243, 139, 168, 0.06);
+      padding: 0.75rem 1rem; border-radius: 0 var(--radius) var(--radius) 0;
+      margin: 1rem 0; font-size: 0.9rem;
+    }
+
+    .decision-list { list-style: none; padding: 0; margin: 0; }
+    .decision-list li {
+      display: grid; grid-template-columns: auto 1fr; gap: 0.65rem;
+      padding: 0.75rem 0; border-bottom: 1px solid var(--surface0);
+    }
+    .decision-list input { margin-top: 0.25rem; accent-color: var(--green); cursor: pointer; }
+    .decision-list .hint { display: block; font-size: 0.82rem; color: var(--subtext); margin-top: 0.2rem; }
+
+    .progress-bar { height: 6px; background: var(--surface0); border-radius: 999px; overflow: hidden; margin: 0.5rem 0 1rem; }
+    .progress-bar > span { display: block; height: 100%; background: var(--green); width: 0%; transition: width 0.25s; }
+
+    button.secondary {
+      font: inherit; cursor: pointer; background: var(--surface0); color: var(--text);
+      border: none; padding: 0.4rem 0.75rem; border-radius: var(--radius);
+    }
+
+    .toggle-demo { margin: 1rem 0; }
+    .toggle-demo label { font-size: 0.875rem; cursor: pointer; color: var(--subtext); }
+    .toggle-demo input { accent-color: var(--blue); margin-right: 0.35rem; }
+
+    .hidden { display: none !important; }
+
+    #export-notes {
+      width: 100%; min-height: 5rem; font: inherit; color: var(--text);
+      background: var(--mantle); border: 1px solid var(--surface0);
+      border-radius: var(--radius); padding: 0.75rem 1rem; resize: vertical;
+    }
+  </style>
+</head>
+<body data-updated="2026-06-09">
+  <header>
+    <h1>Managing coding agent sessions</h1>
+    <p class="meta">The problem · worker vs manager agents · nearly-headless · why HTML artifacts live outside Codex/Claude</p>
+  </header>
+
+  <main>
+    <section class="callout">
+      <p><strong>Core insight:</strong> HTML is the right medium for progress and steering (<a href="https://claude.com/blog/using-claude-code-the-unreasonable-effectiveness-of-html">Unreasonable Effectiveness of HTML</a>) — but the <em>coding agent</em> should not be the one building it. A separate <strong>manager agent</strong> watches sessions and maintains artifacts while workers stay focused on code.</p>
+    </section>
+
+    <nav class="nav-tabs" role="tablist">
+      <button type="button" class="active" data-tab="problem">The problem</button>
+      <button type="button" data-tab="solution">The solution</button>
+      <button type="button" data-tab="architecture">Architecture</button>
+      <button type="button" data-tab="stack">Stack pieces</button>
+      <button type="button" data-tab="decisions">Decisions</button>
+    </nav>
+
+    <!-- PROBLEM -->
+    <section id="panel-problem" class="panel active">
+      <h2>What's broken today</h2>
+      <ul>
+        <li><strong>Session sprawl</strong> — multiple Codex and Claude sessions running; hard to know which is doing what.</li>
+        <li><strong>Wall-of-text progress</strong> — wait minutes, get a stream you can't scan; project status isn't visible.</li>
+        <li><strong>No pending queue view</strong> — what's blocked, waiting for you, or idle across sessions?</li>
+        <li><strong>Provider juggling</strong> — switching Codex vs Claude, models, and project context is manual pain.</li>
+      </ul>
+
+      <div class="toggle-demo">
+        <label><input type="checkbox" id="toggle-view"> Show what you want instead of raw streams</label>
+      </div>
+
+      <div class="pain-grid">
+        <div class="pain-card bad" id="view-bad">
+          <strong>Today — raw provider stream</strong>
+          <div class="stream-mock" style="margin-top:0.5rem">Running npm test…
+  ✓ 14 passed
+  Reading src/store.ts…
+  I'll refactor the event handler to…
+  Tool: edit file protocol.ts line 847…
+  Tool: edit file protocol.ts line 912…
+  Now updating the tests…
+  Let me also check the adapter…</div>
+        </div>
+        <div class="pain-card good hidden" id="view-good">
+          <strong>Target — manager-maintained dashboard</strong>
+          <div class="dash-mock" style="margin-top:0.5rem">
+            <div class="row"><span><span class="status-dot busy"></span>agent-comms extract</span><span>editing protocol types</span></div>
+            <div class="row"><span><span class="status-dot waiting"></span>nearly-headless UI</span><span>needs: pick provider adapter</span></div>
+            <div class="row"><span><span class="status-dot done"></span>dotfiles docs</span><span>complete · 3 files changed</span></div>
+            <div class="row"><span><strong>Pending you</strong></span><span>1 approval · 2 comments</span></div>
+          </div>
+          <p style="margin:0.5rem 0 0;font-size:0.8rem;color:var(--subtext)">Click a row → steer, comment, or batch-instruct a session group.</p>
+        </div>
+      </div>
+
+      <details>
+        <summary>Why markdown / terminal chat doesn't fix this</summary>
+        <p>Long markdown plans are hard to scan. Terminal streams have no spatial structure, no cross-session view, and no durable interactive controls. The HTML article argues for tabs, tables, diagrams, and two-way controls — but generating those <em>inside</em> every coding turn burns tokens and slows the worker.</p>
+      </details>
+    </section>
+
+    <!-- SOLUTION -->
+    <section id="panel-solution" class="panel">
+      <h2>Two-agent model</h2>
+
+      <div class="role-grid">
+        <article class="role-card worker">
+          <h3>Worker agents</h3>
+          <p>Codex, Claude Code, Cursor CLI — do the actual repo work.</p>
+          <ul>
+            <li>Edit files, run tests, implement features</li>
+            <li>Stream raw progress to the runtime</li>
+            <li><strong>Do not</strong> maintain HTML dashboards</li>
+            <li><strong>Do not</strong> spawn a new artifact every commit</li>
+          </ul>
+        </article>
+        <article class="role-card manager">
+          <h3>Manager agent</h3>
+          <p>nearly-headless — watches workers, maintains the UI layer.</p>
+          <ul>
+            <li>Central session/provider/task registry</li>
+            <li>Generates &amp; updates HTML progress artifacts</li>
+            <li>Surfaces pending input, approvals, blockers</li>
+            <li>Routes your feedback back to the right session(s)</li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="anti-pattern">
+        <strong>Anti-pattern:</strong> asking Codex/Claude to "make an HTML status page" inline.
+        Slows the worker, costs tokens, produces a new page on every minor update, and competes with the actual task.
+      </div>
+
+      <div class="callout success">
+        <p><strong>Instead:</strong> a local manager (nearly-headless, optionally backed by a lightweight local model like gemma-gem) subscribes to session events and incrementally updates a small set of durable artifacts — project dashboard, task detail, decision forms.</p>
+      </div>
+
+      <h3>What HTML artifacts are for</h3>
+      <p>Per the <a href="articles/Unreasonable-Effectiveness-of-HTML.html">HTML effectiveness</a> model — applied here by the <em>manager</em>, not the worker:</p>
+      <ul>
+        <li><strong>Progress at a glance</strong> — status dashboards, timelines, diff summaries across sessions</li>
+        <li><strong>Steering</strong> — forms, checklists, priority sliders that round-trip as structured prompts</li>
+        <li><strong>Session groups</strong> — one project view over many provider sessions</li>
+        <li><strong>Pending queue</strong> — what's waiting on you, what's blocked, what's done</li>
+      </ul>
+      <p>Artifacts update on meaningful milestones — not every tool call.</p>
+    </section>
+
+    <!-- ARCHITECTURE -->
+    <section id="panel-architecture" class="panel">
+      <h2>Data flow</h2>
+
+      <div class="stack-diagram">┌─────────────────────────────────────────────────────────┐
+│  YOU — browser                                           │
+│  nearly-headless app shell                               │
+│  · sessions / providers / projects                       │
+│  · pending queue · approvals · comments                  │
+│  · HTML artifacts (dashboards, forms, reports)           │
+└───────────────────────────┬─────────────────────────────┘
+                            │
+              ┌─────────────▼──────────────┐
+              │  MANAGER AGENT             │
+              │  (nearly-headless runtime) │
+              │  · reads session events    │
+              │  · updates .hyperspace/    │
+              │  · dispatches your input   │
+              └─────────────┬──────────────┘
+                            │ events in · commands out
+              ┌─────────────▼──────────────┐
+              │  agent-comms (local bus)   │  optional but useful
+              │  SSE · SQLite · streams    │  when manager ≠ provider host
+              └─────────────┬──────────────┘
+                            │
+         ┌──────────────────┼──────────────────┐
+         ▼                  ▼                  ▼
+   ┌───────────┐     ┌───────────┐     ┌───────────────┐
+   │ Codex     │     │ Claude    │     │ gemma-gem     │
+   │ session   │     │ session   │     │ (local model) │
+   │ WORKER    │     │ WORKER    │     │ artifact gen  │
+   └───────────┘     └───────────┘     └───────────────┘</div>
+
+      <h3>Responsibility split</h3>
+      <table>
+        <thead><tr><th>Layer</th><th>Owns</th><th>Does not own</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>App shell</strong></td>
+            <td>Navigation, settings, provider picker, session list, comment store</td>
+            <td>Repo edits, provider auth internals</td>
+          </tr>
+          <tr>
+            <td><strong>Manager agent</strong></td>
+            <td>Artifact lifecycle, progress synthesis, routing user input to workers</td>
+            <td>Implementation work in the repo</td>
+          </tr>
+          <tr>
+            <td><strong>Worker agents</strong></td>
+            <td>Code, tests, tool calls, provider-native session continuity</td>
+            <td>HTML dashboards, cross-session coordination</td>
+          </tr>
+          <tr>
+            <td><strong>agent-comms</strong></td>
+            <td>Event log, session heartbeats, command queue between processes</td>
+            <td>UI, provider adapters, artifact content</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <details>
+        <summary>Where t3code and ACP fit (reference only)</summary>
+        <p><a href="https://github.com/pingdotgg/t3code">t3code</a> solves a narrower problem: one web GUI talking to one Node server that wraps provider CLIs. Good reference for thread/turn orchestration and <code>ProviderAdapter</code>. We go further: HTML-first (not chat), manager/worker split, and optional multi-process bus.</p>
+        <p><a href="https://agentclientprotocol.com/">ACP</a> standardizes editor↔agent wire protocols. Useful later as a provider adapter inside nearly-headless — not a replacement for the manager layer or agent-comms.</p>
+      </details>
+    </section>
+
+    <!-- STACK -->
+    <section id="panel-stack" class="panel">
+      <h2>Stack pieces</h2>
+
+      <article class="finding severity-low">
+        <h3>nearly-headless — product + manager</h3>
+        <p>Central UI for sessions, providers, projects, and tasks. The manager agent runs here: watches worker progress, maintains <code>.hyperspace/*.html</code>, surfaces pending work, sends your steering input back to the right provider session.</p>
+        <p class="meta">Borrow t3code's session model; skip its chat UI thesis.</p>
+      </article>
+
+      <article class="finding severity-low">
+        <h3>agent-comms — optional nervous system</h3>
+        <p>When the manager, provider host, and artifact generator are separate processes, agent-comms gives them a shared event log and command queue. nearly-headless publishes session/run events; the manager subscribes and updates artifacts.</p>
+        <p class="meta">Not required if everything collapses into one nearly-headless server — but helps gemma-gem and future harnesses participate without tight coupling.</p>
+      </article>
+
+      <article class="finding severity-low">
+        <h3>gemma-gem — local artifact generator candidate</h3>
+        <p>On-device Chrome extension. Could run the lightweight "read events → update HTML" loop without spending Codex tokens. Inference and DOM tools stay in the extension; nearly-headless remains the canonical session manager.</p>
+      </article>
+
+      <article class="finding severity-medium">
+        <h3>Provider adapters — Codex, Claude, Cursor</h3>
+        <p>Start with native CLI protocols (<code>codex app-server</code>, etc.) like t3code. Workers stream through nearly-headless; manager interprets — workers never touch artifact HTML.</p>
+      </article>
+
+      <h3>Artifact update policy</h3>
+      <ul>
+        <li><strong>Update on milestones</strong> — turn complete, checkpoint, blocked, needs input, session status change</li>
+        <li><strong>One dashboard per project</strong> — not one HTML file per commit</li>
+        <li><strong>Incremental patches</strong> — manager edits sections, not full regenerations</li>
+        <li><strong>User interactions persist</strong> — comments and form state saved in artifact HTML, routed back as structured prompts</li>
+      </ul>
+    </section>
+
+    <!-- DECISIONS -->
+    <section id="panel-decisions" class="panel">
+      <h2>Decisions to make</h2>
+      <p class="meta">Check as you decide. Saves in this browser.</p>
+      <div class="progress-bar"><span id="decision-progress"></span></div>
+
+      <ul class="decision-list" id="decision-list">
+        <li>
+          <input type="checkbox" id="d1" data-key="d1">
+          <label for="d1">
+            <strong>Worker agents never maintain HTML artifacts</strong>
+            <span class="hint">Codex/Claude focus on code. Manager owns <code>.hyperspace/</code> updates.</span>
+          </label>
+        </li>
+        <li>
+          <input type="checkbox" id="d2" data-key="d2">
+          <label for="d2">
+            <strong>nearly-headless = centralized session manager + manager agent</strong>
+            <span class="hint">App shell for providers/sessions/tasks. Manager watches all workers on a project.</span>
+          </label>
+        </li>
+        <li>
+          <input type="checkbox" id="d3" data-key="d3">
+          <label for="d3">
+            <strong>Artifact updates on milestones, not every tool call</strong>
+            <span class="hint">Turn complete, blocked, needs-input, checkpoint — not per file edit.</span>
+          </label>
+        </li>
+        <li>
+          <input type="checkbox" id="d4" data-key="d4">
+          <label for="d4">
+            <strong>Local model (gemma-gem or harness) for artifact generation</strong>
+            <span class="hint">Cheap reads of event summaries → HTML patches. Keeps worker tokens for code.</span>
+          </label>
+        </li>
+        <li>
+          <input type="checkbox" id="d5" data-key="d5">
+          <label for="d5">
+            <strong>agent-comms as event bus between manager and providers</strong>
+            <span class="hint">Only if processes stay separate. Skip if nearly-headless hosts everything internally.</span>
+          </label>
+        </li>
+        <li>
+          <input type="checkbox" id="d6" data-key="d6">
+          <label for="d6">
+            <strong>Provider adapters: codex app-server first</strong>
+            <span class="hint">t3code-proven path. ACP later if agents ship stable servers.</span>
+          </label>
+        </li>
+        <li>
+          <input type="checkbox" id="d7" data-key="d7">
+          <label for="d7">
+            <strong>Project dashboard + per-task artifacts (not unbounded HTML files)</strong>
+            <span class="hint">One overview page per repo/project; drill into task surfaces as needed.</span>
+          </label>
+        </li>
+        <li>
+          <input type="checkbox" id="d8" data-key="d8">
+          <label for="d8">
+            <strong>Steering round-trips through app shell, not terminal paste</strong>
+            <span class="hint">Forms, comments, batch instructions → structured prompt to selected session(s).</span>
+          </label>
+        </li>
+      </ul>
+
+      <p style="margin-top:1rem;">
+        <button type="button" class="secondary" id="reset-decisions">Reset</button>
+        <button type="button" class="secondary" id="copy-decisions">Copy summary</button>
+        <span id="copy-status" class="meta"></span>
+      </p>
+
+      <h3>Notes</h3>
+      <textarea id="export-notes" placeholder="Open questions, tradeoffs…"></textarea>
+    </section>
+  </main>
+
+  <footer>
+    Session management architecture · <code>~/.agents/docs/agent-architecture-exploration.html</code>
+  </footer>
+
+  <script>
+    (function () {
+      const STORAGE = 'session-arch-v2';
+      const NOTES = 'session-arch-notes-v2';
+
+      document.querySelectorAll('.nav-tabs button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.nav-tabs button').forEach(b => b.classList.toggle('active', b === btn));
+          document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + btn.dataset.tab));
+        });
+      });
+
+      const toggle = document.getElementById('toggle-view');
+      const bad = document.getElementById('view-bad');
+      const good = document.getElementById('view-good');
+      toggle.addEventListener('change', () => {
+        bad.classList.toggle('hidden', toggle.checked);
+        good.classList.toggle('hidden', !toggle.checked);
+      });
+
+      const list = document.getElementById('decision-list');
+      const progress = document.getElementById('decision-progress');
+      const notes = document.getElementById('export-notes');
+
+      function updateProgress() {
+        const boxes = [...list.querySelectorAll('input[type="checkbox"]')];
+        const done = boxes.filter(b => b.checked).length;
+        progress.style.width = (boxes.length ? (done / boxes.length) * 100 : 0) + '%';
+      }
+
+      function load() {
+        try {
+          const s = JSON.parse(localStorage.getItem(STORAGE) || '{}');
+          list.querySelectorAll('input').forEach(cb => { if (s[cb.dataset.key]) cb.checked = true; });
+          const n = localStorage.getItem(NOTES);
+          if (n) notes.value = n;
+        } catch (_) {}
+        updateProgress();
+      }
+
+      function save() {
+        const s = {};
+        list.querySelectorAll('input').forEach(cb => { s[cb.dataset.key] = cb.checked; });
+        localStorage.setItem(STORAGE, JSON.stringify(s));
+        localStorage.setItem(NOTES, notes.value);
+        updateProgress();
+      }
+
+      list.addEventListener('change', save);
+      notes.addEventListener('input', () => { clearTimeout(notes._t); notes._t = setTimeout(save, 300); });
+
+      document.getElementById('reset-decisions').onclick = () => {
+        if (!confirm('Reset checklist?')) return;
+        localStorage.removeItem(STORAGE); localStorage.removeItem(NOTES);
+        list.querySelectorAll('input').forEach(cb => { cb.checked = false; });
+        notes.value = ''; updateProgress();
+      };
+
+      document.getElementById('copy-decisions').onclick = () => {
+        const lines = ['# Session management architecture', ''];
+        list.querySelectorAll('li').forEach(li => {
+          const cb = li.querySelector('input');
+          lines.push((cb.checked ? '[x] ' : '[ ] ') + li.querySelector('label strong').textContent);
+        });
+        if (notes.value.trim()) lines.push('', notes.value.trim());
+        navigator.clipboard.writeText(lines.join('\n')).then(() => {
+          document.getElementById('copy-status').textContent = 'Copied.';
+          setTimeout(() => document.getElementById('copy-status').textContent = '', 2000);
+        });
+      };
+
+      load();
+    })();
+  </script>
+</body>
+</html>

@@ -62,7 +62,7 @@ setupCommands = [
 name = "nearly-headless"
 url = "git@github.com:adhipk/nearly-headless.git"
 refreshPeriod = "24h"
-path = ".local/share/nearly-headless"
+path = "dotfiles/extensions/nearly-headless"
 requiredExecutables = ["pnpm", "node"]
 rerunWhenMissingPaths = [
     "node_modules",

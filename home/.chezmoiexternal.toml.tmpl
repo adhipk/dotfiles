@@ -4,7 +4,7 @@
     url = "{{ .url }}"
     refreshPeriod = "{{ .refreshPeriod }}"
     [".local/share/chrome-extensions/{{ .name }}".pull]
-        args = ["--ff-only"]
+        args = ["--ff-only", "origin", "{{ if index . "branch" }}{{ .branch }}{{ else }}main{{ end }}"]
 {{ end -}}
 
 {{- range .externalProjects }}
@@ -13,5 +13,5 @@
     url = "{{ .url }}"
     refreshPeriod = "{{ .refreshPeriod }}"
     ["{{ .path }}".pull]
-        args = ["--ff-only"]
+        args = ["--ff-only", "origin", "{{ if index . "branch" }}{{ .branch }}{{ else }}main{{ end }}"]
 {{ end -}}

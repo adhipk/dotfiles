@@ -299,7 +299,7 @@ Canonical status: [MIGRATION.md](MIGRATION.md#project-inventory). Summary:
 
 | Project | Remote | Dotfiles role | External phase |
 | --- | --- | --- | --- |
-| nearly-headless | `git@github.com:adhipk/nearly-headless.git` | Shim + profile/docs; server still in `home/dot_config/hyperspaces/` | Phase 2 in progress |
+| nearly-headless | `git@github.com:adhipk/nearly-headless.git` | Shim + profile/docs; runtime in external repo | Extracted (local) |
 | raycast-lucide-excalidraw | `git@github.com:adhipk/raycast-lucide-excalidraw.git` | External + dev shim | Extracted |
 | gemma-gem | `https://github.com/kessler/gemma-gem.git` (fork planned) | Chrome external; local fork at `extensions/gemma-gem/` | Phase 1 only |
 | agent-comms | planned `adhipk/agent-comms` | Prototype at `extensions/gemma-gem/agent-comms/` | Not started |

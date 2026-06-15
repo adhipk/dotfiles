@@ -48,7 +48,7 @@ explicitly selects the nearly-headless profile.
 | Exploration | `exploration.html` | `.hyperspace/approaches.html` |
 | Explainer | `explainer.html` | `.hyperspace/rate-limiting.html` |
 | Approval needed | `decision.html` | `.hyperspace/approve-deploy.html` |
-| User live doc (generative UI) | `livedoc.html.template` | `.hyperspace/livedoc.html` |
+| User live doc (generative UI) | package template (on first save) | `.hyperspace/livedoc.html` |
 
 Browser Save writes `.hyperspace/livedoc.html`, runs `codex exec`. Read and edit
 the same canvas (`<main class="live-doc-canvas">`). The live doc is an

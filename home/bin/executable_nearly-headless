@@ -1,14 +1,21 @@
 #!/usr/bin/env bash
-# Shim into the standalone nearly-headless project.
+# Shim into the standalone hyperspace app (legacy name: nearly-headless).
 
 set -euo pipefail
 
-PROJECT_DIR="${NEARLY_HEADLESS_PROJECT_DIR:-$HOME/.local/share/nearly-headless}"
-BIN="${NEARLY_HEADLESS_BIN:-$PROJECT_DIR/bin/nearly-headless}"
-NODE_ENTRY="${NEARLY_HEADLESS_NODE_ENTRY:-$PROJECT_DIR/dist/cli.js}"
+PERSONAL_PROJECT_DIR="${HYPERSPACE_PERSONAL_DIR:-$HOME/dotfiles/extensions/nearly-headless}"
+DEV_PROJECT_DIR="${HYPERSPACE_DEV_DIR:-$HOME/projects/nearly-headless}"
+PROJECT_DIR="${HYPERSPACE_PROJECT_DIR:-${NEARLY_HEADLESS_PROJECT_DIR:-$PERSONAL_PROJECT_DIR}}"
+BIN="${HYPERSPACE_BIN:-${NEARLY_HEADLESS_BIN:-$PROJECT_DIR/bin/hyperspace}}"
+LEGACY_BIN="$PROJECT_DIR/bin/nearly-headless"
+NODE_ENTRY="${HYPERSPACE_NODE_ENTRY:-${NEARLY_HEADLESS_NODE_ENTRY:-$PROJECT_DIR/dist/cli.js}}"
 
 if [ -x "$BIN" ]; then
   exec "$BIN" "$@"
+fi
+
+if [ -x "$LEGACY_BIN" ]; then
+  exec "$LEGACY_BIN" "$@"
 fi
 
 if [ -f "$NODE_ENTRY" ]; then
@@ -16,13 +23,22 @@ if [ -f "$NODE_ENTRY" ]; then
 fi
 
 cat >&2 <<EOF
-nearly-headless standalone app is not installed.
+hyperspace standalone app is not installed.
 
-Expected compiled binary:
+Expected binary:
   $BIN
 
 This dotfiles repo only wires the command. The app source lives in:
-  git@github.com:adhipk/nearly-headless.git
+  git@github.com:adhipk/hyperspace.git
+
+Personal checkout:
+  $PERSONAL_PROJECT_DIR
+
+Development checkout:
+  $DEV_PROJECT_DIR
+
+To run the dev checkout:
+  HYPERSPACE_PROJECT_DIR="$DEV_PROJECT_DIR" nearly-headless ...
 
 After chezmoi applies externals, run:
   cd $PROJECT_DIR

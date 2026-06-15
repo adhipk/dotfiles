@@ -6,8 +6,9 @@ provider sessions, watches streamed progress, and responds through interactive
 surfaces the agent creates when it needs input.
 
 Implementation boundary: nearly-headless is a standalone TypeScript app in its
-own repository. Dotfiles only installs local shims, profile docs, and
-machine-specific wiring. The app should compile to a local CLI binary.
+own repository. **Product behavior (UI, server, defaults) lives in that repo**
+ — see `~/.local/share/nearly-headless/SETUP.md`. Dotfiles only installs local
+shims, profile docs, and machine-specific wiring (`~/.config/nearly-headless/`).
 
 Repository:
 
@@ -41,6 +42,7 @@ runner adapter      → Codex/Claude/OpenAI/mock providers
 ```
 
 Inspired by [t3code](https://github.com/pingdotgg/t3code) session abstractions, without its UI.
+Implementation plan: `nearly-headless-port-plan.md` (port patterns, not the t3 server).
 HTML output follows [Anthropic's HTML guidance](https://claude.com/blog/using-claude-code-the-unreasonable-effectiveness-of-html).
 The local dotfiles source includes a captured copy at
 `articles/Unreasonable-Effectiveness-of-HTML.html`.
@@ -86,11 +88,13 @@ Activate: `nearly-headless print-agents` — does not alter default `~/.agents/A
 ```text
 my-project/
 ├── .hyperspace/
-│   ├── shared/hyperspace.css
-│   ├── status.html
+│   ├── shared/                 # copied from nearly-headless on init
+│   ├── status.html             # agent artifacts (no default livedoc)
 │   └── task-report.html
-└── .gitignore          # include .hyperspace/ (see templates/gitignore-snippet)
+└── .gitignore                  # include .hyperspace/ (see templates/gitignore-snippet)
 ```
+
+General setup: `~/.local/share/nearly-headless/SETUP.md` after chezmoi installs the external checkout.
 
 ## Commands
 
@@ -99,8 +103,8 @@ nearly-headless info              # paths and activation help
 nearly-headless print-agents      # cat profile AGENTS.md
 nearly-headless tasks             # show TASKS.md
 hyperspace-serve start            # compatibility server command
-nearly-headless init-project      # create .hyperspace/ for current repo
-nearly-headless serve start       # http://127.0.0.1:4200
+nearly-headless init-project      # .hyperspace/shared/ only in current repo
+nearly-headless serve start       # http://127.0.0.1:4200 — All projects hub at /
 nearly-headless serve open        # browser -> task/artifact workspace
 hyperspace-open-report status     # compatibility artifact opener
 ```
@@ -111,12 +115,14 @@ comments, or fill generated inputs; saves/commands dispatch provider turns.
 
 ## Agent workflow
 
-1. User creates a task in the browser workspace.
-2. Nearly-headless dispatches the task to a provider session/thread.
-3. The app streams progress and runtime events.
-4. The agent writes artifacts or generates task-specific UI when useful.
-5. If the agent needs input, it creates explicit controls in the page.
-6. User replies through the page; the provider session continues.
+1. User creates a task in the browser workspace (app shell).
+2. Nearly-headless dispatches the task to a provider session (worker agent).
+3. The app streams worker progress and runtime events.
+4. The **manager agent** updates HTML artifacts on milestones — not the worker.
+5. If input is needed, the manager surfaces controls in the page (or worker
+   requests approval through the provider; manager reflects it in the UI).
+6. User steers via the page; nearly-headless routes structured input back to
+   the selected worker session(s).
 
 ## Related files in this repo
 

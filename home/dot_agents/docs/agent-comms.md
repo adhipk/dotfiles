@@ -3,8 +3,9 @@
 Project name: `agent-comms` (planned `adhipk/agent-comms`).
 
 Agent-comms is a local communication layer for independent tools and repos. It
-gives browser extensions, coding agents, artifact workers, and CLI tools one
-shared interface without forcing them into the same runtime.
+gives nearly-headless, provider runtimes, and local artifact generators (for
+example gemma-gem) one shared event log without forcing them into the same
+process.
 
 ## Owns
 
@@ -20,13 +21,25 @@ shared interface without forcing them into the same runtime.
 - Gemma-gem model inference or browser DOM tools
 - Product-specific adapters (those live in consumer repos)
 
+## Role in the stack
+
+Coding agents (Codex, Claude) are **workers** — they stream progress but do not
+maintain HTML artifacts. **nearly-headless** is the manager: centralized session
+UI plus an agent that watches worker events and updates `.hyperspace/` dashboards
+on milestones. agent-comms carries events between those processes when they are
+not colocated.
+
+ACP standardizes editor↔agent wire protocols; agent-comms is the local mesh
+layer. They solve different problems and can coexist (ACP as a provider adapter,
+agent-comms as cross-process fan-out).
+
 ## Consumers (planned)
 
 | Consumer | Typical streams |
 | --- | --- |
-| **gemma-gem** | `conversation` — browser chat transcript mirroring |
-| **nearly-headless** | `session`, `run`, `artifact` — task dispatch and progress |
-| **artifact workers** | command claim/complete when sessions are idle |
+| **nearly-headless** | `session`, `run`, `artifact` — dispatch, heartbeats, manager updates |
+| **gemma-gem** | optional local artifact generator; may publish or consume summaries |
+| **provider adapters** | worker session events ingested into the bus |
 
 Product-specific adapters should live in the consuming project repos. This
 project keeps only generic protocol, storage, client, server, and wiring

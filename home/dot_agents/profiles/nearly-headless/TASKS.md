@@ -20,16 +20,40 @@ See `~/.agents/docs/nearly-headless.md`.
 
 ## Phase 2 — Nearly-headless app core
 
+Port **t3 patterns** into `hyperspace_server.mjs` — not the t3 repo. See
+`~/.agents/docs/nearly-headless-port-plan.md`.
+
 - [x] `nearly-headless serve` compatibility path through local artifact server
 - [x] Live doc save → `hyperspace-run-live-doc` → `codex exec` (same file)
 - [x] App can discover configured/current repos without tmux sessions
 - [x] App-owned settings page scaffold
+
+### Phase 2A — Event spine
+
+- [x] `appendEvent()` writer (events.jsonl)
+- [x] Task/run event types + projector → session snapshot
+- [x] SSE `/api/events/stream`
+- [x] Mock runner (`nearly-headless mock-run`, `POST /api/dev/mock-run`)
+- [x] UI shows tasks in app shell sidebar
+
+### Phase 2B — Codex runner
+
+- [ ] `RunnerAdapter` + `codex app-server` (stdio JSON-RPC)
+- [ ] Runtime ingest → orchestration events
+- [ ] `POST /api/tasks/:id/runs` dispatch
+- [ ] Provider session persistence
+
+### Phase 2C — Manager + HTML dashboard
+
+- [ ] Milestone → update `.hyperspace/status.html` from template (no worker HTML)
+- [ ] Pending queue + multi-session view in app shell
 - [ ] Provider-instance and model-selection settings
-- [ ] Provider-session task backend based on T3 Code concepts
-- [ ] Task creation, progress stream, and event log
+
+### Phase 2D — Interaction
+
 - [ ] App-owned comments/actions outside agent-editable HTML
-- [ ] Scoped agent writes for task/artifact surfaces
-- [ ] Approval/user-input flow with interactive generated UI
+- [ ] Approval/user-input round-trip from shell or artifact controls
+- [ ] Scoped agent writes for task/artifact surfaces (manager only)
 
 ## Phase 3 — Extraction to external repo
 
@@ -37,10 +61,10 @@ Per `EXTERNAL-PROJECTS.md` Phase 2 checklist:
 
 - [x] Register `nearly-headless` in `home/.chezmoidata.toml`
 - [x] Add `home/bin/executable_nearly-headless` shim
-- [ ] Move server/runtime from `home/dot_config/hyperspaces/` to external repo
-- [ ] Move HTML components and live-doc shell to external repo
-- [ ] Point config at `~/.config/nearly-headless/`
-- [ ] Remove duplicate implementation from dotfiles (keep shims only)
+- [x] Move server/runtime from `home/dot_config/hyperspaces/` to external repo
+- [x] Move HTML components and live-doc shell to external repo
+- [x] Point config at `~/.config/nearly-headless/`
+- [ ] Push remote and verify chezmoi clone on other machines
 
 ## Phase 4 — Polish
 

@@ -21,7 +21,7 @@ Two independent phase systems — do not mix them:
 
 | Project | Remote | Dotfiles today | Product phase | External phase |
 | --- | --- | --- | --- | --- |
-| **nearly-headless** | `git@github.com:adhipk/nearly-headless.git` | Shim, profile, templates, skills; server still in `home/dot_config/hyperspaces/` | Phase 2 partial | Phase 2 in progress |
+| **nearly-headless** | `git@github.com:adhipk/nearly-headless.git` | Shim, profile, templates, skills; runtime at `~/.local/share/nearly-headless` | Phase 2A started | Extracted (local) |
 | **agent-comms** | planned `adhipk/agent-comms` | Prototype at `extensions/gemma-gem/agent-comms/` (gitignored) | pre-Phase 1 | Not started |
 | **gemma-gem** | `https://github.com/kessler/gemma-gem.git` (fork planned) | Chrome external; local fork work under `extensions/gemma-gem/` | N/A | Phase 1 only |
 | **raycast-lucide-excalidraw** | `git@github.com:adhipk/raycast-lucide-excalidraw.git` | External + dev shim | N/A | Extracted |
@@ -63,8 +63,8 @@ live-doc canvas, settings.
 | Repo discovery without tmux | Done |
 | Settings page scaffold | Done |
 | Provider-session backend + model selection | Not started |
-| Task streaming, comments, approvals | Not started |
-| Move server/runtime out of `home/dot_config/hyperspaces/` | Not started |
+| Task streaming, comments, approvals | Phase 2A event spine in external repo |
+| Move server/runtime out of `home/dot_config/hyperspaces/` | Done (local checkout) |
 
 **Boundary docs:** [nearly-headless.md](home/dot_agents/docs/nearly-headless.md),
 [headless-html-artifacts.md](home/dot_agents/docs/headless-html-artifacts.md),
