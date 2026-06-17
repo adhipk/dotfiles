@@ -15,6 +15,7 @@ brew "sesh"
 brew "yazi"
 brew "zoxide"
 brew "fzf"
+brew "terminal-notifier"
 
 cask "ghostty"
 cask "karabiner-elements"

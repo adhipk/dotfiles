@@ -11,6 +11,7 @@ These commands are installed into `~/bin`, which `home/dot_zshrc` adds to
 
 | Command | Purpose | Source |
 | --- | --- | --- |
+| `bookmarks` | Pin, clear, jump to, list, or show yabai space bookmarks in slots `1` through `5`. | [`home/bin/executable_bookmarks`](home/bin/executable_bookmarks) |
 | `default-apps` | Inspect and change macOS default handlers for file extensions and URL schemes. | [`scripts/default-apps.sh`](scripts/default-apps.sh) |
 | `kit` | Speak text with KittenTTS, either from arguments or stdin, and optionally write WAV output. | [`home/bin/executable_kit`](home/bin/executable_kit) |
 | `kit-watch` | Watch a text file with `fswatch` and read its contents with `kit` whenever it changes. | [`home/bin/executable_kit-watch`](home/bin/executable_kit-watch) |
@@ -157,6 +158,7 @@ Installed below `~/.config/skhd/`:
 | [`media_key.sh ACTION`](home/dot_config/skhd/executable_media_key.sh) | Send a macOS media key event. Supported actions are `brightness_down`, `brightness_up`, `mission_control`, `launchpad`, `dictation`, `do_not_disturb`, `previous`, `play_pause`, `next`, `mute`, `volume_down`, and `volume_up`. |
 | [`open_terminal_window.sh`](home/dot_config/skhd/executable_open_terminal_window.sh) | Open a terminal window on the current yabai space. `TERMINAL_APP` defaults to `Ghostty`. The current skhd config does not bind this helper. |
 | [`show_keys.sh`](home/dot_config/skhd/executable_show_keys.sh) | Toggle the `whichkey` keybinding overlay. |
+| [`notify.sh TITLE MESSAGE`](home/dot_config/skhd/executable_notify.sh) | Show a macOS notification from skhd or yabai helpers. Uses `terminal-notifier` when available. |
 | [`snap_window.sh left\|right`](home/dot_config/skhd/executable_snap_window.sh) | Warp the current window and resize it to half the display width. |
 | [`toggle_ghostty_quick_terminal.sh`](home/dot_config/skhd/executable_toggle_ghostty_quick_terminal.sh) | Create or toggle a bottom-third Ghostty scratchpad named `quick_terminal`. |
 | [`whichkey`](home/dot_config/skhd/executable_whichkey) | Compiled arm64 SwiftUI keybinding overlay launched by `show_keys.sh`. |
@@ -167,14 +169,12 @@ Installed below `~/.config/yabai/`:
 
 | Helper | Purpose |
 | --- | --- |
-| [`bookmark-space.sh SLOT`](home/dot_config/yabai/executable_bookmark-space.sh) | Save the current yabai space UUID in slot `1` through `5`. |
-| [`jump-to-bookmark.sh SLOT`](home/dot_config/yabai/executable_jump-to-bookmark.sh) | Focus the space stored in slot `1` through `5`. |
-| [`unbookmark-space.sh SLOT`](home/dot_config/yabai/executable_unbookmark-space.sh) | Clear a stored slot and remove its label prefix when possible. |
-| [`list-bookmarks.sh`](home/dot_config/yabai/executable_list-bookmarks.sh) | Print bookmark slots and their current space metadata. |
-| [`show-bookmarks.sh`](home/dot_config/yabai/executable_show-bookmarks.sh) | Display bookmarked spaces in a macOS notification. |
+| [`bookmarks`](home/dot_config/yabai/executable_bookmarks) | Manage pinned yabai spaces: `set`, `clear`, `jump`, `list`, and `show` for slots `1` through `5`. |
+| [`float-prefs`](home/dot_config/yabai/executable_float-prefs) | Toggle float for the focused window and remember it per app/title via yabai `manage=off` rules. |
 | [`close_empty_spaces.sh`](home/dot_config/yabai/executable_close_empty_spaces.sh) | Destroy empty yabai spaces while retaining at least one space. |
 
 Bookmarks are stored at `~/.config/yabai/space-bookmarks.json`.
+Floating window preferences are stored at `~/.config/yabai/floating-windows.json`.
 
 ## Desktop Shortcuts
 
@@ -189,8 +189,10 @@ operations to these shortcuts:
 | `Ctrl+Alt+Cmd+Arrows`, `Ctrl+Alt+Cmd+h/k/u/j` | Resize the current window by 100 pixels. |
 | `Ctrl+Alt+Return` | Toggle full-screen zoom. |
 | `Ctrl+Alt+s`, `Ctrl+Alt+b`, `Ctrl+Alt+o`, `Ctrl+Alt+x/y` | Toggle split, balance, rotate, or mirror the layout. |
-| `Ctrl+Alt+f`, `Ctrl+Alt+d`, `Ctrl+Alt+g` | Toggle float, stack west, or toggle BSP/stack layout. |
+| `Ctrl+Alt+f`, `Ctrl+Alt+d`, `Ctrl+Alt+g` | Toggle remembered float (per app/title), stack west, or toggle BSP/stack layout. |
 | `Alt+Cmd+[`, `Alt+Cmd+]`, `Alt+Cmd+Left/Right` | Move the current window between displays. |
+| `Alt+Shift+=`, then `1..5` | Pin the current space to a bookmark slot. |
+| `Alt+Shift+-`, then `1..5` | Clear a bookmark slot. |
 | `Alt+Shift+1..5` | Jump to a bookmarked space. |
 | `Alt+Shift+/` | Show bookmarked spaces. |
 | `Alt+Shift+h/k` | Focus the previous or next space. |

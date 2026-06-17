@@ -63,6 +63,8 @@ yabai -m rule --add title="^skhd keys$"     manage=off
 # classify them before they briefly enter the BSP grid.
 eval "$("$HOME/bin/scratchpads" rules)"
 
+"$HOME/.config/yabai/float-prefs" apply-rules || true
+
 # ============================================================
 # Fixed Space Order (1-4)
 # 1: Ghostty, Browser

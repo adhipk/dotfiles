@@ -127,7 +127,12 @@ assert_contains "$SKHDRC" "alt - tab.*focus" "Alt+tab cycles windows forward"
 assert_contains "$SKHDRC" "shift + alt - tab.*focus" "Shift+alt+tab cycles windows backward"
 
 # Test space management shortcuts
+assert_contains "$SKHDRC" "ctrl + alt - f.*float-prefs toggle" "Float toggle remembers preferences"
 assert_contains "$SKHDRC" "alt - k.*close_empty_spaces.sh" "Alt+k closes empty spaces"
+assert_contains "$SKHDRC" "pin_mode @.*notify.sh.*Pin Mode" "Pin mode shows entry notification"
+assert_contains "$SKHDRC" "pin_mode < 1.*bookmarks set 1" "Pin mode sets bookmark slot 1"
+assert_contains "$SKHDRC" "unpin_mode < 1.*bookmarks clear 1" "Unpin mode clears bookmark slot 1"
+assert_contains "$SKHDRC" "alt + shift - 1.*bookmarks jump 1" "Alt+shift+1 jumps to bookmark 1"
 
 # Test reload shortcut
 assert_contains "$SKHDRC" "alt - r.*restart-service" "Reload shortcut exists"
@@ -157,6 +162,10 @@ assert_contains "$YABAIRC" "right_padding" "Right padding configured"
 assert_not_contains "$YABAIRC" "update_border.sh" "No border signals remain"
 assert_not_contains "$YABAIRC" "auto_mark.sh" "No auto mark signal remains"
 assert_not_contains "$YABAIRC" "cleanup_marks.sh" "No cleanup mark signal remains"
+
+# Floating window preferences are replayed on startup.
+assert_contains "$YABAIRC" 'float-prefs" apply-rules' "yabairc restores floating window preferences"
+assert_not_contains "$YABAIRC" 'float-prefs apply-window' "yabairc does not use float signal handlers"
 
 # Test common window rules exist
 assert_contains "$YABAIRC" "System Settings.*manage=off" "System Settings rule exists"

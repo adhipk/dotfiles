@@ -82,9 +82,6 @@ case "$ARG" in
         ;;
 esac
 
-if [ "$APP" = "Ghostty" ] && [ -z "$EXCLUDE_TITLE_RE" ]; then
-    EXCLUDE_TITLE_RE='(^|[^[:alnum:]_-])(n?vim|codex|claude)([^[:alnum:]_-]|$)|Action Required'
-fi
 
 # No running windows found — launch
 if [ -z "$APP" ]; then

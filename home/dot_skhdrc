@@ -49,9 +49,8 @@ ctrl + alt - o : yabai -m space --rotate 90
 ctrl + alt - x : yabai -m space --mirror x-axis
 ctrl + alt - y : yabai -m space --mirror y-axis
 
-# -- Toggle float + center --
-ctrl + alt - f : yabai -m window --toggle float; \
-                yabai -m window --grid 6:6:1:1:4:4
+# -- Toggle float + center (remembered per app/title) --
+ctrl + alt - f : ~/.config/yabai/float-prefs toggle
 
 # -- Stack windows --
 ctrl + alt - d : yabai -m window --stack west
@@ -83,7 +82,26 @@ alt + cmd - right : win=$(yabai -m query --windows --window | jq -r '.id'); \
                     yabai -m display --focus 2; \
                     yabai -m window --focus "$win"  # alt+cmd+right
 
-# -- Space Bookmarking (yabai spaces) --
+# -- Space Bookmarking: Pin mode (alt+shift+=, then number) --
+:: pin_mode @ : ~/.config/skhd/notify.sh "Pin Mode" "Press 1-5 to pin space"
+alt + shift - 0x18 ; pin_mode  # alt+shift+= enters pin mode
+pin_mode < 1 : ~/.config/yabai/bookmarks set 1; skhd -k "escape"
+pin_mode < 2 : ~/.config/yabai/bookmarks set 2; skhd -k "escape"
+pin_mode < 3 : ~/.config/yabai/bookmarks set 3; skhd -k "escape"
+pin_mode < 4 : ~/.config/yabai/bookmarks set 4; skhd -k "escape"
+pin_mode < 5 : ~/.config/yabai/bookmarks set 5; skhd -k "escape"
+pin_mode < escape ; default
+
+# -- Space Bookmarking: Unpin mode (alt+shift+-, then number) --
+:: unpin_mode @ : ~/.config/skhd/notify.sh "Unpin Mode" "Press 1-5 to unpin space"
+alt + shift - 0x1B ; unpin_mode  # alt+shift+- enters unpin mode
+unpin_mode < 1 : ~/.config/yabai/bookmarks clear 1; skhd -k "escape"
+unpin_mode < 2 : ~/.config/yabai/bookmarks clear 2; skhd -k "escape"
+unpin_mode < 3 : ~/.config/yabai/bookmarks clear 3; skhd -k "escape"
+unpin_mode < 4 : ~/.config/yabai/bookmarks clear 4; skhd -k "escape"
+unpin_mode < 5 : ~/.config/yabai/bookmarks clear 5; skhd -k "escape"
+unpin_mode < escape ; default
+
 # -- Jump to bookmarked space (alt+shift+number) --
 alt + shift - 1 : ~/.config/yabai/bookmarks jump 1
 alt + shift - 2 : ~/.config/yabai/bookmarks jump 2

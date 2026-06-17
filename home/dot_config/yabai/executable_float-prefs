@@ -1,0 +1,226 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+PREFS_FILE="$HOME/.config/yabai/floating-windows.json"
+DEFAULT_GRID="6:6:1:1:4:4"
+RULE_LABEL_PREFIX="float_pref_"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  float-prefs toggle
+  float-prefs apply-rules
+  float-prefs list
+EOF
+}
+
+notify() {
+  "$HOME/.config/skhd/notify.sh" "$1" "$2" || true
+}
+
+regex_escape() {
+  printf '%s' "$1" | sed -e 's/[.[\*^$()+?{|]/\\&/g'
+}
+
+ensure_store() {
+  if [ ! -f "$PREFS_FILE" ] || [ ! -s "$PREFS_FILE" ]; then
+    mkdir -p "$(dirname "$PREFS_FILE")"
+    printf '%s\n' '{}' > "$PREFS_FILE"
+  fi
+}
+
+window_key() {
+  local app="$1"
+  local title="$2"
+  printf '%s|%s' "$app" "$title"
+}
+
+rule_label_for_key() {
+  local key="$1"
+  printf '%s%s' "$RULE_LABEL_PREFIX" "$(printf '%s' "$key" | shasum | awk '{print substr($1, 1, 12)}')"
+}
+
+split_key() {
+  local key="$1"
+  KEY_APP="${key%%|*}"
+  KEY_TITLE="${key#*|}"
+}
+
+query_focused_window_id() {
+  yabai -m query --windows 2>/dev/null | jq -r '[.[] | select(."has-focus") | .id] | first // empty'
+}
+
+restore_focus() {
+  local focused_id="$1"
+
+  [ -n "$focused_id" ] || return 0
+  yabai -m window "$focused_id" --focus >/dev/null 2>&1 || true
+}
+
+remove_pref_rule() {
+  local label="$1"
+  yabai -m rule --remove "$label" >/dev/null 2>&1 || true
+}
+
+add_pref_rule() {
+  local app="$1"
+  local title="$2"
+  local grid="$3"
+  local label="$4"
+
+  remove_pref_rule "$label"
+  yabai -m rule --add \
+    label="$label" \
+    app="^$(regex_escape "$app")$" \
+    title="^$(regex_escape "$title")$" \
+    manage=off \
+    grid="$grid"
+}
+
+float_matching_windows() {
+  local app="$1"
+  local title="$2"
+  local grid="$3"
+  local win_id is_floating
+
+  yabai -m query --windows 2>/dev/null | jq -r --arg app "$app" --arg title "$title" \
+    '.[] | select(.app == $app and .title == $title) | .id' \
+    | while read -r win_id; do
+        [ -n "$win_id" ] || continue
+        is_floating=$(yabai -m query --windows --window "$win_id" | jq -r '."is-floating"')
+        if [ "$is_floating" != "true" ]; then
+          yabai -m window "$win_id" --toggle float
+        fi
+        yabai -m window "$win_id" --grid "$grid"
+      done
+}
+
+tile_matching_windows() {
+  local app="$1"
+  local title="$2"
+  local win_id is_floating
+
+  yabai -m query --windows 2>/dev/null | jq -r --arg app "$app" --arg title "$title" \
+    '.[] | select(.app == $app and .title == $title) | .id' \
+    | while read -r win_id; do
+        [ -n "$win_id" ] || continue
+        is_floating=$(yabai -m query --windows --window "$win_id" | jq -r '."is-floating"')
+        if [ "$is_floating" = "true" ]; then
+          yabai -m window "$win_id" --toggle float
+        fi
+      done
+}
+
+should_skip_window() {
+  local win_json="$1"
+
+  if [ "$(printf '%s' "$win_json" | jq -r '.scratchpad // ""')" != "" ]; then
+    return 0
+  fi
+
+  return 1
+}
+
+apply_rules() {
+  local focused_id key
+
+  ensure_store
+  focused_id=$(query_focused_window_id)
+
+  yabai -m rule --list 2>/dev/null | jq -r '.[] | select(.label | startswith("'"$RULE_LABEL_PREFIX"'")) | .label' \
+    | while read -r label; do
+        [ -n "$label" ] || continue
+        remove_pref_rule "$label"
+      done
+
+  while IFS= read -r key; do
+    [ -n "$key" ] || continue
+    split_key "$key"
+    add_pref_rule "$KEY_APP" "$KEY_TITLE" "$(jq -r --arg key "$key" '.[$key].grid' "$PREFS_FILE")" "$(rule_label_for_key "$key")"
+    float_matching_windows "$KEY_APP" "$KEY_TITLE" "$(jq -r --arg key "$key" '.[$key].grid' "$PREFS_FILE")"
+  done < <(jq -r 'keys[]' "$PREFS_FILE")
+
+  restore_focus "$focused_id"
+}
+
+toggle_current_window() {
+  local win_json app title key grid win_id label tmp
+
+  win_json=$(yabai -m query --windows --window 2>/dev/null) || {
+    notify "yabai" "No window to float"
+    exit 1
+  }
+
+  if should_skip_window "$win_json"; then
+    notify "yabai" "This window cannot be floated"
+    exit 0
+  fi
+
+  ensure_store
+
+  app=$(printf '%s' "$win_json" | jq -r '.app')
+  title=$(printf '%s' "$win_json" | jq -r '.title // ""')
+  key=$(window_key "$app" "$title")
+  win_id=$(printf '%s' "$win_json" | jq -r '.id')
+  label=$(rule_label_for_key "$key")
+
+  if jq -e --arg key "$key" 'has($key)' "$PREFS_FILE" >/dev/null 2>&1; then
+    tmp=$(mktemp "${PREFS_FILE}.XXXXXX")
+    jq --arg key "$key" 'del(.[$key])' "$PREFS_FILE" > "$tmp"
+    mv "$tmp" "$PREFS_FILE"
+    remove_pref_rule "$label"
+    tile_matching_windows "$app" "$title"
+    yabai -m window "$win_id" --focus >/dev/null 2>&1 || true
+    notify "yabai Float" "Tiled: $title"
+    return 0
+  fi
+
+  grid="$DEFAULT_GRID"
+  tmp=$(mktemp "${PREFS_FILE}.XXXXXX")
+  jq --arg key "$key" --arg grid "$grid" '.[$key] = {grid: $grid}' "$PREFS_FILE" > "$tmp"
+  mv "$tmp" "$PREFS_FILE"
+  add_pref_rule "$app" "$title" "$grid" "$label"
+  float_matching_windows "$app" "$title" "$grid"
+  yabai -m window "$win_id" --focus >/dev/null 2>&1 || true
+  notify "yabai Float" "Floated: $title"
+}
+
+list_prefs() {
+  ensure_store
+
+  if [ "$(jq 'length' "$PREFS_FILE")" -eq 0 ]; then
+    printf '%s\n' "No floating window preferences saved."
+    return 0
+  fi
+
+  printf '%s\n' "Floating window preferences:"
+  jq -r 'to_entries[] | "\(.key | split("|")[0]) — \(.key | split("|")[1])"' "$PREFS_FILE"
+}
+
+main() {
+  local command="${1:-toggle}"
+  shift || true
+
+  case "$command" in
+    toggle)
+      toggle_current_window
+      ;;
+    apply-rules)
+      apply_rules
+      ;;
+    list)
+      list_prefs
+      ;;
+    help|-h|--help)
+      usage
+      ;;
+    *)
+      printf '%s\n' "Unknown command: $command" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"
