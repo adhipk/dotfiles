@@ -2,10 +2,11 @@
 
 set -euo pipefail
 
-EXTENSION_DIR="$HOME/.local/share/raycast-extensions/raycast-lucide-excalidraw"
+PROJECT_DIR="$HOME/.local/share/raycast-extensions/raycast-lucide-excalidraw"
+EXTENSION_DIR="$PROJECT_DIR/projects/raycast-extension"
 
 if [ ! -d "$EXTENSION_DIR" ]; then
-    echo "Raycast extension checkout is missing: $EXTENSION_DIR" >&2
+    echo "Raycast extension checkout is missing: $PROJECT_DIR" >&2
     echo "Run chezmoi apply or ./bootstrap.sh to sync externals." >&2
     exit 1
 fi

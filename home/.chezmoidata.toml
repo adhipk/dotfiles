@@ -50,10 +50,10 @@ refreshPeriod = "168h"
 path = ".local/share/raycast-extensions/raycast-lucide-excalidraw"
 requiredExecutables = ["npm"]
 rerunWhenMissingPaths = [
-    "node_modules",
-    "library/lucide-icons.excalidrawlib",
+    "projects/raycast-extension/node_modules",
+    "projects/excalidraw-library/library/lucide-icons.excalidrawlib",
 ]
 setupCommands = [
-    "npm ci",
-    "npm run generate-library",
+    "npm --prefix projects/raycast-extension ci",
+    "npm --prefix projects/excalidraw-library run generate",
 ]

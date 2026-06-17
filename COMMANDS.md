@@ -14,7 +14,7 @@ These commands are installed into `~/bin`, which `home/dot_zshrc` adds to
 | `default-apps` | Inspect and change macOS default handlers for file extensions and URL schemes. | [`scripts/default-apps.sh`](scripts/default-apps.sh) |
 | `kit` | Speak text with KittenTTS, either from arguments or stdin, and optionally write WAV output. | [`home/bin/executable_kit`](home/bin/executable_kit) |
 | `kit-watch` | Watch a text file with `fswatch` and read its contents with `kit` whenever it changes. | [`home/bin/executable_kit-watch`](home/bin/executable_kit-watch) |
-| `lucide-icons-excalidraw` | Start the external Raycast development command for the Lucide Excalidraw picker. Additional arguments are passed to `npm run dev`. | [`home/bin/executable_lucide-icons-excalidraw.tmpl`](home/bin/executable_lucide-icons-excalidraw.tmpl) |
+| `lucide-icons-excalidraw` | Start the external Raycast development command for the Lucide Excalidraw picker. Additional arguments are passed to the Raycast extension's `npm run dev`. | [`home/bin/executable_lucide-icons-excalidraw.tmpl`](home/bin/executable_lucide-icons-excalidraw.tmpl) |
 | `reload-colors` | Restart yabai and skhd, then reload tmux configuration when tmux is running. | [`home/bin/executable_reload-colors`](home/bin/executable_reload-colors) |
 | `reset-yabai` | Reinstall and pin `yabai@7.1.16`, update its scripting-addition sudoers entry, and restart its service. This uses `sudo` and changes Homebrew packages and `/etc/sudoers.d/yabai`. | [`home/bin/executable_reset-yabai`](home/bin/executable_reset-yabai) |
 | `tmux-session-picker` | Select and switch to an existing tmux session with `sesh` + `fzf`. | [`home/bin/executable_tmux-session-picker`](home/bin/executable_tmux-session-picker) |
@@ -254,17 +254,19 @@ in [`home/.chezmoidata.toml`](home/.chezmoidata.toml). Chezmoi clones it into
 `~/.local/share/raycast-extensions/raycast-lucide-excalidraw`, installs its npm
 dependencies, and runs its setup command during bootstrap.
 
-Run its package commands from
-`~/.local/share/raycast-extensions/raycast-lucide-excalidraw/`:
+Run the Raycast extension package commands from
+`~/.local/share/raycast-extensions/raycast-lucide-excalidraw/projects/raycast-extension/`:
 
 | Command | Purpose |
 | --- | --- |
 | `npm run dev` | Start Raycast development mode. |
 | `npm run build` | Build the Raycast command. |
-| `npm run generate-library` | Generate `library/lucide-icons.excalidrawlib` from the Lucide API. |
 | `npm run lint` | Run Raycast linting. |
 | `npm run fix-lint` | Fix lint issues where possible. |
 | `npm run publish` | Publish through the Raycast API. |
+
+Run `npm --prefix ~/.local/share/raycast-extensions/raycast-lucide-excalidraw/projects/excalidraw-library run generate`
+to regenerate `projects/excalidraw-library/library/lucide-icons.excalidrawlib`.
 
 The declared Chrome external is `gemma-gem`, an unpacked browser extension
 built from source into
