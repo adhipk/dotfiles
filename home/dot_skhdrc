@@ -145,11 +145,12 @@ alt - k : ~/.config/yabai/close_empty_spaces.sh
 # ============================================================
 
 alt - 0x32 : ~/.config/skhd/focus_app.sh "Ghostty"  # alt + backtick
-alt - 1 : ~/.config/skhd/focus_app.sh "@browser"
-alt - 2 : ~/.config/skhd/focus_app.sh "@editor"
-alt - 3 : ~/.config/skhd/focus_app.sh "Microsoft Teams"
-alt - 4 : ~/.config/skhd/focus_app.sh "Slack"
+alt - 1 : ~/bin/hotkeys app-focus 1 "@browser"
+alt - 2 : ~/bin/hotkeys app-focus 2 "@editor"
+alt - 3 : ~/bin/hotkeys app-focus 3 "Microsoft Teams"
+alt - 4 : ~/bin/hotkeys app-focus 4 "Slack"
 alt - 0x2A : ~/bin/hotkeys presentation toggle  # alt + backslash
+alt + shift - 0x2A : ~/bin/hotkeys zen toggle  # alt+shift+backslash
 
 alt + shift - 0x32 : ~/.config/skhd/focus_app.sh "Ghostty"  # alt + tilde
 

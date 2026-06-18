@@ -7,6 +7,7 @@ DOTFILES_DIR="$(dirname "$TEST_DIR")"
 SKHDRC="$DOTFILES_DIR/home/dot_skhdrc"
 YABAIRC="$DOTFILES_DIR/home/dot_yabairc"
 KARABINER_CONFIG="$DOTFILES_DIR/home/dot_config/private_karabiner/karabiner.json"
+HOTKEYS="$DOTFILES_DIR/home/bin/executable_hotkeys"
 
 PASSED=0
 FAILED=0
@@ -133,6 +134,14 @@ assert_contains "$SKHDRC" "pin_mode @.*notify.sh.*Pin Mode" "Pin mode shows entr
 assert_contains "$SKHDRC" "pin_mode < 1.*bookmarks set 1" "Pin mode sets bookmark slot 1"
 assert_contains "$SKHDRC" "unpin_mode < 1.*bookmarks clear 1" "Unpin mode clears bookmark slot 1"
 assert_contains "$SKHDRC" "alt + shift - 1.*bookmarks jump 1" "Alt+shift+1 jumps to bookmark 1"
+assert_contains "$SKHDRC" "alt - 1.*hotkeys app-focus 1.*@browser" "Alt+1 browser focus goes through hotkeys"
+assert_contains "$SKHDRC" "alt - 2.*hotkeys app-focus 2.*@editor" "Alt+2 editor focus goes through zen gate"
+assert_contains "$SKHDRC" "alt - 3.*hotkeys app-focus 3.*Microsoft Teams" "Alt+3 Teams focus goes through zen gate"
+assert_contains "$SKHDRC" "alt - 4.*hotkeys app-focus 4.*Slack" "Alt+4 Slack focus goes through zen gate"
+assert_contains "$SKHDRC" "alt + shift - 0x2A.*hotkeys zen toggle" "Alt+Shift+Backslash toggles zen mode"
+
+assert_contains "$HOTKEYS" "ZEN_MODE_FILE=.*zen_mode" "hotkeys stores zen mode state"
+assert_contains "$HOTKEYS" "2|3|4)" "hotkeys disables app slots 2-4 in zen mode"
 
 # Test reload shortcut
 assert_contains "$SKHDRC" "alt - r.*restart-service" "Reload shortcut exists"

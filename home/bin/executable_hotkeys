@@ -2,12 +2,15 @@
 
 set -euo pipefail
 
-STATE_FILE="$HOME/.config/skhd/presentation_mode"
+PRESENTATION_MODE_FILE="$HOME/.config/skhd/presentation_mode"
+ZEN_MODE_FILE="$HOME/.config/skhd/zen_mode"
 
 usage() {
   cat <<'EOF'
 Usage:
+  hotkeys app-focus SLOT APP
   hotkeys presentation toggle
+  hotkeys zen on|off|toggle|status
   hotkeys terminal new
 EOF
 }
@@ -16,24 +19,89 @@ notify() {
   "$HOME/.config/skhd/notify.sh" "$1" "$2" || true
 }
 
-set_presentation_mode() {
-  local state="$1"
+mode_is_on() {
+  local state_file="$1"
 
-  mkdir -p "$(dirname "$STATE_FILE")"
-  printf '%s\n' "$state" > "$STATE_FILE"
+  [ -f "$state_file" ] && [ "$(cat "$state_file" 2>/dev/null)" = "on" ]
+}
+
+set_mode_state() {
+  local state_file="$1"
+  local label="$2"
+  local state="$3"
+
+  case "$state" in
+    on|off) ;;
+    *)
+      printf '%s\n' "Expected mode state to be on or off; got: $state" >&2
+      exit 1
+      ;;
+  esac
+
+  mkdir -p "$(dirname "$state_file")"
+  printf '%s\n' "$state" > "$state_file"
   if [ "$state" = "on" ]; then
-    notify "skhd" "Presentation mode on"
+    notify "skhd" "$label mode on"
   else
-    notify "skhd" "Presentation mode off"
+    notify "skhd" "$label mode off"
   fi
 }
 
+set_presentation_mode() {
+  set_mode_state "$PRESENTATION_MODE_FILE" "Presentation" "$1"
+}
+
 toggle_presentation_mode() {
-  if [ -f "$STATE_FILE" ] && [ "$(cat "$STATE_FILE" 2>/dev/null)" = "on" ]; then
+  if mode_is_on "$PRESENTATION_MODE_FILE"; then
     set_presentation_mode off
   else
     set_presentation_mode on
   fi
+}
+
+set_zen_mode() {
+  set_mode_state "$ZEN_MODE_FILE" "Zen" "$1"
+}
+
+toggle_zen_mode() {
+  if mode_is_on "$ZEN_MODE_FILE"; then
+    set_zen_mode off
+  else
+    set_zen_mode on
+  fi
+}
+
+print_zen_status() {
+  if mode_is_on "$ZEN_MODE_FILE"; then
+    printf '%s\n' "on"
+  else
+    printf '%s\n' "off"
+  fi
+}
+
+app_focus() {
+  local slot="${1:-}"
+
+  if [ -z "$slot" ]; then
+    usage >&2
+    exit 1
+  fi
+  shift
+
+  if [ "$#" -eq 0 ]; then
+    usage >&2
+    exit 1
+  fi
+
+  if mode_is_on "$ZEN_MODE_FILE"; then
+    case "$slot" in
+      2|3|4)
+        exit 0
+        ;;
+    esac
+  fi
+
+  "$HOME/.config/skhd/focus_app.sh" "$@"
 }
 
 open_terminal_window() {
@@ -98,13 +166,26 @@ main() {
   local action="${2:-}"
 
   case "$group:$action" in
+    app-focus:*)
+      shift
+      app_focus "$@"
+      ;;
     presentation:toggle)
       toggle_presentation_mode
+      ;;
+    zen:on|zen:off)
+      set_zen_mode "$action"
+      ;;
+    zen:toggle)
+      toggle_zen_mode
+      ;;
+    zen:status)
+      print_zen_status
       ;;
     terminal:new)
       open_terminal_window
       ;;
-    help:|:help|:-h|:--help|"")
+    help:|-h:|--help:|:help|:-h|:--help|:)
       usage
       ;;
     *)
