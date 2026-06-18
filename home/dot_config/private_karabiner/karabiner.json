@@ -18,6 +18,7 @@
                 "to": [
                   {
                     "key_code": "left_control",
+                    "lazy": true,
                     "modifiers": [
                       "left_option",
                       "left_command"

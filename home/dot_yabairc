@@ -13,6 +13,8 @@ fi
 yabai -m signal --remove "hide_scratchpads_on_focus_change" >/dev/null 2>&1 || true
 yabai -m signal --remove "hide_scratchpads_on_app_switch" >/dev/null 2>&1 || true
 yabai -m signal --remove "hide_scratchpads_on_app_deactivate" >/dev/null 2>&1 || true
+yabai -m signal --remove "projects_record_focus" >/dev/null 2>&1 || true
+yabai -m signal --add label=projects_record_focus event=window_focused action="$HOME/.config/yabai/projects record-focus"
 
 yabai -m config debug_output on
 # global settings

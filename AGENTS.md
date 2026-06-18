@@ -1,8 +1,25 @@
 # Agent Notes
 
+## Projects (primary UX)
+- Hold `caps lock` for Hyper (`ctrl + opt + cmd`).
+- **`Hyper+p`** or **`Hyper+e`** — **ProjectDeck** floating picker (blurred HUD panel, search, keyboard nav; spaces submenu supports detach and delete).
+- **`Hyper+n`** — quick create via ProjectDeck name form.
+- **`Hyper+1..5`** — fast switch to a project (last-used space).
+- **`Hyper+a`** — adopt current space into project context.
+- **`Hyper+Shift+Backspace`** — detach current space from project (no confirm).
+- **`Alt+Shift+1..9`** / **`Alt+Shift+h/k`** — jump or cycle spaces in project context.
+- Built automatically on `make install` (not chezmoi-managed).
+
 ## Key Bindings (skhd)
 - `alt + n` creates a new space and focuses it.
-- `alt + backtick` and `alt + ~` focus Ghostty (app focus shortcut).
+- `alt + backtick` and `alt + ~` focus Ghostty.
+
+## Projects CLI
+- `projects pick` — ProjectDeck UI (macOS dialog fallback if not built)
+- `projects new [id]` — create on next Hyper slot and adopt current space
+- `projects status` — one-line active/context summary
+- `projects list` — terminal listing
+- `projects adopt` — add current space to project context
 
 ## Terminal Defaults
 - `home/dot_config/skhd/executable_open_terminal_window.sh` defaults to Ghostty.

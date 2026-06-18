@@ -82,46 +82,68 @@ alt + cmd - right : win=$(yabai -m query --windows --window | jq -r '.id'); \
                     yabai -m display --focus 2; \
                     yabai -m window --focus "$win"  # alt+cmd+right
 
-# -- Space Bookmarking: Pin mode (alt+shift+=, then number) --
-:: pin_mode @ : ~/.config/skhd/notify.sh "Pin Mode" "Press 1-5 to pin space"
-alt + shift - 0x18 ; pin_mode  # alt+shift+= enters pin mode
-pin_mode < 1 : ~/.config/yabai/bookmarks set 1; skhd -k "escape"
-pin_mode < 2 : ~/.config/yabai/bookmarks set 2; skhd -k "escape"
-pin_mode < 3 : ~/.config/yabai/bookmarks set 3; skhd -k "escape"
-pin_mode < 4 : ~/.config/yabai/bookmarks set 4; skhd -k "escape"
-pin_mode < 5 : ~/.config/yabai/bookmarks set 5; skhd -k "escape"
-pin_mode < escape ; default
+# -- Projects: space shortcuts in active project (alt+shift) --
+:: space_slot_mode @ : ~/.config/skhd/notify.sh "Space Shortcut" "Press 1-9 for Alt+Shift slot"
+alt + shift - 0x18 ; space_slot_mode  # alt+shift+=
+space_slot_mode < 1 : ~/.config/yabai/projects set-space-slot 1; skhd -k "escape"
+space_slot_mode < 2 : ~/.config/yabai/projects set-space-slot 2; skhd -k "escape"
+space_slot_mode < 3 : ~/.config/yabai/projects set-space-slot 3; skhd -k "escape"
+space_slot_mode < 4 : ~/.config/yabai/projects set-space-slot 4; skhd -k "escape"
+space_slot_mode < 5 : ~/.config/yabai/projects set-space-slot 5; skhd -k "escape"
+space_slot_mode < 6 : ~/.config/yabai/projects set-space-slot 6; skhd -k "escape"
+space_slot_mode < 7 : ~/.config/yabai/projects set-space-slot 7; skhd -k "escape"
+space_slot_mode < 8 : ~/.config/yabai/projects set-space-slot 8; skhd -k "escape"
+space_slot_mode < 9 : ~/.config/yabai/projects set-space-slot 9; skhd -k "escape"
+space_slot_mode < escape ; default
 
-# -- Space Bookmarking: Unpin mode (alt+shift+-, then number) --
-:: unpin_mode @ : ~/.config/skhd/notify.sh "Unpin Mode" "Press 1-5 to unpin space"
-alt + shift - 0x1B ; unpin_mode  # alt+shift+- enters unpin mode
-unpin_mode < 1 : ~/.config/yabai/bookmarks clear 1; skhd -k "escape"
-unpin_mode < 2 : ~/.config/yabai/bookmarks clear 2; skhd -k "escape"
-unpin_mode < 3 : ~/.config/yabai/bookmarks clear 3; skhd -k "escape"
-unpin_mode < 4 : ~/.config/yabai/bookmarks clear 4; skhd -k "escape"
-unpin_mode < 5 : ~/.config/yabai/bookmarks clear 5; skhd -k "escape"
-unpin_mode < escape ; default
+:: clear_space_slot_mode @ : ~/.config/skhd/notify.sh "Clear Space Shortcut" "Press 1-9 to clear"
+alt + shift - 0x1B ; clear_space_slot_mode  # alt+shift+-
+clear_space_slot_mode < 1 : ~/.config/yabai/projects clear-space-slot 1; skhd -k "escape"
+clear_space_slot_mode < 2 : ~/.config/yabai/projects clear-space-slot 2; skhd -k "escape"
+clear_space_slot_mode < 3 : ~/.config/yabai/projects clear-space-slot 3; skhd -k "escape"
+clear_space_slot_mode < 4 : ~/.config/yabai/projects clear-space-slot 4; skhd -k "escape"
+clear_space_slot_mode < 5 : ~/.config/yabai/projects clear-space-slot 5; skhd -k "escape"
+clear_space_slot_mode < 6 : ~/.config/yabai/projects clear-space-slot 6; skhd -k "escape"
+clear_space_slot_mode < 7 : ~/.config/yabai/projects clear-space-slot 7; skhd -k "escape"
+clear_space_slot_mode < 8 : ~/.config/yabai/projects clear-space-slot 8; skhd -k "escape"
+clear_space_slot_mode < 9 : ~/.config/yabai/projects clear-space-slot 9; skhd -k "escape"
+clear_space_slot_mode < escape ; default
 
-# -- Jump to bookmarked space (alt+shift+number) --
-alt + shift - 1 : ~/.config/yabai/bookmarks jump 1
-alt + shift - 2 : ~/.config/yabai/bookmarks jump 2
-alt + shift - 3 : ~/.config/yabai/bookmarks jump 3
-alt + shift - 4 : ~/.config/yabai/bookmarks jump 4
-alt + shift - 5 : ~/.config/yabai/bookmarks jump 5
+alt + shift - h : ~/.config/yabai/projects cycle prev
+alt + shift - k : ~/.config/yabai/projects cycle next
 
-# -- Show pinned bookmarks notification (alt+shift+/) --
-alt + shift - 0x2C : ~/.config/yabai/bookmarks show  # alt+shift+/
+alt + shift - 1 : ~/.config/yabai/projects focus-space 1
+alt + shift - 2 : ~/.config/yabai/projects focus-space 2
+alt + shift - 3 : ~/.config/yabai/projects focus-space 3
+alt + shift - 4 : ~/.config/yabai/projects focus-space 4
+alt + shift - 5 : ~/.config/yabai/projects focus-space 5
+alt + shift - 6 : ~/.config/yabai/projects focus-space 6
+alt + shift - 7 : ~/.config/yabai/projects focus-space 7
+alt + shift - 8 : ~/.config/yabai/projects focus-space 8
+alt + shift - 9 : ~/.config/yabai/projects focus-space 9
 
-# -- Focus prev/next space --
-alt + shift - h : yabai -m space --focus prev
-alt + shift - k : yabai -m space --focus next
+alt + shift - 0x2C : ~/.config/yabai/projects show  # alt+shift+/
 
-# -- Move window to space --
-ctrl + alt + shift - 1 : yabai -m window --space 1
-ctrl + alt + shift - 2 : yabai -m window --space 2
-ctrl + alt + shift - 3 : yabai -m window --space 3
-ctrl + alt + shift - 4 : yabai -m window --space 4
-ctrl + alt + shift - 5 : yabai -m window --space 5
+# -- Projects: hyper layer (ctrl+alt+cmd, caps hold) --
+ctrl + alt + cmd - 1 : ~/.config/yabai/projects focus-project 1
+ctrl + alt + cmd - 2 : ~/.config/yabai/projects focus-project 2
+ctrl + alt + cmd - 3 : ~/.config/yabai/projects focus-project 3
+ctrl + alt + cmd - 4 : ~/.config/yabai/projects focus-project 4
+ctrl + alt + cmd - 5 : ~/.config/yabai/projects focus-project 5
+
+ctrl + alt + cmd + shift - 1 : ~/.config/yabai/projects adopt --project-slot 1
+ctrl + alt + cmd + shift - 2 : ~/.config/yabai/projects adopt --project-slot 2
+ctrl + alt + cmd + shift - 3 : ~/.config/yabai/projects adopt --project-slot 3
+ctrl + alt + cmd + shift - 4 : ~/.config/yabai/projects adopt --project-slot 4
+ctrl + alt + cmd + shift - 5 : ~/.config/yabai/projects adopt --project-slot 5
+
+ctrl + alt + cmd - a : ~/.config/yabai/projects adopt
+ctrl + alt + cmd - 0x21 : ~/.config/yabai/projects cycle prev  # hyper+[
+ctrl + alt + cmd - 0x1E : ~/.config/yabai/projects cycle next  # hyper+]
+ctrl + alt + cmd - e : ~/.config/yabai/projects pick
+ctrl + alt + cmd - p : ~/.config/yabai/projects pick
+ctrl + alt + cmd - n : ~/.config/yabai/projects new
+ctrl + alt + cmd + shift - 0x33 : ~/.config/yabai/projects detach  # hyper+shift+backspace
 
 # -- Move window to new desktop --
 ctrl + alt - n : app=$(yabai -m query --windows --window | jq -r '.app') && \

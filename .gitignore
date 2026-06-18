@@ -2,6 +2,9 @@
 *.tmp
 *.log
 
+# ProjectDeck build output
+scripts/projectdeck/executable_projectdeck
+
 # Ignore local shell secrets
 zshrc.secrets
 

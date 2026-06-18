@@ -44,6 +44,17 @@ show_managed_file_summary() {
     fi
 }
 
+build_projectdeck() {
+    local build_script="$DOTFILES_DIR/scripts/build-projectdeck.sh"
+
+    [[ "$(uname -s)" == "Darwin" ]] || return 0
+    [[ -x "$build_script" ]] || return 0
+
+    echo "[dotfiles] building projectdeck..."
+    PROJECTDECK_INSTALL_PATH="$CHEZMOI_DESTINATION/.config/yabai/projectdeck" \
+        "$build_script"
+}
+
 echo "[dotfiles] repository:  $DOTFILES_DIR"
 echo "[dotfiles] source:      $CHEZMOI_SOURCE_ROOT"
 echo "[dotfiles] destination: $CHEZMOI_DESTINATION"
@@ -60,6 +71,7 @@ fi
 if [[ "$is_dry_run" == true ]]; then
     echo "[dotfiles] dry run complete; no files were changed."
 else
+    build_projectdeck
     echo "[dotfiles] pending changes after apply:"
     show_status
     show_managed_file_summary

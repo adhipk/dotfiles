@@ -1,4 +1,4 @@
-.PHONY: test test-colorscheme test-configs test-source-state test-install test-integration install apply apply-debug compile sync diff watch reload clean help
+.PHONY: test test-colorscheme test-configs test-projects test-source-state test-install test-integration install apply apply-debug compile sync diff watch reload clean help build-projectdeck
 
 # Default target
 help:
@@ -11,13 +11,14 @@ help:
 	@echo "  make test-source-state - Run chezmoi source-state tests only"
 	@echo "  make test-install      - Run disposable installer tests only"
 	@echo "  make test-integration  - Run integration tests only"
-	@echo "  make install           - Apply dotfiles with chezmoi"
+	@echo "  make install           - Apply dotfiles with chezmoi and build ProjectDeck"
 	@echo "  make apply             - Alias for install"
 	@echo "  make apply-debug       - Apply dotfiles with verbose chezmoi output"
 	@echo "  make compile           - Alias for install"
 	@echo "  make sync              - Alias for install"
 	@echo "  make diff              - Preview chezmoi changes"
 	@echo "  make watch             - Auto-apply source-state changes"
+	@echo "  make build-projectdeck - Build the ProjectDeck picker binary"
 	@echo "  make reload            - Reload configurations"
 	@echo "  make clean             - Clean up temporary files"
 
@@ -31,6 +32,9 @@ test-colorscheme:
 
 test-configs:
 	@./tests/test_configs.sh
+
+test-projects:
+	@./tests/test_projects.sh
 
 test-source-state:
 	@./tests/test_source_state.sh
@@ -55,6 +59,9 @@ sync: install
 # Preview dotfile changes
 diff:
 	@chezmoi -S "$(CURDIR)" diff
+
+build-projectdeck:
+	@./scripts/build-projectdeck.sh
 
 # Watch for changes and auto-sync (macOS: requires fswatch)
 watch:

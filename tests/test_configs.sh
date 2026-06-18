@@ -103,6 +103,7 @@ if jq -e '
         .type == "basic"
         and .from.key_code == "caps_lock"
         and .to[0].key_code == "left_control"
+        and .to[0].lazy == true
         and .to[0].modifiers == ["left_option", "left_command"]
         and .to_if_alone[0].key_code == "caps_lock"
     )
@@ -130,10 +131,18 @@ assert_contains "$SKHDRC" "shift + alt - tab.*focus" "Shift+alt+tab cycles windo
 # Test space management shortcuts
 assert_contains "$SKHDRC" "ctrl + alt - f.*float-prefs toggle" "Float toggle remembers preferences"
 assert_contains "$SKHDRC" "alt - k.*close_empty_spaces.sh" "Alt+k closes empty spaces"
-assert_contains "$SKHDRC" "pin_mode @.*notify.sh.*Pin Mode" "Pin mode shows entry notification"
-assert_contains "$SKHDRC" "pin_mode < 1.*bookmarks set 1" "Pin mode sets bookmark slot 1"
-assert_contains "$SKHDRC" "unpin_mode < 1.*bookmarks clear 1" "Unpin mode clears bookmark slot 1"
-assert_contains "$SKHDRC" "alt + shift - 1.*bookmarks jump 1" "Alt+shift+1 jumps to bookmark 1"
+assert_contains "$SKHDRC" "space_slot_mode @.*Space Shortcut" "Space shortcut mode shows entry notification"
+assert_contains "$SKHDRC" "space_slot_mode < 1.*projects set-space-slot 1" "Alt+Shift+= sets space shortcut 1"
+assert_contains "$SKHDRC" "alt + shift - 1.*projects focus-space 1" "Alt+Shift+1 focuses project space slot 1"
+assert_contains "$SKHDRC" "alt + shift - h.*projects cycle prev" "Alt+Shift+h cycles project spaces"
+assert_contains "$SKHDRC" "alt + shift - k.*projects cycle next" "Alt+Shift+k cycles project spaces"
+assert_contains "$SKHDRC" "ctrl + alt + cmd - p.*projects pick" "Hyper+p opens project hub"
+assert_contains "$SKHDRC" "ctrl + alt + cmd - n.*projects new" "Hyper+n quick-creates project"
+assert_contains "$SKHDRC" "ctrl + alt + cmd - e.*projects pick" "Hyper+e opens project hub"
+assert_contains "$SKHDRC" "ctrl + alt + cmd - 1.*projects focus-project 1" "Hyper+1 focuses project slot 1"
+assert_contains "$SKHDRC" "ctrl + alt + cmd + shift - 1.*projects adopt --project-slot 1" "Hyper+Shift+1 adopts into project slot 1"
+assert_contains "$SKHDRC" "ctrl + alt + cmd + shift - 0x33.*projects detach" "Hyper+Shift+Backspace detaches current space"
+assert_not_contains "$SKHDRC" "ctrl + alt + shift - 1.*window --space 1" "Mission Control index moves removed"
 assert_contains "$SKHDRC" "alt - 1.*hotkeys app-focus 1.*@browser" "Alt+1 browser focus goes through hotkeys"
 assert_contains "$SKHDRC" "alt - 2.*hotkeys app-focus 2.*@editor" "Alt+2 editor focus goes through zen gate"
 assert_contains "$SKHDRC" "alt - 3.*hotkeys app-focus 3.*Microsoft Teams" "Alt+3 Teams focus goes through zen gate"
@@ -174,6 +183,7 @@ assert_not_contains "$YABAIRC" "cleanup_marks.sh" "No cleanup mark signal remain
 
 # Floating window preferences are replayed on startup.
 assert_contains "$YABAIRC" 'float-prefs" apply-rules' "yabairc restores floating window preferences"
+assert_contains "$YABAIRC" 'projects record-focus' "yabairc tracks project last_space on focus"
 assert_not_contains "$YABAIRC" 'float-prefs apply-window' "yabairc does not use float signal handlers"
 
 # Test common window rules exist

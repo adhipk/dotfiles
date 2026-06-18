@@ -94,6 +94,7 @@ for file in \
     executable_hotkeys \
     executable_scratchpads \
     symlink_default-apps.tmpl \
+    executable_projects \
     executable_tmux-session-picker \
     executable_tmux-sessionizer-zoxide \
     executable_unescape-buffer \
@@ -105,7 +106,7 @@ echo ""
 echo "Testing scratchpad implementation..."
 assert_not_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" 'SCRATCHPAD_STATE_FILE' "Scratchpads CLI does not use a JSON registry"
 assert_not_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" 'scratchpads\.json' "Scratchpads CLI does not persist window IDs"
-assert_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_focus_app.sh" 'scratchpad // ""' "App focus helper excludes scratchpad windows"
+assert_file_exists "$DOTFILES_DIR/home/dot_config/yabai/executable_projects" "projects CLI is declared"
 assert_not_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" 'SPOTLIGHT_SHELL' "Scratchpads CLI does not load hyperspace shell"
 assert_file_exists "$DOTFILES_DIR/home/dot_config/skhd/modules/hyperspace/executable_spotlight-zsh" "Hyperspace module keeps spotlight shell wrapper"
 assert_file_exists "$DOTFILES_DIR/home/dot_config/skhd/modules/hyperspace/dot_zshrc" "Hyperspace module keeps spotlight zshrc"

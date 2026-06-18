@@ -11,7 +11,9 @@ These commands are installed into `~/bin`, which `home/dot_zshrc` adds to
 
 | Command | Purpose | Source |
 | --- | --- | --- |
-| `bookmarks` | Pin, clear, jump to, list, or show yabai space bookmarks in slots `1` through `5`. | [`home/bin/executable_bookmarks`](home/bin/executable_bookmarks) |
+| `projects` | Interactive project hub, create/switch/adopt spaces. | [`home/bin/executable_projects`](home/bin/executable_projects) |
+| `projects-pick` | Same as `projects pick` (Hyper+p). | [`home/bin/executable_projects-pick`](home/bin/executable_projects-pick) |
+| `bookmarks` | Legacy space bookmarks (superseded by `projects`). | [`home/bin/executable_bookmarks`](home/bin/executable_bookmarks) |
 | `default-apps` | Inspect and change macOS default handlers for file extensions and URL schemes. | [`scripts/default-apps.sh`](scripts/default-apps.sh) |
 | `kit` | Speak text with KittenTTS, either from arguments or stdin, and optionally write WAV output. | [`home/bin/executable_kit`](home/bin/executable_kit) |
 | `kit-watch` | Watch a text file with `fswatch` and read its contents with `kit` whenever it changes. | [`home/bin/executable_kit-watch`](home/bin/executable_kit-watch) |
@@ -170,10 +172,13 @@ Installed below `~/.config/yabai/`:
 
 | Helper | Purpose |
 | --- | --- |
-| [`bookmarks`](home/dot_config/yabai/executable_bookmarks) | Manage pinned yabai spaces: `set`, `clear`, `jump`, `list`, and `show` for slots `1` through `5`. |
+| [`projectdeck`](scripts/projectdeck/ProjectDeck.swift) | SwiftUI floating project picker. Built to `~/.config/yabai/projectdeck` on `make install`. |
+| [`projects`](home/dot_config/yabai/executable_projects) | Project store and actions (`pick`, `new`, `adopt`, `focus-project`, `focus-space`, `cycle`, etc.). |
+| [`bookmarks`](home/dot_config/yabai/executable_bookmarks) | Legacy pinned spaces (superseded by `projects`). |
 | [`float-prefs`](home/dot_config/yabai/executable_float-prefs) | Toggle float for the focused window and remember it per app/title via yabai `manage=off` rules. |
 | [`close_empty_spaces.sh`](home/dot_config/yabai/executable_close_empty_spaces.sh) | Destroy empty yabai spaces while retaining at least one space. |
 
+Projects are stored at `~/.config/yabai/projects.json`.
 Bookmarks are stored at `~/.config/yabai/space-bookmarks.json`.
 Floating window preferences are stored at `~/.config/yabai/floating-windows.json`.
 
@@ -192,12 +197,18 @@ operations to these shortcuts:
 | `Ctrl+Alt+s`, `Ctrl+Alt+b`, `Ctrl+Alt+o`, `Ctrl+Alt+x/y` | Toggle split, balance, rotate, or mirror the layout. |
 | `Ctrl+Alt+f`, `Ctrl+Alt+d`, `Ctrl+Alt+g` | Toggle remembered float (per app/title), stack west, or toggle BSP/stack layout. |
 | `Alt+Cmd+[`, `Alt+Cmd+]`, `Alt+Cmd+Left/Right` | Move the current window between displays. |
-| `Alt+Shift+=`, then `1..5` | Pin the current space to a bookmark slot. |
-| `Alt+Shift+-`, then `1..5` | Clear a bookmark slot. |
-| `Alt+Shift+1..5` | Jump to a bookmarked space. |
-| `Alt+Shift+/` | Show bookmarked spaces. |
-| `Alt+Shift+h/k` | Focus the previous or next space. |
-| `Ctrl+Alt+Shift+1..5` | Move the current window to a numbered space. |
+| `Hyper+p` / `Hyper+e` | ProjectDeck floating picker (switch, create, adopt, spaces, detach, delete). |
+| `Hyper+n` | Quick create project via ProjectDeck. |
+| `Hyper+1..5` | Focus project shortcut → last-used space in that project. |
+| `Hyper+Shift+1..5` | Adopt current space into project shortcut (slot must already be assigned). |
+| `Hyper+a` | Adopt current space into the last-focused project. |
+| `Hyper+Shift+Backspace` | Detach current space from its project (no confirm). |
+| `Hyper+[` / `Hyper+]` | Cycle prev/next space in the project context. |
+| `Alt+Shift+=`, then `1..9` | Manually remap a space shortcut (optional). |
+| `Alt+Shift+-`, then `1..9` | Clear a space shortcut in the project context. |
+| `Alt+Shift+1..9` | Jump to a space shortcut in the project context. |
+| `Alt+Shift+h` / `Alt+Shift+k` | Cycle prev/next within the project context. |
+| `Alt+Shift+/` | Show project notification summary (`projects show`). |
 | `Ctrl+Alt+n` | Move the current window to a new labeled space. |
 | `Alt+n` | Create and focus a new space. |
 | `Alt+k` | Close empty spaces. |
