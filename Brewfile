@@ -19,6 +19,7 @@ brew "yq"
 brew "zoxide"
 brew "fzf"
 brew "terminal-notifier"
+brew "tree-sitter"
 
 cask "ghostty"
 cask "karabiner-elements"
