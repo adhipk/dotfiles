@@ -78,11 +78,18 @@ for file in \
     dot_config/starship.toml \
     dot_config/yazi/init.lua \
     dot_config/yazi/keymap.toml \
+    dot_config/yazi/package.toml \
     dot_config/symlink_nvim.tmpl; do
     assert_file_exists "$DOTFILES_DIR/home/$file" "$file is declared"
 done
 assert_contains "$DOTFILES_DIR/home/dot_config/symlink_nvim.tmpl" '\.chezmoi\.sourceDir }}/../nvim' "Neovim config links to the repository checkout"
 assert_file_exists "$DOTFILES_DIR/nvim/init.lua" "Neovim config is stored in the repository"
+assert_contains "$DOTFILES_DIR/Brewfile" 'brew "clipboard"' "Clipboard CLI is declared in Brewfile"
+assert_contains "$DOTFILES_DIR/Brewfile" 'brew "gh"' "GitHub CLI is declared in Brewfile"
+assert_contains "$DOTFILES_DIR/Brewfile" 'brew "yq"' "yq is declared in Brewfile"
+assert_contains "$DOTFILES_DIR/home/dot_config/yazi/package.toml" "orhnk/system-clipboard" "Yazi system clipboard plugin is declared"
+assert_contains "$DOTFILES_DIR/home/dot_config/yazi/keymap.toml" "plugin system-clipboard" "Yazi system clipboard keymap is declared"
+assert_contains "$DOTFILES_DIR/home/dot_config/zsh/zshrc.commands" "svg-png()" "svg-png shell helper is declared"
 
 echo ""
 echo "Testing managed helper commands..."
@@ -90,6 +97,8 @@ for file in \
     executable_watch-sync \
     executable_ghostty-startup-bench \
     executable_lucide-icons-excalidraw.tmpl \
+    executable_gh-create-repo \
+    executable_man-me \
     executable_reload-colors \
     executable_hotkeys \
     executable_scratchpads \
@@ -101,12 +110,20 @@ for file in \
     executable_unescape-string; do
     assert_file_exists "$DOTFILES_DIR/home/bin/$file" "$file is declared"
 done
+assert_contains "$DOTFILES_DIR/home/bin/executable_man-me" "parse_metadata_file" "man-me parses source metadata comments"
+assert_contains "$DOTFILES_DIR/home/bin/executable_man-me" "SEARCH_QUERY" "man-me supports free-text query matching"
+assert_contains "$DOTFILES_DIR/home/bin/executable_man-me" "rg -iq" "man-me uses ripgrep for matching when available"
+assert_contains "$DOTFILES_DIR/home/bin/executable_hotkeys" "man-me: tags=.*hotkeys" "hotkeys command carries man-me search tags"
+assert_contains "$DOTFILES_DIR/home/dot_skhdrc" "man-me: name=skhdrc" "skhdrc carries man-me metadata"
 
 echo ""
 echo "Testing scratchpad implementation..."
 assert_not_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" 'SCRATCHPAD_STATE_FILE' "Scratchpads CLI does not use a JSON registry"
 assert_not_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" 'scratchpads\.json' "Scratchpads CLI does not persist window IDs"
 assert_file_exists "$DOTFILES_DIR/home/dot_config/yabai/executable_projects" "projects CLI is declared"
+assert_file_exists "$DOTFILES_DIR/home/dot_config/yabai/executable_tile-pip-window" "PiP tiling helper is declared"
+assert_contains "$DOTFILES_DIR/home/dot_config/yabai/executable_tile-pip-window" "toggle float" "PiP tiling helper inserts PiP into the tree"
+assert_contains "$DOTFILES_DIR/home/dot_config/yabai/executable_tile-pip-window" "YABAI_WINDOW_ID" "PiP tiling helper accepts yabai signal window IDs"
 assert_not_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" 'SPOTLIGHT_SHELL' "Scratchpads CLI does not load hyperspace shell"
 assert_file_exists "$DOTFILES_DIR/home/dot_config/skhd/modules/hyperspace/executable_spotlight-zsh" "Hyperspace module keeps spotlight shell wrapper"
 assert_file_exists "$DOTFILES_DIR/home/dot_config/skhd/modules/hyperspace/dot_zshrc" "Hyperspace module keeps spotlight zshrc"
@@ -126,6 +143,7 @@ assert_contains "$DOTFILES_DIR/home/.chezmoiexternal.toml.tmpl" "externalProject
 assert_file_exists "$DOTFILES_DIR/home/.chezmoiscripts/run_onchange_after_install-vscode-extensions.sh.tmpl" "VS Code install hook exists"
 assert_file_exists "$DOTFILES_DIR/home/.chezmoiscripts/run_after_sync-chrome-extensions.sh.tmpl" "Chrome build hook exists"
 assert_file_exists "$DOTFILES_DIR/home/.chezmoiscripts/run_after_sync-external-projects.sh.tmpl" "External project setup hook exists"
+assert_file_exists "$DOTFILES_DIR/home/.chezmoiscripts/run_after_sync-yazi-packages.sh.tmpl" "Yazi package sync hook exists"
 
 echo ""
 echo "Testing chezmoi parsing..."

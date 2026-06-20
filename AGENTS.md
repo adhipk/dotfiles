@@ -1,5 +1,6 @@
 # Agent Notes
-
+## Primary Role
+Your job is to maintain my dotfile configurations, this includes keyboard shortcuts, display management, any utils or specific command bins, installed packages, etc. After implementing any feature, make sure that the setup and boootstrap processes reflect the changes.
 ## Projects (primary UX)
 - Hold `caps lock` for Hyper (`ctrl + opt + cmd`).
 - **`Hyper+p`** or **`Hyper+e`** — **ProjectDeck** floating picker (blurred HUD panel, search, keyboard nav; spaces submenu supports detach and delete).

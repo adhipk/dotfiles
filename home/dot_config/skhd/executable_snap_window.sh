@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# man-me: name=snap_window.sh
+# man-me: category=Desktop Helper Paths
+# man-me: usage=~/.config/skhd/snap_window.sh left/right
+# man-me: description=Resize the focused window to the left or right half of the display.
+# man-me: tags=hotkeys hotkey keyboard shortcut skhd yabai window resize snap
 set -euo pipefail
 
 direction=$1

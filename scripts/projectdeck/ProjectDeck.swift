@@ -1,3 +1,8 @@
+// man-me: name=projectdeck
+// man-me: category=Project Spaces
+// man-me: usage=Hyper+p or projects pick
+// man-me: description=Floating SwiftUI project picker built during install.
+// man-me: tags=project projects projectdeck picker hyper hotkeys skhd yabai swiftui
 import AppKit
 import Combine
 import SwiftUI

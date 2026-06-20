@@ -1,0 +1,614 @@
+#!/usr/bin/env bash
+# man-me: name=man-me
+# man-me: category=Development and Repo
+# man-me: usage=man-me [QUERY] [--installed|--source DIR] [--category NAME] [--all]
+# man-me: description=Generate a categorized personal command reference from source metadata comments.
+# man-me: tags=manual docs commands bins utilities rg fuzzy search
+set -euo pipefail
+
+MODE="auto"
+SOURCE_DIR="${DOTFILES_DIR:-}"
+CATEGORY_FILTER=""
+SEARCH_QUERY=""
+SHOW_ALL=0
+
+usage() {
+  cat <<'EOF'
+Usage:
+  man-me [QUERY] [--installed|--source [DIR]] [--category NAME] [--all]
+
+Print a categorized reference for personal commands, bins, shell functions, and
+desktop helper utilities.
+
+Examples:
+  man-me hotkeys
+  man-me tmux
+  man-me --category "Project Spaces"
+  man-me --source "$PWD" hotkeys
+
+Options:
+  --installed        Read installed paths from $HOME.
+  --source [DIR]     Read the chezmoi source tree. DIR defaults to the current
+                     checkout, DOTFILES_DIR, or "chezmoi source-path".
+  --category NAME    Only print categories matching NAME.
+  --all              Include catalog entries whose backing file is not present.
+  -h, --help         Show this help.
+EOF
+}
+
+detect_source_dir() {
+  if [[ -n "$SOURCE_DIR" && -f "$SOURCE_DIR/.chezmoiroot" ]]; then
+    printf '%s\n' "$SOURCE_DIR"
+    return 0
+  fi
+
+  if [[ -f ".chezmoiroot" && -d "home" ]]; then
+    pwd
+    return 0
+  fi
+
+  if command -v chezmoi >/dev/null 2>&1; then
+    local source_path
+    source_path="$(chezmoi source-path 2>/dev/null || true)"
+    if [[ -n "$source_path" && -f "$source_path/.chezmoiroot" ]]; then
+      printf '%s\n' "$source_path"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+append_query() {
+  SEARCH_QUERY="${SEARCH_QUERY:+$SEARCH_QUERY }$1"
+}
+
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --installed)
+      MODE="installed"
+      shift
+      ;;
+    --source)
+      MODE="source"
+      if [[ "${2:-}" != "" && "${2:-}" != --* ]]; then
+        SOURCE_DIR="$2"
+        shift 2
+      else
+        shift
+      fi
+      ;;
+    --source=*)
+      MODE="source"
+      SOURCE_DIR="${1#*=}"
+      shift
+      ;;
+    --category)
+      if [[ -z "${2:-}" ]]; then
+        echo "man-me: --category requires a value" >&2
+        exit 2
+      fi
+      CATEGORY_FILTER="$2"
+      shift 2
+      ;;
+    --category=*)
+      CATEGORY_FILTER="${1#*=}"
+      shift
+      ;;
+    --all)
+      SHOW_ALL=1
+      shift
+      ;;
+    --)
+      shift
+      while [[ "$#" -gt 0 ]]; do
+        append_query "$1"
+        shift
+      done
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    -*)
+      echo "man-me: unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+    *)
+      append_query "$1"
+      shift
+      ;;
+  esac
+done
+
+if [[ "$MODE" == "auto" ]]; then
+  if [[ -f ".chezmoiroot" && -d "home/bin" ]]; then
+    MODE="source"
+  else
+    MODE="installed"
+  fi
+fi
+
+if SOURCE_DIR="$(detect_source_dir)"; then
+  :
+else
+  SOURCE_DIR=""
+fi
+
+if [[ "$MODE" == "source" && -z "$SOURCE_DIR" ]]; then
+  echo "man-me: could not find a chezmoi source tree; pass --source DIR" >&2
+  exit 1
+fi
+
+shorten_home() {
+  local path="$1"
+
+  case "$path" in
+    "$HOME"/*)
+      printf '~/%s' "${path#"$HOME"/}"
+      ;;
+    *)
+      printf '%s' "$path"
+      ;;
+  esac
+}
+
+source_name() {
+  local base="$1"
+  base="${base##*/}"
+  base="${base%.tmpl}"
+
+  case "$base" in
+    executable_*)
+      printf '%s' "${base#executable_}"
+      ;;
+    symlink_*)
+      printf '%s' "${base#symlink_}"
+      ;;
+    dot_*)
+      printf '.%s' "${base#dot_}"
+      ;;
+    *)
+      printf '%s' "$base"
+      ;;
+  esac
+}
+
+installed_path_for_source() {
+  local source_path="$1"
+  local rest dir base name
+
+  if [[ "$source_path" == /* ]]; then
+    printf '%s' "$source_path"
+    return 0
+  fi
+
+  case "$source_path" in
+    home/bin/executable_*)
+      name="$(source_name "$source_path")"
+      printf '%s/bin/%s' "$HOME" "$name"
+      ;;
+    home/bin/symlink_*)
+      name="$(source_name "$source_path")"
+      printf '%s/bin/%s' "$HOME" "$name"
+      ;;
+    home/dot_config/*/executable_*)
+      rest="${source_path#home/dot_config/}"
+      dir="${rest%%/*}"
+      base="${rest##*/}"
+      name="$(source_name "$base")"
+      printf '%s/.config/%s/%s' "$HOME" "$dir" "$name"
+      ;;
+    home/dot_config/private_karabiner/karabiner.json)
+      printf '%s/.config/karabiner/karabiner.json' "$HOME"
+      ;;
+    home/dot_config/*)
+      printf '%s/.config/%s' "$HOME" "${source_path#home/dot_config/}"
+      ;;
+    home/dot_skhdrc)
+      printf '%s/.skhdrc' "$HOME"
+      ;;
+    home/dot_yabairc)
+      printf '%s/.yabairc' "$HOME"
+      ;;
+    home/dot_tmux.conf)
+      printf '%s/.tmux.conf' "$HOME"
+      ;;
+    home/dot_zshrc)
+      printf '%s/.zshrc' "$HOME"
+      ;;
+    scripts/projectdeck/ProjectDeck.swift)
+      printf '%s/.config/yabai/projectdeck' "$HOME"
+      ;;
+    scripts/default-apps.sh)
+      printf '%s/bin/default-apps' "$HOME"
+      ;;
+    commands/*|bootstrap.sh|install.sh|Makefile|scripts/*)
+      if [[ -n "$SOURCE_DIR" ]]; then
+        printf '%s/%s' "$SOURCE_DIR" "$source_path"
+      fi
+      ;;
+    *)
+      if [[ -n "$SOURCE_DIR" ]]; then
+        printf '%s/%s' "$SOURCE_DIR" "$source_path"
+      fi
+      ;;
+  esac
+}
+
+mode_path_for_source() {
+  local source_path="$1"
+
+  if [[ "$MODE" == "source" ]]; then
+    printf '%s/%s' "$SOURCE_DIR" "$source_path"
+  else
+    installed_path_for_source "$source_path"
+  fi
+}
+
+display_path_for_source() {
+  local source_path="$1"
+  local path
+
+  if [[ "$MODE" == "source" ]]; then
+    printf '%s' "$source_path"
+  else
+    path="$(mode_path_for_source "$source_path")"
+    [[ -n "$path" ]] && shorten_home "$path"
+  fi
+}
+
+trim() {
+  local value="$1"
+
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+normalize() {
+  printf '%s' "$1" | tr '[:upper:] ' '[:lower:]-' | tr -cd '[:alnum:]-'
+}
+
+text_matches() {
+  local needle="$1"
+  local haystack="$2"
+
+  [[ -z "$needle" ]] && return 0
+  if command -v rg >/dev/null 2>&1; then
+    printf '%s\n' "$haystack" | rg -iq --fixed-strings -- "$needle"
+  elif command -v fzf >/dev/null 2>&1; then
+    printf '%s\n' "$haystack" | fzf --filter="$needle" >/dev/null 2>&1 && return 0
+  else
+    [[ "$(normalize "$haystack")" == *"$(normalize "$needle")"* ]]
+  fi
+}
+
+category_matches() {
+  local category="$1"
+
+  [[ -z "$CATEGORY_FILTER" ]] && return 0
+  text_matches "$CATEGORY_FILTER" "$category"
+}
+
+query_matches() {
+  local haystack="$1"
+  local term
+
+  [[ -z "$SEARCH_QUERY" ]] && return 0
+  for term in $SEARCH_QUERY; do
+    text_matches "$term" "$haystack" || return 1
+  done
+}
+
+PRINTED_PATHS=""
+PRINTED_ITEMS=""
+
+mark_printed() {
+  local item="$1"
+  local path="$2"
+
+  PRINTED_ITEMS="${PRINTED_ITEMS}${item}"$'\n'
+  [[ -n "$path" ]] && PRINTED_PATHS="${PRINTED_PATHS}${path}"$'\n'
+}
+
+was_printed_item() {
+  local item="$1"
+  grep -Fx -- "$item" <<<"$PRINTED_ITEMS" >/dev/null 2>&1
+}
+
+was_printed_path() {
+  local path="$1"
+  [[ -n "$path" ]] && grep -Fx -- "$path" <<<"$PRINTED_PATHS" >/dev/null 2>&1
+}
+
+current_category=""
+
+print_category() {
+  local category="$1"
+
+  if [[ "$current_category" != "$category" ]]; then
+    printf '\n%s\n' "$category"
+    current_category="$category"
+  fi
+}
+
+print_entry() {
+  local category="$1"
+  local name="$2"
+  local source_path="$3"
+  local use_text="$4"
+  local description="$5"
+  local tags="${6:-}"
+  local actual_path display_path haystack missing=""
+
+  category_matches "$category" || return 0
+
+  actual_path="$(mode_path_for_source "$source_path")"
+  display_path="$(display_path_for_source "$source_path")"
+  haystack="$category $name $source_path $display_path $use_text $description $tags"
+  query_matches "$haystack" || return 0
+
+  if [[ -z "$actual_path" || ! -e "$actual_path" ]]; then
+    [[ "$SHOW_ALL" -eq 1 ]] || return 0
+    missing=" (missing)"
+  fi
+
+  print_category "$category"
+  printf '  %s\n' "$name"
+  printf '    use: %s\n' "$use_text"
+  printf '    does: %s\n' "$description"
+  if [[ -n "$display_path" ]]; then
+    printf '    path: %s%s\n' "$display_path" "$missing"
+  fi
+  mark_printed "$name" "$actual_path"
+}
+
+metadata_files() {
+  if [[ -n "$SOURCE_DIR" && -d "$SOURCE_DIR" ]]; then
+    if command -v rg >/dev/null 2>&1; then
+      rg -l --fixed-strings 'man-me:' "$SOURCE_DIR" 2>/dev/null | sort
+    else
+      find "$SOURCE_DIR" -type f -print | while IFS= read -r file; do
+        grep -q 'man-me:' "$file" 2>/dev/null && printf '%s\n' "$file"
+      done | sort
+    fi
+    return 0
+  fi
+
+  for path in \
+    "$HOME/bin" \
+    "$HOME/.config/skhd" \
+    "$HOME/.config/yabai" \
+    "$HOME/.config/zsh" \
+    "$HOME/.zshrc" \
+    "$HOME/.skhdrc" \
+    "$HOME/.yabairc"; do
+    [[ -e "$path" ]] || continue
+    if [[ -d "$path" ]]; then
+      find "$path" -type f -print
+    else
+      printf '%s\n' "$path"
+    fi
+  done | while IFS= read -r file; do
+    grep -q 'man-me:' "$file" 2>/dev/null && printf '%s\n' "$file"
+  done | sort
+}
+
+metadata_source_path_for_file() {
+  local file="$1"
+
+  if [[ -n "$SOURCE_DIR" && "$file" == "$SOURCE_DIR"/* ]]; then
+    printf '%s' "${file#"$SOURCE_DIR"/}"
+  else
+    printf '%s' "$file"
+  fi
+}
+
+emit_metadata_entry() {
+  local source_path="$1"
+  local name="$2"
+  local category="$3"
+  local use_text="$4"
+  local description="$5"
+  local tags="$6"
+  local entry_source_path="${7:-}"
+
+  [[ -n "$name$category$use_text$description$tags" ]] || return 0
+  [[ -n "$entry_source_path" ]] || entry_source_path="$source_path"
+
+  [[ -n "$name" ]] || name="$(source_name "$entry_source_path")"
+  [[ -n "$category" ]] || category="Other"
+  [[ -n "$use_text" ]] || use_text="$name --help (when supported)"
+  [[ -n "$description" ]] || description="Personal command or helper documented in source metadata."
+
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$category" "$name" "$entry_source_path" "$use_text" "$description" "$tags"
+}
+
+parse_metadata_file() {
+  local file="$1"
+  local source_path="$2"
+  local line stripped meta key value
+  local seen=0 name="" category="" use_text="" description="" tags=""
+  local entry_source_path=""
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    stripped="$(trim "$line")"
+    case "$stripped" in
+      "# man-me:"*|"#man-me:"*|"// man-me:"*|"//man-me:"*) ;;
+      *) continue ;;
+    esac
+
+    meta="${stripped#*man-me:}"
+    meta="$(trim "$meta")"
+    [[ "$meta" == *=* ]] || continue
+    key="$(trim "${meta%%=*}")"
+    value="$(trim "${meta#*=}")"
+
+    if [[ "$key" == "name" && "$seen" -eq 1 ]]; then
+      emit_metadata_entry "$source_path" "$name" "$category" "$use_text" "$description" "$tags" "$entry_source_path"
+      name=""
+      category=""
+      use_text=""
+      description=""
+      tags=""
+      entry_source_path=""
+    fi
+
+    seen=1
+    case "$key" in
+      name) name="$value" ;;
+      category) category="$value" ;;
+      use|usage) use_text="$value" ;;
+      desc|description) description="$value" ;;
+      tags) tags="${tags:+$tags }$value" ;;
+      source|path|file) entry_source_path="$value" ;;
+    esac
+  done <"$file"
+
+  if [[ "$seen" -eq 1 ]]; then
+    emit_metadata_entry "$source_path" "$name" "$category" "$use_text" "$description" "$tags" "$entry_source_path"
+  fi
+}
+
+metadata_records() {
+  local file source_path
+
+  while IFS= read -r file; do
+    source_path="$(metadata_source_path_for_file "$file")"
+    parse_metadata_file "$file" "$source_path"
+  done < <(metadata_files)
+}
+
+print_metadata_entries() {
+  local category name source_path use_text description tags
+
+  while IFS=$'\t' read -r category name source_path use_text description tags; do
+    [[ -n "$category" ]] || continue
+    print_entry "$category" "$name" "$source_path" "$use_text" "$description" "$tags"
+  done < <(metadata_records | sort -t $'\t' -k1,1 -k2,2)
+}
+
+print_discovered() {
+  local category="$1"
+  local name="$2"
+  local path="$3"
+  local display="$4"
+  local haystack
+
+  category_matches "$category" || return 0
+  haystack="$category $name $path $display"
+  query_matches "$haystack" || return 0
+  was_printed_item "$name" && return 0
+  was_printed_path "$path" && return 0
+
+  print_category "$category"
+  printf '  %s\n' "$name"
+  printf '    use: %s --help (when supported)\n' "$name"
+  printf '    does: Discovered personal command or helper that is not yet in the curated catalog.\n'
+  printf '    path: %s\n' "$display"
+  mark_printed "$name" "$path"
+}
+
+discover_source_bins() {
+  local dir="$SOURCE_DIR/home/bin"
+  local path rel name
+
+  [[ -d "$dir" ]] || return 0
+  while IFS= read -r path; do
+    rel="${path#"$SOURCE_DIR"/}"
+    name="$(source_name "$rel")"
+    print_discovered "Other Source Bins" "$name" "$path" "$rel"
+  done < <(find "$dir" -maxdepth 1 \( -name 'executable_*' -o -name 'symlink_*' \) -type f -print | sort)
+}
+
+discover_source_helpers() {
+  local root rel path name category
+
+  for root in "$SOURCE_DIR/home/dot_config/skhd" "$SOURCE_DIR/home/dot_config/yabai"; do
+    [[ -d "$root" ]] || continue
+    while IFS= read -r path; do
+      rel="${path#"$SOURCE_DIR"/}"
+      name="$(source_name "$rel")"
+      case "$rel" in
+        home/dot_config/skhd/*) category="Other skhd Helpers" ;;
+        home/dot_config/yabai/*) category="Other yabai Helpers" ;;
+        *) category="Other Desktop Helpers" ;;
+      esac
+      print_discovered "$category" "$name" "$path" "$rel"
+    done < <(find "$root" -maxdepth 1 -name 'executable_*' -type f -print | sort)
+  done
+}
+
+discover_installed_bins() {
+  local dir="$HOME/bin"
+  local path name
+
+  [[ -d "$dir" ]] || return 0
+  while IFS= read -r path; do
+    [[ -x "$path" ]] || continue
+    name="${path##*/}"
+    print_discovered "Other Installed Bins" "$name" "$path" "$(shorten_home "$path")"
+  done < <(find "$dir" -maxdepth 1 \( -type f -o -type l \) -print | sort)
+}
+
+discover_installed_helpers() {
+  local root path name category
+
+  for root in "$HOME/.config/skhd" "$HOME/.config/yabai"; do
+    [[ -d "$root" ]] || continue
+    while IFS= read -r path; do
+      [[ -x "$path" ]] || continue
+      name="${path##*/}"
+      case "$root" in
+        "$HOME/.config/skhd") category="Other skhd Helpers" ;;
+        "$HOME/.config/yabai") category="Other yabai Helpers" ;;
+        *) category="Other Desktop Helpers" ;;
+      esac
+      print_discovered "$category" "$name" "$path" "$(shorten_home "$path")"
+    done < <(find "$root" -maxdepth 1 \( -type f -o -type l \) -print | sort)
+  done
+}
+
+discover_shell_functions() {
+  local file path name
+
+  if [[ "$MODE" == "source" ]]; then
+    file="$SOURCE_DIR/home/dot_config/zsh/zshrc.commands"
+    path="$file"
+  else
+    file="$HOME/.config/zsh/zshrc.commands"
+    path="$file"
+  fi
+
+  [[ -f "$file" ]] || return 0
+  while IFS= read -r name; do
+    print_discovered "Other Shell Functions" "$name" "$path" "$(shorten_home "$path")"
+  done < <(sed -n 's/^\([A-Za-z0-9_-][A-Za-z0-9_-]*\)()[[:space:]]*{.*/\1/p' "$file" | sort)
+}
+
+printf 'Personal command reference\n'
+if [[ "$MODE" == "source" ]]; then
+  printf 'Mode: source (%s)\n' "$SOURCE_DIR"
+else
+  printf 'Mode: installed (%s)\n' "$HOME"
+fi
+if [[ -n "$SEARCH_QUERY" ]]; then
+  printf 'Query: %s\n' "$SEARCH_QUERY"
+fi
+printf 'Tip: add "# man-me:" tag comments near source commands; use queries like "man-me hotkeys".\n'
+
+print_metadata_entries
+
+if [[ "$MODE" == "source" ]]; then
+  discover_source_bins
+  discover_source_helpers
+else
+  discover_installed_bins
+  discover_installed_helpers
+fi
+discover_shell_functions
+
+printf '\n'

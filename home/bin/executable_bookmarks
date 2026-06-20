@@ -1,2 +1,7 @@
 #!/usr/bin/env bash
+# man-me: name=bookmarks
+# man-me: category=Project Spaces
+# man-me: usage=bookmarks set <slot>; bookmarks clear <slot>; bookmarks jump <slot>; bookmarks list
+# man-me: description=Legacy yabai space bookmarks, superseded by projects.
+# man-me: tags=bookmarks spaces yabai hotkeys skhd
 exec "$HOME/.config/yabai/bookmarks" "$@"

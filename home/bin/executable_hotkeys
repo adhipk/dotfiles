@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# man-me: name=hotkeys
+# man-me: category=Hotkeys and Keybindings
+# man-me: usage=hotkeys app-focus SLOT APP; hotkeys zen on|off|toggle|status; hotkeys terminal new
+# man-me: description=Shared skhd action router for app focus, zen mode, presentation mode, and terminal spawning.
+# man-me: tags=hotkeys hotkey keyboard shortcut shortcuts keybinding keybindings skhd zen presentation app-focus terminal
 
 set -euo pipefail
 

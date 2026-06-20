@@ -1,4 +1,9 @@
 #!/bin/zsh
+# man-me: name=reset-yabai
+# man-me: category=Window and Display
+# man-me: usage=reset-yabai
+# man-me: description=Reinstall and pin yabai, update its scripting-addition sudoers rule, and restart the service.
+# man-me: tags=yabai reset reinstall pin window display
 
 set -e
 

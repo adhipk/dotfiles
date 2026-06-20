@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# man-me: name=scratchpads
+# man-me: category=Window and Display
+# man-me: usage=scratchpads open quick; scratchpads close; scratchpads rules; scratchpads debug
+# man-me: description=Ghostty and yabai scratchpad manager.
+# man-me: tags=scratchpad scratchpads ghostty yabai window terminal
 
 set -euo pipefail
 

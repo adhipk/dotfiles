@@ -1,4 +1,9 @@
 #!/bin/bash
+# man-me: name=mark
+# man-me: category=Development and Repo
+# man-me: usage=commands/mark <text>
+# man-me: description=Append a quick note to ~/notes/marks.md from the repository-local command.
+# man-me: tags=notes mark command repo utility
 
 # 1. Check if an argument was actually provided
 if [ -z "$1" ]; then

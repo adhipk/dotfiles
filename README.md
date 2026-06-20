@@ -130,6 +130,8 @@ make apply
 make apply-debug
 make watch
 make reload
+man-me
+man-me hotkeys
 default-apps
 default-apps list
 default-apps get .md
@@ -138,9 +140,11 @@ default-apps set https: Safari
 default-apps --help
 ```
 
-`default-apps` prints macOS handlers and changes extension or URL-scheme
-defaults. The app argument may be an application name, application path, or
-bundle ID.
+`man-me` prints a generated, categorized reference from `man-me:` comments in
+the command and helper sources; pass a query such as `man-me hotkeys` to search
+across related commands, paths, usage, and tags. `default-apps` prints macOS
+handlers and changes extension or URL-scheme defaults. The app argument may be
+an application name, application path, or bundle ID.
 
 ## Keyboard Shortcuts
 

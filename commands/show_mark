@@ -1,4 +1,9 @@
 #!/bin/bash
+# man-me: name=show_mark
+# man-me: category=Development and Repo
+# man-me: usage=commands/show_mark
+# man-me: description=Print ~/notes/marks.md from the repository-local command.
+# man-me: tags=notes mark command repo utility
 
 # Check if the file exists before trying to read it
 if [ -f "$HOME/notes/marks.md" ]; then

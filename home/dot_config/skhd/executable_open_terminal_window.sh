@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# man-me: name=open_terminal_window.sh
+# man-me: category=Desktop Helper Paths
+# man-me: usage=~/.config/skhd/open_terminal_window.sh
+# man-me: description=Open a new terminal window on the current yabai space.
+# man-me: tags=hotkeys hotkey keyboard shortcut skhd terminal ghostty yabai
 set -euo pipefail
 
 terminal_app=${TERMINAL_APP:-Ghostty}

@@ -1,3 +1,14 @@
+# man-me: name=skhdrc
+# man-me: category=Hotkeys and Keybindings
+# man-me: usage=alt+/; Hyper+p; Hyper+n; Alt+Shift+1..9; Alt+1..4
+# man-me: description=Primary skhd keyboard shortcut map.
+# man-me: tags=hotkeys hotkey keyboard shortcut shortcuts keybinding keybindings keys skhd hyper caps lock karabiner projectdeck
+# man-me: name=hyper key
+# man-me: source=home/dot_config/private_karabiner/karabiner.json
+# man-me: category=Hotkeys and Keybindings
+# man-me: usage=hold Caps Lock for Hyper; tap Caps Lock for Caps Lock
+# man-me: description=Karabiner maps held Caps Lock to ctrl+opt+cmd for the Hyper shortcuts documented here.
+# man-me: tags=hotkeys hotkey keyboard shortcut shortcuts keybinding keybindings hyper caps lock karabiner
 # ============================================================
 # Window Management (ctrl + opt + <key>) — BSP tiling
 # Caps Lock can be held as ctrl + opt + cmd via Karabiner-Elements.

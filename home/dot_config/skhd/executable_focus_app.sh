@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# man-me: name=focus_app.sh
+# man-me: category=Desktop Helper Paths
+# man-me: usage=~/.config/skhd/focus_app.sh APP
+# man-me: description=Focus, cycle, toggle, or launch an app; @browser and @editor resolve default handlers.
+# man-me: tags=hotkeys hotkey keyboard shortcut skhd app focus browser editor ghostty
 
 PRESENTATION_MODE=false
 PRESENTATION_MODE_FILE="$HOME/.config/skhd/presentation_mode"

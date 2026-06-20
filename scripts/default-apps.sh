@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# man-me: name=default-apps
+# man-me: category=Development and Repo
+# man-me: usage=default-apps list; default-apps get .md; default-apps set .md Obsidian
+# man-me: description=Inspect and change macOS default application handlers.
+# man-me: tags=defaults macos app handlers duti development
 set -euo pipefail
 
 temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/default-apps.XXXXXX")

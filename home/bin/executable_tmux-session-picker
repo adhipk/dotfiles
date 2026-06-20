@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# man-me: name=tmux-session-picker
+# man-me: category=Terminal and Sessions
+# man-me: usage=tmux-session-picker
+# man-me: description=Switch to an existing tmux session with sesh and fzf.
+# man-me: tags=tmux terminal session sessions sesh fzf
 # Quick picker to switch between existing tmux sessions only.
 
 if ! command -v sesh >/dev/null 2>&1; then

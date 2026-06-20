@@ -1,4 +1,9 @@
 #!/bin/sh
+# man-me: name=media_key.sh
+# man-me: category=Desktop Helper Paths
+# man-me: usage=~/.config/skhd/media_key.sh ACTION
+# man-me: description=Send brightness, volume, media, Mission Control, Launchpad, or Do Not Disturb key events.
+# man-me: tags=hotkeys hotkey keyboard shortcut skhd media volume brightness
 
 set -eu
 

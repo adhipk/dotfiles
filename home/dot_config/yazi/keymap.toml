@@ -3,6 +3,11 @@ on = "!"
 run = 'shell "$SHELL" --block --confirm'
 desc = "Open a shell in the current directory"
 
+[[mgr.prepend_keymap]]
+on = "<C-y>"
+run = "plugin system-clipboard"
+desc = "Copy selected files to the system clipboard"
+
 [[input.prepend_keymap]]
 on = "<Esc>"
 run = "close"

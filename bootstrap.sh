@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# man-me: name=bootstrap.sh
+# man-me: category=Repository Setup
+# man-me: usage=./bootstrap.sh
+# man-me: description=Install Homebrew dependencies from Brewfile, then apply the dotfiles.
+# man-me: tags=bootstrap setup install homebrew brewfile chezmoi dotfiles
 set -euo pipefail
 
 DOTFILES_DIR="${DOTFILES_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
@@ -37,3 +42,4 @@ echo "Applying chezmoi source state..."
 echo ""
 echo "Next steps:"
 echo "  1. Restart yabai and skhd: alt+r"
+echo "  2. Review personal commands: man-me"

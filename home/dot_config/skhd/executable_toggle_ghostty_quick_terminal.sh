@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# man-me: name=toggle_ghostty_quick_terminal.sh
+# man-me: category=Desktop Helper Paths
+# man-me: usage=~/.config/skhd/toggle_ghostty_quick_terminal.sh
+# man-me: description=Create or toggle the bottom-third Ghostty quick terminal scratchpad.
+# man-me: tags=hotkeys hotkey keyboard shortcut skhd ghostty terminal scratchpad yabai
 set -euo pipefail
 
 scratchpad_label="quick_terminal"

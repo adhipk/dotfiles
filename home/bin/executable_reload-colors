@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# man-me: name=reload-colors
+# man-me: category=Window and Display
+# man-me: usage=reload-colors
+# man-me: description=Restart yabai and skhd, then reload tmux if it is running.
+# man-me: tags=reload colors yabai skhd tmux hotkeys
 
 # Script to reload all configurations after changing colorscheme
 # Usage: reload-colors

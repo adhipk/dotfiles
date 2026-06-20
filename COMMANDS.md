@@ -15,6 +15,8 @@ These commands are installed into `~/bin`, which `home/dot_zshrc` adds to
 | `projects-pick` | Same as `projects pick` (Hyper+p). | [`home/bin/executable_projects-pick`](home/bin/executable_projects-pick) |
 | `bookmarks` | Legacy space bookmarks (superseded by `projects`). | [`home/bin/executable_bookmarks`](home/bin/executable_bookmarks) |
 | `default-apps` | Inspect and change macOS default handlers for file extensions and URL schemes. | [`scripts/default-apps.sh`](scripts/default-apps.sh) |
+| `gh-create-repo` | Edit repository settings as YAML, then run the matching `gh repo create` command. | [`home/bin/executable_gh-create-repo`](home/bin/executable_gh-create-repo) |
+| `man-me` | Generate a categorized reference for personal commands, bins, shell functions, and desktop helpers. | [`home/bin/executable_man-me`](home/bin/executable_man-me) |
 | `kit` | Speak text with KittenTTS, either from arguments or stdin, and optionally write WAV output. | [`home/bin/executable_kit`](home/bin/executable_kit) |
 | `kit-watch` | Watch a text file with `fswatch` and read its contents with `kit` whenever it changes. | [`home/bin/executable_kit-watch`](home/bin/executable_kit-watch) |
 | `lucide-icons-excalidraw` | Start the external Raycast development command for the Lucide Excalidraw picker. Additional arguments are passed to the Raycast extension's `npm run dev`. | [`home/bin/executable_lucide-icons-excalidraw.tmpl`](home/bin/executable_lucide-icons-excalidraw.tmpl) |
@@ -47,6 +49,38 @@ default-apps --help
 
 `set` accepts an application name, an application path, or a bundle ID. It
 requires `duti`, which is installed from the `Brewfile`.
+
+### man-me
+
+```bash
+man-me
+man-me hotkeys
+man-me tmux
+man-me --category terminal
+man-me --source "$PWD"
+man-me --all
+```
+
+`man-me` prints a generated local command reference grouped by category. It
+parses `man-me:` metadata comments from the command and helper source files,
+then falls back to discovered executable names when metadata is absent.
+Positional arguments run a free-text search across command names, usage,
+descriptions, paths, and tags; `man-me hotkeys` shows the keyboard shortcut and
+skhd helper surface. It uses `rg` when available, falls back to `fzf` or shell
+matching, uses installed paths by default, switches to source mode when run from
+this checkout, and includes an `--all` option for missing catalog entries.
+
+### gh-create-repo
+
+```bash
+gh-create-repo
+```
+
+The command opens a temporary `gh-repo-create.yml` in `$VISUAL`, `$EDITOR`, or
+`nvim`. After you save and quit, it validates the YAML and runs `gh repo create`
+with the selected visibility, description, README, gitignore, license, source,
+remote, and push options. It requires `gh` and `yq`, both installed from the
+`Brewfile`.
 
 ### Text Unescaping
 

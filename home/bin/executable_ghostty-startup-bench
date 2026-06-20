@@ -1,4 +1,9 @@
 #!/usr/bin/env zsh
+# man-me: name=ghostty-startup-bench
+# man-me: category=Terminal and Sessions
+# man-me: usage=ghostty-startup-bench [iterations]
+# man-me: description=Benchmark login shell startup and Ghostty window launch timings.
+# man-me: tags=ghostty terminal benchmark startup yabai shell
 
 set -euo pipefail
 

@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# man-me: name=close_empty_spaces.sh
+# man-me: category=Window and Display
+# man-me: usage=~/.config/yabai/close_empty_spaces.sh
+# man-me: description=Destroy empty yabai spaces while keeping at least one space.
+# man-me: tags=hotkeys hotkey keyboard shortcut skhd yabai spaces display
 
 # Script to close all empty desktops/spaces
 # Usage: close_empty_spaces.sh

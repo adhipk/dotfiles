@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# man-me: name=notify.sh
+# man-me: category=Desktop Helper Paths
+# man-me: usage=~/.config/skhd/notify.sh TITLE MESSAGE
+# man-me: description=Show macOS notifications from helper scripts.
+# man-me: tags=hotkeys skhd notification terminal-notifier
 
 title="${1:-Notification}"
 message="${2:-}"

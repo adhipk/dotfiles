@@ -6,6 +6,11 @@
 #   "kittentts @ https://github.com/KittenML/KittenTTS/releases/download/0.8.1/kittentts-0.8.1-py3-none-any.whl",
 # ]
 # ///
+# man-me: name=kit
+# man-me: category=Text, Speech, and Clipboard
+# man-me: usage=kit [options] TEXT; echo TEXT into kit; kit --list-voices
+# man-me: description=Text-to-speech command using KittenTTS by default and optional Chatterbox.
+# man-me: tags=kit tts speech text audio voice chatterbox kitten
 """
 KittenTTS command-line interface - acts as a 'say' command replacement
 Usage: kit [options] <text>

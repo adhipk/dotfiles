@@ -184,6 +184,9 @@ assert_not_contains "$YABAIRC" "cleanup_marks.sh" "No cleanup mark signal remain
 # Floating window preferences are replayed on startup.
 assert_contains "$YABAIRC" 'float-prefs" apply-rules' "yabairc restores floating window preferences"
 assert_contains "$YABAIRC" 'projects record-focus' "yabairc tracks project last_space on focus"
+assert_contains "$YABAIRC" 'tile_pip_on_create.*window_created.*tile-pip-window' "yabairc tiles PiP windows when created"
+assert_contains "$YABAIRC" 'tile_pip_on_title_change.*window_title_changed.*tile-pip-window' "yabairc tiles windows that become PiP"
+assert_contains "$YABAIRC" 'tile_pip_windows.*manage=on.*sticky=off.*sub-layer=auto' "yabairc manages PiP windows"
 assert_not_contains "$YABAIRC" 'float-prefs apply-window' "yabairc does not use float signal handlers"
 
 # Test common window rules exist

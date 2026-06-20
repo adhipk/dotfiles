@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+// man-me: name=unescape-buffer
+// man-me: category=Text, Speech, and Clipboard
+// man-me: usage=printf 'line\\n' into unescape-buffer
+// man-me: description=Node.js stdin filter for escaped newlines, tabs, carriage returns, quotes, and backslashes.
+// man-me: tags=text stdin escape unescape node clipboard
 
 // unescape-buffer.js
 // Reads from stdin, unescapes string literals, writes to stdout

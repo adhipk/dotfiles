@@ -1,4 +1,9 @@
 # Minimal zsh configuration
+# man-me: name=y
+# man-me: category=Terminal and Sessions
+# man-me: usage=y [ARG ...]
+# man-me: description=Run Yazi and cd the parent shell to Yazi's final directory.
+# man-me: tags=yazi shell terminal cd file-manager
 export PATH="$HOME/.local/bin:$PATH"
 export PATH="/opt/homebrew/opt/openjdk/bin:$PATH"
 export EDITOR=nvim

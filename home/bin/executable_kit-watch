@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# man-me: name=kit-watch
+# man-me: category=Text, Speech, and Clipboard
+# man-me: usage=kit-watch [--tail] [--no-initial] FILE [-- KIT_ARGS...]
+# man-me: description=Watch a text file and read it aloud with kit after changes.
+# man-me: tags=kit tts speech text watch fswatch
 set -euo pipefail
 
 usage() {

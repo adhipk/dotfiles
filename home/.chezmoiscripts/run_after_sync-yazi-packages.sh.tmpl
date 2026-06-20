@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+package_file="$HOME/.config/yazi/package.toml"
+plugin_file="$HOME/.config/yazi/plugins/system-clipboard.yazi/main.lua"
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/yazi"
+stamp_file="$state_dir/package.sha256"
+
+if [ ! -f "$package_file" ]; then
+    exit 0
+fi
+
+if ! command -v ya >/dev/null 2>&1; then
+    echo "chezmoi: skipping Yazi package sync because 'ya' is not in PATH" >&2
+    exit 0
+fi
+
+mkdir -p "$state_dir"
+current_hash="$(shasum -a 256 "$package_file" | awk '{print $1}')"
+previous_hash="$(cat "$stamp_file" 2>/dev/null || true)"
+
+if [ "$current_hash" != "$previous_hash" ] || [ ! -f "$plugin_file" ]; then
+    echo "chezmoi: syncing Yazi packages"
+    ya pkg install
+    printf '%s\n' "$current_hash" > "$stamp_file"
+fi

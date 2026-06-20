@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# man-me: name=install.sh
+# man-me: category=Repository Setup
+# man-me: usage=./install.sh [chezmoi apply args...]
+# man-me: description=Apply this source state with chezmoi and build ProjectDeck on macOS.
+# man-me: tags=install setup apply chezmoi dotfiles projectdeck bootstrap
 set -euo pipefail
 
 DOTFILES_DIR="${DOTFILES_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"

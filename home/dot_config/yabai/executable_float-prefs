@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# man-me: name=float-prefs
+# man-me: category=Window and Display
+# man-me: usage=~/.config/yabai/float-prefs toggle; apply-rules; list
+# man-me: description=Remember per-window floating preferences and replay yabai rules.
+# man-me: tags=hotkeys hotkey keyboard shortcut skhd yabai window float display
 
 set -euo pipefail
 

@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# man-me: name=watch-sync
+# man-me: category=Development and Repo
+# man-me: usage=watch-sync
+# man-me: description=Watch the chezmoi source state with fswatch and apply changes automatically.
+# man-me: tags=chezmoi dotfiles watch sync fswatch apply bootstrap setup
 set -euo pipefail
 
 if ! command -v fswatch >/dev/null 2>&1; then

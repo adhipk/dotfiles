@@ -1,3 +1,8 @@
+# man-me: name=Makefile
+# man-me: category=Repository Setup
+# man-me: usage=make test; make install; make diff; make watch; make reload
+# man-me: description=Convenience wrappers for tests, apply, diff, watch, reload, and ProjectDeck build.
+# man-me: tags=make setup test install apply diff watch reload projectdeck
 .PHONY: test test-colorscheme test-configs test-projects test-source-state test-install test-integration install apply apply-debug compile sync diff watch reload clean help build-projectdeck
 
 # Default target

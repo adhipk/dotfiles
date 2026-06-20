@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# man-me: name=tile-pip-window
+# man-me: category=Window and Display
+# man-me: usage=~/.config/yabai/tile-pip-window [window-id]
+# man-me: description=Turn picture-in-picture windows into managed yabai tiles.
+# man-me: tags=yabai pip picture-in-picture tiling window
+
+set -euo pipefail
+
+window_id="${1:-${YABAI_WINDOW_ID:-}}"
+[ -n "$window_id" ] || exit 0
+
+query_window() {
+  yabai -m query --windows --window "$window_id" 2>/dev/null
+}
+
+window_json=$(query_window) || exit 0
+
+window_prop() {
+  printf '%s' "$window_json" | jq -r "$1"
+}
+
+title=$(window_prop '.title // ""')
+[ "$title" = "Picture in Picture" ] || exit 0
+
+is_floating=$(window_prop '."is-floating"')
+is_sticky=$(window_prop '."is-sticky"')
+
+# The desired state is managed and non-sticky. Do not keep acting on a window
+# just because macOS still reports it in the above layer after insertion.
+if [ "$is_floating" != "true" ] && [ "$is_sticky" != "true" ]; then
+  exit 0
+fi
+
+if [ "$is_sticky" = "true" ]; then
+  yabai -m window "$window_id" --toggle sticky >/dev/null 2>&1 || true
+fi
+
+window_json=$(query_window) || exit 0
+is_floating=$(window_prop '."is-floating"')
+if [ "$is_floating" = "true" ]; then
+  yabai -m window "$window_id" --toggle float >/dev/null 2>&1 || true
+fi
+
+yabai -m window "$window_id" --sub-layer auto >/dev/null 2>&1 || true
