@@ -14,11 +14,13 @@ yabai -m signal --remove "hide_scratchpads_on_focus_change" >/dev/null 2>&1 || t
 yabai -m signal --remove "hide_scratchpads_on_app_switch" >/dev/null 2>&1 || true
 yabai -m signal --remove "hide_scratchpads_on_app_deactivate" >/dev/null 2>&1 || true
 yabai -m signal --remove "projects_record_focus" >/dev/null 2>&1 || true
+yabai -m signal --remove "app_mru_update" >/dev/null 2>&1 || true
 yabai -m signal --remove "tile_pip_on_create" >/dev/null 2>&1 || true
 yabai -m signal --remove "tile_pip_on_title_change" >/dev/null 2>&1 || true
 yabai -m signal --remove "normalize_pip_on_create" >/dev/null 2>&1 || true
 yabai -m signal --remove "normalize_pip_on_title_change" >/dev/null 2>&1 || true
 yabai -m signal --add label=projects_record_focus event=window_focused action="$HOME/.config/yabai/projects record-focus"
+yabai -m signal --add label=app_mru_update event=window_focused action="$HOME/.config/skhd/app-mru.sh update"
 yabai -m signal --add label=tile_pip_on_create event=window_created title="^Picture in Picture$" action="$HOME/.config/yabai/tile-pip-window"
 yabai -m signal --add label=tile_pip_on_title_change event=window_title_changed title="^Picture in Picture$" action="$HOME/.config/yabai/tile-pip-window"
 
