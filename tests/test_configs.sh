@@ -8,6 +8,10 @@ SKHDRC="$DOTFILES_DIR/home/dot_skhdrc"
 YABAIRC="$DOTFILES_DIR/home/dot_yabairc"
 KARABINER_CONFIG="$DOTFILES_DIR/home/dot_config/private_karabiner/karabiner.json"
 HOTKEYS="$DOTFILES_DIR/home/bin/executable_hotkeys"
+NVIM_INIT="$DOTFILES_DIR/nvim/init.lua"
+RENDER_MARKDOWN_CONFIG="$DOTFILES_DIR/nvim/lua/custom/plugins/render-markdown.lua"
+LINT_CONFIG="$DOTFILES_DIR/nvim/lua/kickstart/plugins/lint.lua"
+MARKDOWNLINT_CONFIG="$DOTFILES_DIR/nvim/.markdownlint.json"
 
 PASSED=0
 FAILED=0
@@ -95,25 +99,59 @@ assert_file_exists "$KARABINER_CONFIG" "Karabiner config exists"
 echo ""
 echo "Testing Karabiner configuration..."
 if jq -e '
-    .profiles[]
-    | select(.selected == true)
-    | .complex_modifications.rules[]
-    | .manipulators[]
-    | select(
-        .type == "basic"
-        and .from.key_code == "caps_lock"
-        and .to[0].key_code == "left_control"
-        and .to[0].lazy == true
-        and .to[0].modifiers == ["left_option", "left_command"]
-        and .to_if_alone[0].key_code == "caps_lock"
-    )
+    .profiles[] | select(.selected == true) as $profile
+    | (
+        [
+          $profile.complex_modifications.rules[].manipulators[]
+          | select(
+              .type == "basic"
+              and .from.key_code == "caps_lock"
+              and .to[0].key_code == "left_control"
+              and .to[0].lazy == true
+              and (.to[0] | has("modifiers") | not)
+              and .to_if_alone[0].key_code == "escape"
+              and any(.conditions[]?; .type == "variable_if" and .name == "nvim_caps_lock_control" and .value == true)
+          )
+        ] | length == 1
+      )
+      and (
+        [
+          $profile.complex_modifications.rules[].manipulators[]
+          | select(
+              .type == "basic"
+              and .from.key_code == "caps_lock"
+              and .to[0].key_code == "left_control"
+              and .to[0].lazy == true
+              and .to[0].modifiers == ["left_option", "left_command"]
+              and .to_if_alone[0].key_code == "escape"
+              and any(.conditions[]?; .type == "variable_unless" and .name == "nvim_caps_lock_control" and .value == true)
+          )
+        ] | length == 1
+      )
 ' "$KARABINER_CONFIG" >/dev/null; then
-    echo "  ✓ Caps Lock is a hyper key on hold and Caps Lock on tap"
+    echo "  ✓ Caps Lock is Hyper by default and Control while Neovim is focused"
     ((PASSED++))
 else
-    echo "  ✗ Caps Lock hyper key mapping is missing or invalid"
+    echo "  ✗ Caps Lock Hyper/Neovim-Control mapping is missing or invalid"
     ((FAILED++))
 fi
+
+assert_contains "$NVIM_INIT" "nvim_caps_lock_control" "Neovim toggles Caps Lock Karabiner variable"
+assert_contains "$NVIM_INIT" "karabiner_cli" "Neovim uses karabiner_cli for Caps Lock mode"
+assert_contains "$NVIM_INIT" "vim.keymap.set('n', 'd', '\"_d'" "Delete uses Lua keymap to avoid yanking"
+assert_contains "$NVIM_INIT" "vim.keymap.set('n', '<leader>d', '\"d'" "Leader delete uses default register"
+assert_not_contains "$NVIM_INIT" "^[[:space:]]*nnoremap " "Neovim Lua config does not contain raw nnoremap commands"
+assert_not_contains "$NVIM_INIT" "^[[:space:]]*vnoremap " "Neovim Lua config does not contain raw vnoremap commands"
+assert_contains "$NVIM_INIT" "marksman = {}" "Marksman LSP is configured for Markdown"
+assert_contains "$NVIM_INIT" "'markdownlint'" "markdownlint is installed through Mason"
+assert_contains "$NVIM_INIT" "markdown_inline" "Markdown inline treesitter parser is installed"
+assert_contains "$NVIM_INIT" "yaml" "YAML treesitter parser is installed for Markdown frontmatter"
+assert_contains "$RENDER_MARKDOWN_CONFIG" "MeanderingProgrammer/render-markdown.nvim" "render-markdown.nvim is installed"
+assert_contains "$RENDER_MARKDOWN_CONFIG" "completions = { lsp = { enabled = true } }" "render-markdown LSP completions are enabled"
+assert_contains "$RENDER_MARKDOWN_CONFIG" "file_types = { 'markdown' }" "render-markdown is scoped to Markdown"
+assert_contains "$LINT_CONFIG" "vim.fn.executable 'markdownlint'" "Markdown linting waits for markdownlint executable"
+assert_contains "$LINT_CONFIG" ".markdownlint.json" "markdownlint uses the checked-in rule config"
+assert_contains "$MARKDOWNLINT_CONFIG" '"default": false' "markdownlint default rules are disabled"
 
 echo ""
 echo "Testing skhdrc configuration..."

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# man-me: name=tmux-sessionizer-zoxide
+# man-me: category=Terminal and Sessions
+# man-me: usage=tmux-sessionizer-zoxide
+# man-me: description=Pick from existing tmux sessions or zoxide-ranked directories and connect via sesh.
+# man-me: tags=tmux terminal session sessions sesh fzf zoxide
+
+set -euo pipefail
+
+if ! command -v sesh >/dev/null 2>&1; then
+  echo "sesh is not installed. Install it with: brew install sesh" >&2
+  exit 1
+fi
+
+if ! command -v fzf >/dev/null 2>&1; then
+  echo "fzf is required for interactive session picker" >&2
+  exit 1
+fi
+
+selected=$(sesh list -t -z 2>/dev/null | fzf --height 40% --reverse --border --prompt="sesh> " || true)
+
+if [[ -z "$selected" ]]; then
+  exit 0
+fi
+
+exec sesh connect "$selected"

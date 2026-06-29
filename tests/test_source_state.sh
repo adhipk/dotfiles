@@ -86,8 +86,10 @@ assert_contains "$DOTFILES_DIR/home/dot_config/symlink_nvim.tmpl" '\.chezmoi\.so
 assert_file_exists "$DOTFILES_DIR/nvim/init.lua" "Neovim config is stored in the repository"
 assert_contains "$DOTFILES_DIR/Brewfile" 'brew "clipboard"' "Clipboard CLI is declared in Brewfile"
 assert_contains "$DOTFILES_DIR/Brewfile" 'brew "gh"' "GitHub CLI is declared in Brewfile"
+assert_contains "$DOTFILES_DIR/Brewfile" 'brew "marksman"' "Marksman Markdown LSP is declared in Brewfile"
 assert_contains "$DOTFILES_DIR/Brewfile" 'brew "tree-sitter"' "Tree-sitter CLI is declared in Brewfile"
 assert_contains "$DOTFILES_DIR/Brewfile" 'brew "yq"' "yq is declared in Brewfile"
+assert_contains "$DOTFILES_DIR/Brewfile" 'cask "vscodium"' "VSCodium is declared in Brewfile"
 assert_contains "$DOTFILES_DIR/home/dot_config/yazi/package.toml" "orhnk/system-clipboard" "Yazi system clipboard plugin is declared"
 assert_contains "$DOTFILES_DIR/home/dot_config/yazi/keymap.toml" "plugin system-clipboard" "Yazi system clipboard keymap is declared"
 assert_contains "$DOTFILES_DIR/home/dot_config/zsh/zshrc.commands" "svg-png()" "svg-png shell helper is declared"
@@ -106,6 +108,7 @@ for file in \
     symlink_default-apps.tmpl \
     executable_projects \
     executable_tmux-session-picker \
+    executable_tmux-sessionizer \
     executable_tmux-sessionizer-zoxide \
     executable_unescape-buffer \
     executable_unescape-string; do
@@ -124,12 +127,14 @@ assert_not_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" 'scratchpads
 assert_file_exists "$DOTFILES_DIR/home/dot_config/skhd/executable_app-mru.sh" "app-mru helper is declared"
 assert_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_focus_app.sh" 'app-mru.sh' "App focus helper uses MRU stacks"
 assert_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_focus_app.sh" 'app_mru_cycle' "App focus helper cycles by MRU"
+assert_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_focus_app.sh" 'EDITOR_APP:-VSCodium' "Alt+2 editor defaults to VSCodium"
 assert_not_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_focus_app.sh" 'focus recent' "App focus helper does not jump to unrelated windows"
 assert_not_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_app-mru.sh" 'focus recent' "App MRU helper stays within app windows"
 assert_file_exists "$DOTFILES_DIR/home/dot_config/yabai/executable_tile-pip-window" "PiP tiling helper is declared"
 assert_contains "$DOTFILES_DIR/home/dot_config/yabai/executable_tile-pip-window" "toggle float" "PiP tiling helper inserts PiP into the tree"
 assert_contains "$DOTFILES_DIR/home/dot_config/yabai/executable_tile-pip-window" "YABAI_WINDOW_ID" "PiP tiling helper accepts yabai signal window IDs"
 assert_not_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" 'SPOTLIGHT_SHELL' "Scratchpads CLI does not load hyperspace shell"
+assert_file_exists "$DOTFILES_DIR/home/dot_config/skhd/modules/hyperspace.skhdrc" "Hyperspace skhd module stays parked"
 assert_file_exists "$DOTFILES_DIR/home/dot_config/skhd/modules/hyperspace/executable_spotlight-zsh" "Hyperspace module keeps spotlight shell wrapper"
 assert_file_exists "$DOTFILES_DIR/home/dot_config/skhd/modules/hyperspace/dot_zshrc" "Hyperspace module keeps spotlight zshrc"
 assert_file_exists "$DOTFILES_DIR/home/dot_config/skhd/modules/hyperspace/executable_hyperspace" "Hyperspace module keeps hyperspace CLI"
@@ -137,7 +142,9 @@ assert_file_exists "$DOTFILES_DIR/home/dot_config/skhd/modules/hyperspace/execut
 
 echo ""
 echo "Testing extension declarations..."
-assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "vscodeExtensions" "VS Code extensions are declared"
+assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "vscodeExtensions" "VSCodium extensions are declared"
+assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "jeanp413.open-remote-ssh" "VSCodium remote SSH extension is declared"
+assert_not_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "anysphere." "Cursor-only extensions are not declared"
 assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "name = \"gemma-gem\"" "Chrome extension is declared"
 assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "buildCommand = \"pnpm build\"" "Chrome extension is built from source"
 assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "\\[\\[externalProjects\\]\\]" "External projects are declared"
@@ -145,7 +152,9 @@ assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "name = \"raycast-lucide-
 assert_contains "$DOTFILES_DIR/home/.chezmoidata.toml" "npm --prefix projects/excalidraw-library run generate" "External project setup is declared"
 assert_contains "$DOTFILES_DIR/home/.chezmoiexternal.toml.tmpl" "type = \"git-repo\"" "Extension repositories use chezmoi externals"
 assert_contains "$DOTFILES_DIR/home/.chezmoiexternal.toml.tmpl" "externalProjects" "External projects use chezmoi externals"
-assert_file_exists "$DOTFILES_DIR/home/.chezmoiscripts/run_onchange_after_install-vscode-extensions.sh.tmpl" "VS Code install hook exists"
+assert_file_exists "$DOTFILES_DIR/home/.chezmoiscripts/run_onchange_after_install-vscodium-extensions.sh.tmpl" "VSCodium install hook exists"
+assert_file_exists "$DOTFILES_DIR/home/.chezmoiscripts/run_once_install-vscodium-cli.sh.tmpl" "VSCodium CLI install hook exists"
+assert_file_exists "$DOTFILES_DIR/home/Library/Application Support/VSCodium/User/settings.json" "VSCodium settings are managed"
 assert_file_exists "$DOTFILES_DIR/home/.chezmoiscripts/run_after_sync-chrome-extensions.sh.tmpl" "Chrome build hook exists"
 assert_file_exists "$DOTFILES_DIR/home/.chezmoiscripts/run_after_sync-external-projects.sh.tmpl" "External project setup hook exists"
 assert_file_exists "$DOTFILES_DIR/home/.chezmoiscripts/run_after_sync-yazi-packages.sh.tmpl" "Yazi package sync hook exists"

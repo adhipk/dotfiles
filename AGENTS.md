@@ -2,7 +2,8 @@
 ## Primary Role
 Your job is to maintain my dotfile configurations, this includes keyboard shortcuts, display management, any utils or specific command bins, installed packages, etc. After implementing any feature, make sure that the setup and boootstrap processes reflect the changes.
 ## Projects (primary UX)
-- Hold `caps lock` for Hyper (`ctrl + opt + cmd`).
+- Tap `caps lock` for Escape; hold it for Hyper (`ctrl + opt + cmd`) outside Neovim.
+- In Neovim, hold `caps lock` for Control.
 - **`Hyper+p`** or **`Hyper+e`** — **ProjectDeck** floating picker (blurred HUD panel, search, keyboard nav; spaces submenu supports detach and delete).
 - **`Hyper+n`** — quick create via ProjectDeck name form.
 - **`Hyper+1..5`** — fast switch to a project (last-used space).

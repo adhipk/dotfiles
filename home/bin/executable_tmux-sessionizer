@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# man-me: name=tmux-sessionizer
+# man-me: category=Terminal and Sessions
+# man-me: usage=tmux-sessionizer; tmux-sessionizer -s 0
+# man-me: description=Compatibility wrapper for tmux session slots backed by sesh.
+# man-me: tags=tmux terminal session sessions sesh fzf zoxide
+
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage:
+  tmux-sessionizer
+  tmux-sessionizer -s <index>
+  tmux-sessionizer <session-or-directory>
+EOF
+}
+
+if ! command -v sesh >/dev/null 2>&1; then
+  echo "sesh is not installed. Install it with: brew install sesh" >&2
+  exit 1
+fi
+
+case "${1:-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  -s)
+    if [[ -z "${2:-}" ]]; then
+      usage >&2
+      exit 1
+    fi
+
+    slot="$2"
+    if ! [[ "$slot" =~ ^[0-9]+$ ]]; then
+      echo "Invalid slot: $slot" >&2
+      exit 1
+    fi
+
+    selected=$(sesh list -t -z 2>/dev/null | sed -n "$((slot + 1))p" | sed '/^$/d' | head -n 1 || true)
+    if [[ -z "$selected" ]]; then
+      exit 0
+    fi
+
+    exec sesh connect "$selected"
+    ;;
+  "")
+    ;;
+  *)
+    exec sesh connect "$1"
+    ;;
+esac
+
+if ! command -v fzf >/dev/null 2>&1; then
+  echo "fzf is required for interactive sesh selection" >&2
+  exit 1
+fi
+
+selected=$(sesh list -t -z 2>/dev/null | fzf --height 40% --reverse --border --prompt="sesh> " || true)
+
+if [[ -z "$selected" ]]; then
+  exit 0
+fi
+
+exec sesh connect "$selected"

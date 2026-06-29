@@ -2,7 +2,7 @@
 # man-me: name=focus_app.sh
 # man-me: category=Desktop Helper Paths
 # man-me: usage=~/.config/skhd/focus_app.sh APP
-# man-me: description=Focus, MRU-cycle, toggle, or launch an app; @browser and @editor resolve default handlers.
+# man-me: description=Focus, MRU-cycle, toggle, or launch an app; @browser resolves the macOS HTTPS handler and @editor uses EDITOR_APP (default VSCodium).
 # man-me: tags=hotkeys hotkey keyboard shortcut skhd app focus browser editor ghostty
 
 PRESENTATION_MODE=false
@@ -59,24 +59,14 @@ default_app_for_url() {
     fi
 }
 
-default_markdown_editor() {
-    local sample_file
-    local app
-
-    sample_file=$(mktemp "${TMPDIR:-/tmp}/skhd-default-editor.XXXXXX.md")
-    app=$(default_app_for_url file "$sample_file")
-    rm -f "$sample_file"
-    printf '%s\n' "$app"
-}
-
 case "$ARG" in
     @browser)
         APP=$(default_app_for_url scheme "https://google.com")
         LAUNCH_CMD="open https://google.com"
         ;;
     @editor)
-        APP=$(default_markdown_editor)
-        LAUNCH_CMD="open -a \"${APP:-TextEdit}\""
+        APP="${EDITOR_APP:-VSCodium}"
+        LAUNCH_CMD="open -a \"${APP}\""
         ;;
     *)
         APP="$ARG"

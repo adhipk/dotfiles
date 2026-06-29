@@ -191,7 +191,7 @@ Installed below `~/.config/skhd/`:
 | Helper | Purpose |
 | --- | --- |
 | [`app-mru.sh`](home/dot_config/skhd/executable_app-mru.sh) | Track and cycle application windows in most-recently-used order. Updated on `window_focused` via yabai. |
-| [`focus_app.sh APP`](home/dot_config/skhd/executable_focus_app.sh) | Focus, MRU-cycle, or launch an application. `@browser` resolves the macOS HTTPS handler and `@editor` resolves the Markdown handler. |
+| [`focus_app.sh APP`](home/dot_config/skhd/executable_focus_app.sh) | Focus, MRU-cycle, or launch an application. `@browser` resolves the macOS HTTPS handler and `@editor` uses `EDITOR_APP` (defaults to `VSCodium`). |
 | [`hotkeys`](home/bin/executable_hotkeys) | Miscellaneous skhd actions. `hotkeys zen toggle` flips zen mode, where `Alt+1` and terminal focus keep working but `Alt+2..4` do nothing. |
 | [`media_key.sh ACTION`](home/dot_config/skhd/executable_media_key.sh) | Send a macOS media key event. Supported actions are `brightness_down`, `brightness_up`, `mission_control`, `launchpad`, `dictation`, `do_not_disturb`, `previous`, `play_pause`, `next`, `mute`, `volume_down`, and `volume_up`. |
 | [`open_terminal_window.sh`](home/dot_config/skhd/executable_open_terminal_window.sh) | Open a terminal window on the current yabai space. `TERMINAL_APP` defaults to `Ghostty`. The current skhd config does not bind this helper. |
@@ -247,7 +247,7 @@ operations to these shortcuts:
 | `Ctrl+Alt+n` | Move the current window to a new labeled space. |
 | `Alt+n` | Create and focus a new space. |
 | `Alt+k` | Close empty spaces. |
-| `Alt+Backtick`, `Alt+~`, `Alt+1..4` | Focus Ghostty, the default browser, the default Markdown editor, Teams, or Slack. Repeat to MRU-cycle that app's windows only. |
+| `Alt+Backtick`, `Alt+~`, `Alt+1..4` | Focus Ghostty, the default browser, VSCodium (`EDITOR_APP`), Teams, or Slack. Repeat to MRU-cycle that app's windows only. |
 | `Alt+Shift+Backslash` | Toggle zen mode. In zen mode, terminal focus and `Alt+1` browser focus still work; `Alt+2..4` are disabled. |
 | `Ctrl+Alt+w`, `Ctrl+Alt+z` | Close or minimize the current window. |
 | `Alt+r` | Restart yabai and skhd. |
@@ -278,7 +278,8 @@ and is documented further in [`TMUX_GUIDE.md`](TMUX_GUIDE.md).
 
 | Hook | Purpose |
 | --- | --- |
-| [`run_onchange_after_install-vscode-extensions.sh.tmpl`](home/.chezmoiscripts/run_onchange_after_install-vscode-extensions.sh.tmpl) | Install declared VS Code extensions with `code --install-extension --force` whenever the generated hook changes. |
+| [`run_onchange_after_install-vscodium-extensions.sh.tmpl`](home/.chezmoiscripts/run_onchange_after_install-vscodium-extensions.sh.tmpl) | Install declared VSCodium extensions with `codium --install-extension --force` whenever the generated hook changes. |
+| [`run_once_install-vscodium-cli.sh.tmpl`](home/.chezmoiscripts/run_once_install-vscodium-cli.sh.tmpl) | Symlink the `codium` CLI into `~/.local/bin` after VSCodium is installed. |
 | [`run_after_sync-chrome-extensions.sh.tmpl`](home/.chezmoiscripts/run_after_sync-chrome-extensions.sh.tmpl) | Build declared Chrome extension repositories after their Git revision changes or their unpacked manifest is missing. |
 | [`run_after_sync-external-projects.sh.tmpl`](home/.chezmoiscripts/run_after_sync-external-projects.sh.tmpl) | Install and set up declared external project repositories after their Git revision changes or generated paths go missing. |
 

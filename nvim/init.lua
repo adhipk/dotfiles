@@ -101,6 +101,15 @@ do
   -- Set to true if you have a Nerd Font installed and selected in the terminal
   vim.g.have_nerd_font = true
 
+  -- d is for delete
+  vim.keymap.set('n', 'x', '"_x', { desc = 'Delete character without yanking' })
+  vim.keymap.set('n', 'd', '"_d', { desc = 'Delete without yanking' })
+  vim.keymap.set('n', 'D', '"_D', { desc = 'Delete to end of line without yanking' })
+  vim.keymap.set('x', 'd', '"_d', { desc = 'Delete selection without yanking' })
+  vim.keymap.set('n', '<leader>d', '"d', { desc = 'Delete into default register' })
+  vim.keymap.set('n', '<leader>D', '"D', { desc = 'Delete to end of line into default register' })
+  vim.keymap.set('x', '<leader>d', '"d', { desc = 'Delete selection into default register' })
+
   -- [[ Setting options ]]
   --  See `:help vim.o`
   -- NOTE: You can change these options as you wish!
@@ -229,16 +238,16 @@ do
   --  Use CTRL+<hjkl> to switch between windows
   --
   --  See `:help wincmd` for a list of all window commands
-  vim.keymap.set('n', '<C-h>', '<C-w><C-h>', { desc = 'Move focus to the left window' })
-  vim.keymap.set('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right window' })
-  vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
-  vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
+  -- vim.keymap.set('n', '<C-h>', '<C-w><C-h>', { desc = 'Move focus to the left window' })
+  -- vim.keymap.set('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right window' })
+  -- vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
+  -- vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
 
   -- NOTE: Some terminals have colliding keymaps or are not able to send distinct keycodes
-  -- vim.keymap.set("n", "<C-S-h>", "<C-w>H", { desc = "Move window to the left" })
-  -- vim.keymap.set("n", "<C-S-l>", "<C-w>L", { desc = "Move window to the right" })
-  -- vim.keymap.set("n", "<C-S-j>", "<C-w>J", { desc = "Move window to the lower" })
-  -- vim.keymap.set("n", "<C-S-k>", "<C-w>K", { desc = "Move window to the upper" })
+  vim.keymap.set("n", "<C-S-h>", "<C-w>H", { desc = "Move window to the left" })
+  vim.keymap.set("n", "<C-S-l>", "<C-w>L", { desc = "Move window to the right" })
+  vim.keymap.set("n", "<C-S-j>", "<C-w>J", { desc = "Move window to the lower" })
+  vim.keymap.set("n", "<C-S-k>", "<C-w>K", { desc = "Move window to the upper" })
 
   -- [[ Basic Autocommands ]]
   --  See `:help lua-guide-autocommands`
@@ -250,6 +259,29 @@ do
     desc = 'Highlight when yanking (copying) text',
     group = vim.api.nvim_create_augroup('kickstart-highlight-yank', { clear = true }),
     callback = function() vim.hl.on_yank() end,
+  })
+
+  local karabiner_nvim_variable = 'nvim_caps_lock_control'
+  local function set_karabiner_nvim_mode(enabled)
+    if vim.fn.executable 'karabiner_cli' ~= 1 then return end
+
+    vim.fn.jobstart({
+      'karabiner_cli',
+      '--set-variables',
+      vim.json.encode { [karabiner_nvim_variable] = enabled },
+    }, { detach = true })
+  end
+
+  local karabiner_nvim_group = vim.api.nvim_create_augroup('karabiner-nvim-caps-lock', { clear = true })
+  vim.api.nvim_create_autocmd({ 'VimEnter', 'FocusGained' }, {
+    desc = 'Use Caps Lock hold as Control while Neovim is focused',
+    group = karabiner_nvim_group,
+    callback = function() set_karabiner_nvim_mode(true) end,
+  })
+  vim.api.nvim_create_autocmd({ 'FocusLost', 'VimLeavePre' }, {
+    desc = 'Restore Caps Lock hold as Hyper outside Neovim',
+    group = karabiner_nvim_group,
+    callback = function() set_karabiner_nvim_mode(false) end,
   })
 end
 
@@ -495,11 +527,11 @@ do
     -- You can put your default mappings / updates / etc. in here
     --  All the info you're looking for is in `:help telescope.setup()`
     --
-    -- defaults = {
-    --   mappings = {
-    --     i = { ['<c-enter>'] = 'to_fuzzy_refine' },
-    --   },
-    -- },
+    defaults = {
+      mappings = {
+        i = { ['<c-enter>'] = 'to_fuzzy_refine' },
+      },
+    },
     -- pickers = {}
     extensions = {
       ['ui-select'] = { require('telescope.themes').get_dropdown() },
@@ -702,7 +734,9 @@ do
     --    https://github.com/pmizio/typescript-tools.nvim
     --
     -- But for many setups, the LSP (`ts_ls`) will work just fine
-    -- ts_ls = {},
+    ts_ls = {},
+
+    marksman = {},
 
     stylua = {}, -- Used to format Lua code
 
@@ -760,7 +794,7 @@ do
   -- You can press `g?` for help in this menu.
   local ensure_installed = vim.tbl_keys(servers or {})
   vim.list_extend(ensure_installed, {
-    -- You can add other tools here that you want Mason to install
+    'markdownlint',
   })
 
   require('mason-tool-installer').setup { ensure_installed = ensure_installed }
@@ -905,7 +939,7 @@ do
   vim.pack.add { { src = gh 'nvim-treesitter/nvim-treesitter', version = 'main' } }
 
   -- Ensure basic parsers are installed
-  local parsers = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' }
+  local parsers = { 'bash', 'c', 'diff', 'html', 'latex', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc', 'yaml' }
   require('nvim-treesitter').install(parsers)
 
   ---@param buf integer

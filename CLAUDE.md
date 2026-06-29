@@ -9,5 +9,5 @@ normal workflows.
 - Preserve chezmoi attributes such as `dot_`, `executable_`, and `symlink_`.
 - Add helper commands under `home/bin/`.
 - Add idempotent one-time setup under `home/.chezmoiscripts/` with `run_once_`.
-- Declare VS Code and Chrome extensions in `home/.chezmoidata.toml`.
+- Declare VSCodium and Chrome extensions in `home/.chezmoidata.toml`.
 - Run `make test` and `make diff` after changes.

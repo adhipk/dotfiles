@@ -1,0 +1,113 @@
+{
+    "window.commandCenter": true,
+    "editor.guides.bracketPairs": "active",
+    "files.associations": {
+        ".env": "properties",
+        "*.json": "json",
+        "*.jsonl": "json"
+    },
+    "terminal.integrated.fontFamily": "monospace",
+    "[typescriptreact]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[typescript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "editor.unicodeHighlight.ambiguousCharacters": false,
+    "[html]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "explorer.confirmDragAndDrop": false,
+    "extensions.ignoreRecommendations": true,
+    "[json]": {
+        "editor.defaultFormatter": "vscode.json-language-features"
+    },
+    "explorer.confirmDelete": false,
+    "git.autofetch": true,
+    "biome.suggestInstallingGlobally": false,
+    "terminal.external.osxExec": "Ghostty.app",
+    "editor.fontSize": 14,
+    "editor.fontFamily": "'Fira Code', 'Courier New', monospace",
+    "editor.fontLigatures": true,
+    "terminal.integrated.fontLigatures.enabled": true,
+    "terminal.integrated.fontSize": 14,
+    "terminal.explorerKind": "external",
+    "terminal.integrated.defaultProfile.osx": "zsh",
+    "terminal.integrated.defaultLocation": "editor",
+    "javascript.updateImportsOnFileMove.enabled": "always",
+    "terminal.integrated.enableMultiLinePasteWarning": "never",
+    "[javascript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "explorer.fileNesting.patterns": {
+        "*.ts": "${capture}.js",
+        "*.js": "${capture}.js.map, ${capture}.min.js, ${capture}.d.ts",
+        "*.jsx": "${capture}.js",
+        "*.tsx": "${capture}.ts",
+        "tsconfig.json": "tsconfig.*.json",
+        "package.json": "package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb, bun.lock",
+        "*.sqlite": "${capture}.${extname}-*",
+        "*.db": "${capture}.${extname}-*",
+        "*.sqlite3": "${capture}.${extname}-*",
+        "*.db3": "${capture}.${extname}-*",
+        "*.sdb": "${capture}.${extname}-*",
+        "*.s3db": "${capture}.${extname}-*"
+    },
+    "git.openRepositoryInParentFolders": "always",
+    "task.allowAutomaticTasks": "on",
+    "accessibility.signals.terminalBell": {
+        "sound": "off",
+        "announcement": "off"
+    },
+    "zenMode.hideStatusBar": true,
+    "zenMode.fullScreen": true,
+    "zenMode.centerLayout": false,
+    "zenMode.restore": true,
+    "[markdown]": {
+        "editor.defaultFormatter": "unifiedjs.vscode-remark",
+        "editor.formatOnSave": false,
+        "editor.rename.enablePreview": true
+    },
+    "files.autoSave": "onFocusChange",
+    "editor.gotoLocation.alternativeDefinitionCommand": "",
+    "explorer.confirmPasteNative": false,
+    "window.autoDetectColorScheme": true,
+    "workbench.colorTheme": "Catppuccin Mocha",
+    "workbench.preferredDarkColorTheme": "Catppuccin Mocha",
+    "workbench.preferredLightColorTheme": "Catppuccin Latte",
+    "editor.quickSuggestions": {
+        "other": "on",
+        "comments": "off",
+        "strings": "on"
+    },
+    "multiCommand.commands": [
+        {
+            "command": "multiCommand.unescapeBuffer",
+            "sequence": [
+                "editor.action.selectAll",
+                "editor.action.clipboardCopyAction",
+                {
+                    "command": "workbench.action.terminal.sendSequence",
+                    "args": {
+                        "text": "python3 -c \"import sys; s=sys.stdin.read(); s=s.replace(r'\\\\n', '\\n').replace(r'\\\\\\\"', '\\\"').replace(r'\\\\t', '\\t'); print(s, end='')\" | pbcopy && pbpaste\n"
+                    }
+                },
+                "editor.action.clipboardPasteAction",
+                {
+                    "command": "cursorMove",
+                    "args": {
+                        "to": "viewPortTop"
+                    }
+                }
+            ]
+        }
+    ],
+    "diffEditor.maxComputationTime": 0,
+    "markdown-preview-enhanced.revealjsTheme": "vscode.css",
+    "markdown-preview-enhanced.previewTheme": "vscode.css",
+    "editor.formatOnPaste": true,
+    "editor.accessibilitySupport": "off",
+    "zenMode.showTabs": "single",
+    "editor.formatOnSaveMode": "modifications",
+    "workbench.editor.showTabs": "none"
+}

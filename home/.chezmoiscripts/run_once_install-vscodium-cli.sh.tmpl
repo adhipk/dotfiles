@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+vscodium_cli="/Applications/VSCodium.app/Contents/Resources/app/bin/codium"
+
+if [[ ! -x "$vscodium_cli" ]]; then
+    echo "chezmoi: skipping VSCodium CLI symlink; app is not installed" >&2
+    exit 0
+fi
+
+mkdir -p "$HOME/.local/bin"
+ln -sf "$vscodium_cli" "$HOME/.local/bin/codium"

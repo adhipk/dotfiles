@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v codium >/dev/null 2>&1; then
+    echo "chezmoi: skipping VSCodium extensions because 'codium' is not in PATH" >&2
+    exit 0
+fi
+
+extensions=(
+{{- range .vscodeExtensions }}
+    {{ . | quote }}
+{{- end }}
+)
+
+for extension in "${extensions[@]}"; do
+    if ! codium --install-extension "$extension" --force; then
+        echo "chezmoi: unable to install VSCodium extension '$extension'; continuing" >&2
+    fi
+done

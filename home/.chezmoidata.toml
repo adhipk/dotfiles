@@ -1,11 +1,10 @@
 vscodeExtensions = [
     "anthropic.claude-code",
-    "anysphere.cursorpyright",
-    "anysphere.remote-ssh",
     "biomejs.biome",
     "bradlc.vscode-tailwindcss",
     "catppuccin.catppuccin-vsc",
     "dbaeumer.vscode-eslint",
+    "detachhead.basedpyright",
     "dotjoshjohnson.xml",
     "eamodio.gitlens",
     "echoapi.echoapi-for-vscode",
@@ -14,6 +13,7 @@ vscodeExtensions = [
     "github.vscode-github-actions",
     "hashicorp.terraform",
     "jdinhlife.gruvbox",
+    "jeanp413.open-remote-ssh",
     "mechatroner.rainbow-csv",
     "mermaidchart.vscode-mermaid-chart",
     "ms-python.black-formatter",
@@ -28,10 +28,6 @@ vscodeExtensions = [
     "redhat.vscode-yaml",
     "ryuta46.multi-command",
     "shd101wyy.markdown-preview-enhanced",
-    "sst-dev.opencode",
-    "tomoki1207.pdf",
-    "unifiedjs.vscode-remark",
-    "yutengjing.vscode-classic-experience",
 ]
 
 [[chromeExtensions]]

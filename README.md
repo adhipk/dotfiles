@@ -10,14 +10,15 @@ Personal macOS setup managed with [chezmoi](https://www.chezmoi.io/).
 
 ```text
 home/
-├── .chezmoidata.toml                 # VS Code, Chrome, and external project inventory
+├── .chezmoidata.toml                 # VSCodium, Chrome, and external project inventory
 ├── .chezmoiexternal.toml.tmpl        # External git repositories
 ├── .chezmoiscripts/                  # Apply hooks and one-time setup scripts
 ├── bin/                              # Helper commands installed into ~/bin
+├── Library/Application Support/VSCodium/User/  # VSCodium settings
 ├── dot_agents/                       # Personal agent skills and docs -> ~/.agents
 ├── dot_config/
 │   ├── symlink_nvim.tmpl              # ~/.config/nvim -> repository nvim/
-│   ├── karabiner/                     # Caps Lock hyper key configuration
+│   ├── karabiner/                     # Caps Lock contextual key remap configuration
 │   ├── skhd/                         # skhd helper scripts
 │   ├── yabai/                        # yabai helper scripts
 │   ├── yazi/                         # Yazi configuration
@@ -64,11 +65,11 @@ chezmoi update -v
 
 ## Extensions
 
-Declare VS Code extension IDs, Chrome extension repositories, and reusable
+Declare VSCodium extension IDs, Chrome extension repositories, and reusable
 external project repositories in
 `home/.chezmoidata.toml`.
 
-VS Code extensions are installed through the `code` CLI whenever the declared
+VSCodium extensions are installed through the `codium` CLI whenever the declared
 list changes. Extra locally installed extensions are left alone.
 
 Chrome extension source repositories are cloned into
@@ -148,8 +149,9 @@ an application name, application path, or bundle ID.
 
 ## Keyboard Shortcuts
 
-- tap `caps lock`: toggle Caps Lock
-- hold `caps lock`: send `ctrl + opt + cmd`
+- tap `caps lock`: Escape
+- hold `caps lock`: Hyper (`ctrl + opt + cmd`)
+- hold `caps lock` in Neovim: Control
 - `alt + n`: create a space and focus it
 - `alt + backtick` / `alt + ~`: focus Ghostty, skipping task windows titled like `nvim`, `vim`, `codex`, `claude`, or Codex's `Action Required` status
 - `alt + r`: restart yabai and skhd
