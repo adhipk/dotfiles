@@ -186,6 +186,11 @@ assert_contains "$SKHDRC" "alt - 2.*hotkeys app-focus 2.*@editor" "Alt+2 editor 
 assert_contains "$SKHDRC" "alt - 3.*hotkeys app-focus 3.*Microsoft Teams" "Alt+3 Teams focus goes through zen gate"
 assert_contains "$SKHDRC" "alt - 4.*hotkeys app-focus 4.*Slack" "Alt+4 Slack focus goes through zen gate"
 assert_contains "$SKHDRC" "alt + shift - 0x2A.*hotkeys zen toggle" "Alt+Shift+Backslash toggles zen mode"
+assert_contains "$SKHDRC" "alt + shift - 0x32.*hotkeys terminal new" "Alt+Shift+Backtick creates a terminal"
+assert_contains "$SKHDRC" 'fn - 1.*skhd -k "cmd + shift - 3"' "Fn+1 saves a full-screen screenshot through macOS"
+assert_contains "$SKHDRC" 'fn - 2.*skhd -k "ctrl + cmd + shift - 3"' "Fn+2 copies a full-screen screenshot through macOS"
+assert_contains "$SKHDRC" 'fn - 3.*skhd -k "cmd + shift - 4"' "Fn+3 saves an interactive screenshot through macOS"
+assert_contains "$SKHDRC" 'fn - 4.*skhd -k "ctrl + cmd + shift - 4"' "Fn+4 copies an interactive screenshot through macOS"
 
 assert_contains "$HOTKEYS" "ZEN_MODE_FILE=.*zen_mode" "hotkeys stores zen mode state"
 assert_contains "$HOTKEYS" "2|3|4)" "hotkeys disables app slots 2-4 in zen mode"

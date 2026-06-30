@@ -14,7 +14,8 @@ Your job is to maintain my dotfile configurations, this includes keyboard shortc
 
 ## Key Bindings (skhd)
 - `alt + n` creates a new space and focuses it.
-- `alt + backtick` and `alt + ~` focus Ghostty.
+- `alt + backtick` focuses Ghostty.
+- `alt + shift + backtick` creates a new terminal window on the focused space.
 
 ## Projects CLI
 - `projects pick` — ProjectDeck UI (macOS dialog fallback if not built)

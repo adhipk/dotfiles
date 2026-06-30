@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # man-me: name=scratchpads
 # man-me: category=Window and Display
-# man-me: usage=scratchpads open quick; scratchpads close; scratchpads rules; scratchpads debug
+# man-me: usage=scratchpads open quick; scratchpads open codex; scratchpads close; scratchpads rules; scratchpads debug
 # man-me: description=Ghostty and yabai scratchpad manager.
 # man-me: tags=scratchpad scratchpads ghostty yabai window terminal
 
@@ -14,6 +14,7 @@ usage() {
   cat <<'EOF'
 Usage:
   scratchpads open quick
+  scratchpads open codex
   scratchpads close
   scratchpads debug
   scratchpads rules
@@ -347,6 +348,9 @@ scratchpad_window_title() {
 
 scratchpad_profile_for_label() {
   case "$1" in
+    codex_dotfiles)
+      printf '%s\n' "codex"
+      ;;
     quick_terminal)
       printf '%s\n' "bottom"
       ;;
@@ -358,6 +362,9 @@ scratchpad_profile_for_label() {
 
 scratchpad_grid_for_profile() {
   case "$1" in
+    codex)
+      printf '%s\n' "10:10:1:1:8:8"
+      ;;
     bottom)
       printf '%s\n' "6:1:0:4:1:2"
       ;;
@@ -371,7 +378,7 @@ launch_ghostty() {
   local title="$1"
   local initial_command="${2:-}"
   local profile="${3:-}"
-  local cwd="$HOME"
+  local cwd="${4:-$HOME}"
   local ghostty_args=(--working-directory="$cwd" --title="$title")
   local -a clean_ghostty_env=(env -u ZDOTDIR)
 
@@ -454,6 +461,7 @@ print_rule_for_label() {
 }
 
 print_static_rules() {
+  print_rule_for_label "codex_dotfiles"
   print_rule_for_label "quick_terminal"
 }
 
@@ -598,6 +606,90 @@ open_scratchpad_with_profile() {
   fi
 }
 
+open_or_focus_scratchpad_with_profile() {
+  local label="$1"
+  local profile="$2"
+  local cwd="$3"
+  local command_text="$4"
+  local initial_command="${5:-direct:/bin/zsh}"
+
+  local before_json="[]"
+  local windows_json
+  local win_id
+  local title
+
+  log "open_or_focus label=$label profile=$profile cwd=$cwd command=$command_text"
+
+  title=$(scratchpad_window_title "$label")
+
+  if win_id=$(scratchpad_ids "$label" 2>/dev/null | head -1); then
+    if [ -n "$win_id" ]; then
+      log "focusing existing scratchpad label=$label win_id=$win_id"
+      if ! scratchpad_visible_ids "$label" 2>/dev/null | grep -qx "$win_id"; then
+        yabai -m window --toggle "$label" >/dev/null 2>&1 || true
+        sleep 0.1
+      fi
+      yabai -m window "$win_id" --grid "$(scratchpad_grid_for_profile "$profile")" >/dev/null 2>&1 || true
+      yabai -m window --focus "$win_id" >/dev/null 2>&1 || true
+      return 0
+    fi
+  else
+    log "open_or_focus label=$label could not inspect scratchpads"
+  fi
+
+  if win_id=$(ghostty_window_id_for_title "$title" 2>/dev/null); then
+    if [ -n "$win_id" ]; then
+      log "claiming existing Ghostty window title=$title win_id=$win_id"
+      yabai -m window "$win_id" --scratchpad "$label" >/dev/null 2>&1 || true
+      yabai -m window "$win_id" --grid "$(scratchpad_grid_for_profile "$profile")" >/dev/null 2>&1 || true
+      yabai -m window --focus "$win_id" >/dev/null 2>&1 || true
+      return 0
+    fi
+  fi
+
+  if windows_json=$(ghostty_window_ids_json 2>/dev/null); then
+    before_json="$windows_json"
+  fi
+
+  launch_ghostty "$title" "$initial_command" "$profile" "$cwd"
+
+  for _ in {1..30}; do
+    if ! windows_json=$(query_windows_json 2>/dev/null); then
+      sleep 0.1
+      continue
+    fi
+
+    win_id=$(new_ghostty_window_id "$before_json" "$windows_json")
+    if [ -n "$win_id" ]; then
+      break
+    fi
+    sleep 0.1
+  done
+
+  if [ -n "$win_id" ]; then
+    local assigned_label
+    assigned_label=$(window_scratchpad_label "$win_id" 2>/dev/null || true)
+    if [ "$assigned_label" != "$label" ]; then
+      log "fallback assigning label=$label to win_id=$win_id current_label=${assigned_label:-<empty>}"
+      yabai -m window "$win_id" --scratchpad "$label" >/dev/null 2>&1 || true
+    fi
+    yabai -m window "$win_id" --grid "$(scratchpad_grid_for_profile "$profile")" >/dev/null 2>&1 || true
+    yabai -m window --focus "$win_id" >/dev/null 2>&1 || true
+    send_command_to_ghostty_window "$title" "$command_text" || true
+  else
+    log "failed to locate new Ghostty window for label=$label"
+  fi
+}
+
+open_codex_dotfiles_scratchpad() {
+  open_or_focus_scratchpad_with_profile \
+    "codex_dotfiles" \
+    "codex" \
+    "$HOME/dotfiles" \
+    "codex" \
+    "direct:/bin/zsh"
+}
+
 debug_state() {
   {
     printf 'log_file=%s\n' "$SCRATCHPAD_LOG_FILE"
@@ -628,6 +720,9 @@ main() {
   case "$group:$action" in
     open:quick)
       open_scratchpad "quick_terminal" "bottom"
+      ;;
+    open:codex)
+      open_codex_dotfiles_scratchpad
       ;;
     close:)
       close_all_scratchpads

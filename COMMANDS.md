@@ -194,7 +194,7 @@ Installed below `~/.config/skhd/`:
 | [`focus_app.sh APP`](home/dot_config/skhd/executable_focus_app.sh) | Focus, MRU-cycle, or launch an application. `@browser` resolves the macOS HTTPS handler and `@editor` uses `EDITOR_APP` (defaults to `VSCodium`). |
 | [`hotkeys`](home/bin/executable_hotkeys) | Miscellaneous skhd actions. `hotkeys zen toggle` flips zen mode, where `Alt+1` and terminal focus keep working but `Alt+2..4` do nothing. |
 | [`media_key.sh ACTION`](home/dot_config/skhd/executable_media_key.sh) | Send a macOS media key event. Supported actions are `brightness_down`, `brightness_up`, `mission_control`, `launchpad`, `dictation`, `do_not_disturb`, `previous`, `play_pause`, `next`, `mute`, `volume_down`, and `volume_up`. |
-| [`open_terminal_window.sh`](home/dot_config/skhd/executable_open_terminal_window.sh) | Open a terminal window on the current yabai space. `TERMINAL_APP` defaults to `Ghostty`. The current skhd config does not bind this helper. |
+| [`open_terminal_window.sh`](home/dot_config/skhd/executable_open_terminal_window.sh) | Open a terminal window on the current yabai space. `TERMINAL_APP` defaults to `Ghostty`. The active binding uses `hotkeys terminal new`. |
 | [`show_keys.sh`](home/dot_config/skhd/executable_show_keys.sh) | Toggle the `whichkey` keybinding overlay. |
 | [`notify.sh TITLE MESSAGE`](home/dot_config/skhd/executable_notify.sh) | Show a macOS notification from skhd or yabai helpers. Uses `terminal-notifier` when available. |
 | [`snap_window.sh left\|right`](home/dot_config/skhd/executable_snap_window.sh) | Warp the current window and resize it to half the display width. |
@@ -247,7 +247,8 @@ operations to these shortcuts:
 | `Ctrl+Alt+n` | Move the current window to a new labeled space. |
 | `Alt+n` | Create and focus a new space. |
 | `Alt+k` | Close empty spaces. |
-| `Alt+Backtick`, `Alt+~`, `Alt+1..4` | Focus Ghostty, the default browser, VSCodium (`EDITOR_APP`), Teams, or Slack. Repeat to MRU-cycle that app's windows only. |
+| `Alt+Backtick`, `Alt+1..4` | Focus Ghostty, the default browser, VSCodium (`EDITOR_APP`), Teams, or Slack. Repeat to MRU-cycle that app's windows only. |
+| `Alt+Shift+Backtick` | Create a new terminal window on the focused space. |
 | `Alt+Shift+Backslash` | Toggle zen mode. In zen mode, terminal focus and `Alt+1` browser focus still work; `Alt+2..4` are disabled. |
 | `Ctrl+Alt+w`, `Ctrl+Alt+z` | Close or minimize the current window. |
 | `Alt+r` | Restart yabai and skhd. |

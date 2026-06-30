@@ -153,7 +153,8 @@ an application name, application path, or bundle ID.
 - hold `caps lock`: Hyper (`ctrl + opt + cmd`)
 - hold `caps lock` in Neovim: Control
 - `alt + n`: create a space and focus it
-- `alt + backtick` / `alt + ~`: focus Ghostty, skipping task windows titled like `nvim`, `vim`, `codex`, `claude`, or Codex's `Action Required` status
+- `alt + backtick`: focus Ghostty, skipping task windows titled like `nvim`, `vim`, `codex`, `claude`, or Codex's `Action Required` status
+- `alt + shift + backtick`: create a new Ghostty window on the focused space
 - `alt + r`: restart yabai and skhd
 - `alt + /`: show the keybinding cheat sheet
 

@@ -185,7 +185,16 @@ alt - 4 : ~/bin/hotkeys app-focus 4 "Slack"
 alt - 0x2A : ~/bin/hotkeys presentation toggle  # alt + backslash
 alt + shift - 0x2A : ~/bin/hotkeys zen toggle  # alt+shift+backslash
 
-alt + shift - 0x32 : ~/.config/skhd/focus_app.sh "Ghostty"  # alt + tilde
+alt + shift - 0x32 : ~/bin/hotkeys terminal new  # alt + shift + backtick
+
+# ============================================================
+# Screenshots (fn) - delegate to macOS' default screenshot shortcuts.
+# ============================================================
+
+fn - 1 : skhd -k "cmd + shift - 3"
+fn - 2 : skhd -k "ctrl + cmd + shift - 3"
+fn - 3 : skhd -k "cmd + shift - 4"
+fn - 4 : skhd -k "ctrl + cmd + shift - 4"
 
 # ============================================================
 # Window close / minimize
