@@ -8,14 +8,23 @@ set -euo pipefail
 
 terminal_app=${TERMINAL_APP:-Ghostty}
 current_space=$(yabai -m query --spaces --space | jq -r '.index')
+current_display=$(yabai -m query --displays --display | jq -r '.index')
 
 # Prevent key-repeat storms from spawning many windows on long key holds.
 lock_dir="/tmp/open_terminal_window.lock"
 state_file="/tmp/open_terminal_window.last_ms"
 cooldown_ms=1200
+stale_lock_after_s=10
 
 if ! mkdir "$lock_dir" 2>/dev/null; then
-  exit 0
+  lock_mtime=$(stat -f '%m' "$lock_dir" 2>/dev/null || printf '0\n')
+  now_s=$(date +%s)
+  if [[ "$lock_mtime" =~ ^[0-9]+$ ]] && (( now_s - lock_mtime > stale_lock_after_s )); then
+    rmdir "$lock_dir" 2>/dev/null || true
+    mkdir "$lock_dir" 2>/dev/null || exit 0
+  else
+    exit 0
+  fi
 fi
 trap 'rmdir "$lock_dir"' EXIT
 
@@ -30,6 +39,7 @@ printf '%s\n' "$now_ms" > "$state_file"
 
 rule_label="temp_terminal_rule_$$"
 yabai -m rule --add app="^${terminal_app}$" space="$current_space" label="$rule_label"
+before_json=$(yabai -m query --windows | jq -c --arg app "$terminal_app" '[ .[] | select(.app == $app) | .id ]')
 
 if [[ "$terminal_app" == "Ghostty" ]]; then
   env -u ZDOTDIR open -n -a "$terminal_app"
@@ -45,7 +55,12 @@ fi
 
 win_id=""
 for _ in {1..12}; do
-  win_id=$(yabai -m query --windows | jq -r --arg app "$terminal_app" --argjson space "$current_space" 'map(select(.app==$app and .space==$space)) | max_by(.id) | .id // empty')
+  win_id=$(yabai -m query --windows | jq -r --arg app "$terminal_app" --argjson before "$before_json" '
+    [ .[]
+      | select(.app == $app)
+      | .id
+    ] - $before
+    | last // empty')
   if [[ -n "$win_id" ]]; then
     break
   fi
@@ -55,5 +70,8 @@ done
 yabai -m rule --remove "$rule_label" >/dev/null 2>&1 || true
 
 if [[ -n "$win_id" ]]; then
+  yabai -m window "$win_id" --space "$current_space" >/dev/null 2>&1 || true
+  yabai -m display --focus "$current_display" >/dev/null 2>&1 || true
+  yabai -m space --focus "$current_space" >/dev/null 2>&1 || true
   yabai -m window --focus "$win_id" >/dev/null 2>&1 || true
 fi

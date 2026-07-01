@@ -35,6 +35,7 @@ source zsh-history-substring-search.zsh
 fpath=("$HOME/.docker/completions" $fpath)
 autoload -Uz compinit
 compinit
+[ -r "$HOME/.config/zsh/acli-completions" ] && source "$HOME/.config/zsh/acli-completions"
 
 # Basic aliases
 alias python=python3

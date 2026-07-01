@@ -75,6 +75,7 @@ for file in \
     dot_tmux.conf \
     dot_config/private_karabiner/karabiner.json \
     dot_config/zsh/zshrc.commands \
+    dot_config/zsh/acli-completions \
     dot_config/starship.toml \
     dot_config/yazi/init.lua \
     dot_config/yazi/keymap.toml \
@@ -130,6 +131,8 @@ assert_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_focus_app.sh" 'ap
 assert_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_focus_app.sh" 'EDITOR_APP:-VSCodium' "Alt+2 editor defaults to VSCodium"
 assert_not_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_focus_app.sh" 'focus recent' "App focus helper does not jump to unrelated windows"
 assert_not_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_app-mru.sh" 'focus recent' "App MRU helper stays within app windows"
+assert_file_exists "$DOTFILES_DIR/home/dot_config/yabai/executable_create-space" "Create-space helper is declared"
+assert_contains "$DOTFILES_DIR/home/dot_config/yabai/executable_create-space" "before_uuids" "Create-space helper identifies the new space by UUID"
 assert_file_exists "$DOTFILES_DIR/home/dot_config/yabai/executable_tile-pip-window" "PiP tiling helper is declared"
 assert_contains "$DOTFILES_DIR/home/dot_config/yabai/executable_tile-pip-window" "toggle float" "PiP tiling helper inserts PiP into the tree"
 assert_contains "$DOTFILES_DIR/home/dot_config/yabai/executable_tile-pip-window" "YABAI_WINDOW_ID" "PiP tiling helper accepts yabai signal window IDs"

@@ -15,6 +15,7 @@ Your job is to maintain my dotfile configurations, this includes keyboard shortc
 ## Key Bindings (skhd)
 - `alt + n` creates a new space and focuses it.
 - `alt + backtick` focuses Ghostty.
+- `alt + comma` opens a Codex scratchpad in `~/dotfiles`, then toggles visibility without closing it.
 - `alt + shift + backtick` creates a new terminal window on the focused space.
 
 ## Projects CLI

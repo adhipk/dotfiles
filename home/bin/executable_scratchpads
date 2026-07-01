@@ -45,6 +45,26 @@ query_focused_window_json() {
   printf '%s\n' "$window_json"
 }
 
+focused_space_index() {
+  yabai -m query --spaces --space | jq -r '.index'
+}
+
+focused_display_index() {
+  yabai -m query --displays --display | jq -r '.index'
+}
+
+restore_origin_focus() {
+  local display_index="${1:-}"
+  local space_index="${2:-}"
+
+  if [ -n "$display_index" ]; then
+    yabai -m display --focus "$display_index" >/dev/null 2>&1 || true
+  fi
+  if [ -n "$space_index" ]; then
+    yabai -m space --focus "$space_index" >/dev/null 2>&1 || true
+  fi
+}
+
 scratchpad_ids() {
   local label="${1:-}"
   local windows_json
@@ -120,6 +140,17 @@ focused_non_scratchpad_window_id() {
   fi
 }
 
+focused_scratchpad_is_label() {
+  local label="$1"
+  local focused_json
+  local focused_label
+
+  focused_json=$(query_focused_window_json) || return 1
+  focused_label=$(printf '%s\n' "$focused_json" | jq -r '(.scratchpad // "")')
+
+  [ "$focused_label" = "$label" ]
+}
+
 visible_non_scratchpad_window_id() {
   local windows_json
 
@@ -155,6 +186,31 @@ restore_focus_after_close() {
   fi
 
   log "could not restore focus after scratchpad close"
+  return 1
+}
+
+hide_scratchpad_and_restore_focus() {
+  local label="$1"
+  local fallback_id
+
+  log "hiding scratchpad label=$label"
+  yabai -m window --toggle "$label" >/dev/null 2>&1 || true
+  sleep 0.1
+
+  if yabai -m window --focus recent >/dev/null 2>&1; then
+    if ! focused_scratchpad_is_label "$label"; then
+      log "focused recent non-scratchpad window"
+      return 0
+    fi
+  fi
+
+  fallback_id=$(visible_non_scratchpad_window_id 2>/dev/null || true)
+  if [ -n "$fallback_id" ] && yabai -m window "$fallback_id" --focus >/dev/null 2>&1; then
+    log "focused visible non-scratchpad window id=$fallback_id"
+    return 0
+  fi
+
+  log "could not restore focus after hiding scratchpad label=$label"
   return 1
 }
 
@@ -614,6 +670,8 @@ open_or_focus_scratchpad_with_profile() {
   local initial_command="${5:-direct:/bin/zsh}"
 
   local before_json="[]"
+  local origin_display
+  local origin_space
   local windows_json
   local win_id
   local title
@@ -621,10 +679,21 @@ open_or_focus_scratchpad_with_profile() {
   log "open_or_focus label=$label profile=$profile cwd=$cwd command=$command_text"
 
   title=$(scratchpad_window_title "$label")
+  origin_display=$(focused_display_index 2>/dev/null || true)
+  origin_space=$(focused_space_index 2>/dev/null || true)
 
   if win_id=$(scratchpad_ids "$label" 2>/dev/null | head -1); then
     if [ -n "$win_id" ]; then
+      if focused_scratchpad_is_label "$label"; then
+        hide_scratchpad_and_restore_focus "$label" || true
+        return 0
+      fi
+
       log "focusing existing scratchpad label=$label win_id=$win_id"
+      restore_origin_focus "$origin_display" "$origin_space"
+      if [ -n "$origin_space" ]; then
+        yabai -m window "$win_id" --space "$origin_space" >/dev/null 2>&1 || true
+      fi
       if ! scratchpad_visible_ids "$label" 2>/dev/null | grep -qx "$win_id"; then
         yabai -m window --toggle "$label" >/dev/null 2>&1 || true
         sleep 0.1
@@ -640,7 +709,11 @@ open_or_focus_scratchpad_with_profile() {
   if win_id=$(ghostty_window_id_for_title "$title" 2>/dev/null); then
     if [ -n "$win_id" ]; then
       log "claiming existing Ghostty window title=$title win_id=$win_id"
+      restore_origin_focus "$origin_display" "$origin_space"
       yabai -m window "$win_id" --scratchpad "$label" >/dev/null 2>&1 || true
+      if [ -n "$origin_space" ]; then
+        yabai -m window "$win_id" --space "$origin_space" >/dev/null 2>&1 || true
+      fi
       yabai -m window "$win_id" --grid "$(scratchpad_grid_for_profile "$profile")" >/dev/null 2>&1 || true
       yabai -m window --focus "$win_id" >/dev/null 2>&1 || true
       return 0
@@ -651,6 +724,7 @@ open_or_focus_scratchpad_with_profile() {
     before_json="$windows_json"
   fi
 
+  restore_origin_focus "$origin_display" "$origin_space"
   launch_ghostty "$title" "$initial_command" "$profile" "$cwd"
 
   for _ in {1..30}; do
@@ -673,6 +747,10 @@ open_or_focus_scratchpad_with_profile() {
       log "fallback assigning label=$label to win_id=$win_id current_label=${assigned_label:-<empty>}"
       yabai -m window "$win_id" --scratchpad "$label" >/dev/null 2>&1 || true
     fi
+    if [ -n "$origin_space" ]; then
+      yabai -m window "$win_id" --space "$origin_space" >/dev/null 2>&1 || true
+    fi
+    restore_origin_focus "$origin_display" "$origin_space"
     yabai -m window "$win_id" --grid "$(scratchpad_grid_for_profile "$profile")" >/dev/null 2>&1 || true
     yabai -m window --focus "$win_id" >/dev/null 2>&1 || true
     send_command_to_ghostty_window "$title" "$command_text" || true

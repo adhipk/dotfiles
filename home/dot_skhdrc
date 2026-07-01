@@ -157,18 +157,10 @@ ctrl + alt + cmd - n : ~/.config/yabai/projects new
 ctrl + alt + cmd + shift - 0x33 : ~/.config/yabai/projects detach  # hyper+shift+backspace
 
 # -- Move window to new desktop --
-ctrl + alt - n : app=$(yabai -m query --windows --window | jq -r '.app') && \
-                 yabai -m space --create && \
-                 idx=$(yabai -m query --spaces --display | jq 'map(select(."is-visible" == false)) | last | .index') && \
-                 yabai -m window --space "$idx" && \
-                 yabai -m space --focus "$idx" && \
-                 yabai -m space --label "$app" && \
-                 ~/.config/yabai/close_empty_spaces.sh
+ctrl + alt - n : ~/.config/yabai/create-space move-window
 
 # -- Create new desktop and focus it --
-alt - n : yabai -m space --create && \
-          idx=$(yabai -m query --spaces --display | jq 'map(select(."is-visible" == false)) | last | .index') && \
-          yabai -m space --focus "$idx"
+alt - n : ~/.config/yabai/create-space focus
 
 # -- Close all empty desktops --
 alt - k : ~/.config/yabai/close_empty_spaces.sh
@@ -182,6 +174,7 @@ alt - 1 : ~/bin/hotkeys app-focus 1 "@browser"
 alt - 2 : ~/bin/hotkeys app-focus 2 "@editor"
 alt - 3 : ~/bin/hotkeys app-focus 3 "Microsoft Teams"
 alt - 4 : ~/bin/hotkeys app-focus 4 "Slack"
+alt - 0x2B : ~/bin/scratchpads open codex  # alt + comma
 alt - 0x2A : ~/bin/hotkeys presentation toggle  # alt + backslash
 alt + shift - 0x2A : ~/bin/hotkeys zen toggle  # alt+shift+backslash
 

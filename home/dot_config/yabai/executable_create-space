@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# man-me: name=create-space
+# man-me: category=Window and Display
+# man-me: usage=~/.config/yabai/create-space [focus|move-window]
+# man-me: description=Create a yabai space on the focused display and focus it.
+# man-me: tags=hotkeys hotkey keyboard shortcut skhd yabai spaces display
+
+set -euo pipefail
+
+mode="${1:-focus}"
+
+case "$mode" in
+  focus|move-window) ;;
+  *)
+    echo "usage: create-space [focus|move-window]" >&2
+    exit 2
+    ;;
+esac
+
+command -v yabai >/dev/null 2>&1 || {
+  echo "create-space: yabai is not installed" >&2
+  exit 1
+}
+
+command -v jq >/dev/null 2>&1 || {
+  echo "create-space: jq is not installed" >&2
+  exit 1
+}
+
+display="$(yabai -m query --displays --display | jq -r '.index')"
+before_uuids="$(yabai -m query --spaces | jq -r '.[].uuid')"
+
+if [ "$mode" = "move-window" ]; then
+  window_json="$(yabai -m query --windows --window)"
+  window_id="$(printf '%s' "$window_json" | jq -r '.id')"
+  window_app="$(printf '%s' "$window_json" | jq -r '.app // ""')"
+fi
+
+yabai -m space --create
+
+new_space_json=""
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+  new_space_json="$(
+    yabai -m query --spaces | jq -c --arg before "$before_uuids" --arg display "$display" '
+      ($before | split("\n")) as $before_spaces
+      | [ .[] | select(.uuid as $uuid | ($before_spaces | index($uuid) | not)) ] as $new_spaces
+      | (($new_spaces | map(select((.display | tostring) == $display)) | .[0]) // ($new_spaces | .[0]) // empty)
+    '
+  )"
+
+  [ -n "$new_space_json" ] && [ "$new_space_json" != "null" ] && break
+  sleep 0.05
+done
+
+new_index="$(printf '%s' "$new_space_json" | jq -r '.index // empty')"
+
+if [ -z "$new_index" ]; then
+  echo "create-space: could not identify newly created space" >&2
+  exit 1
+fi
+
+yabai -m display --focus "$display" >/dev/null 2>&1 || true
+
+if [ "$mode" = "move-window" ]; then
+  yabai -m window "$window_id" --space "$new_index"
+fi
+
+yabai -m space --focus "$new_index"
+
+if [ "$mode" = "move-window" ]; then
+  yabai -m window --focus "$window_id" >/dev/null 2>&1 || true
+  [ -n "$window_app" ] && yabai -m space --label "$window_app" >/dev/null 2>&1 || true
+  "$HOME/.config/yabai/close_empty_spaces.sh"
+fi
