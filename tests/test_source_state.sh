@@ -58,6 +58,27 @@ assert_not_contains() {
     fi
 }
 
+assert_line_order() {
+    local file="$1"
+    local first_pattern="$2"
+    local second_pattern="$3"
+    local test_name="$4"
+    local first_line
+    local second_line
+
+    first_line=$(grep -n "$first_pattern" "$file" | head -n 1 | cut -d: -f1)
+    second_line=$(grep -n "$second_pattern" "$file" | head -n 1 | cut -d: -f1)
+
+    if [ -n "$first_line" ] && [ -n "$second_line" ] && [ "$first_line" -lt "$second_line" ]; then
+        echo "  ✓ $test_name"
+        ((PASSED++))
+    else
+        echo "  ✗ $test_name"
+        echo "    Expected '$first_pattern' before '$second_pattern'"
+        ((FAILED++))
+    fi
+}
+
 echo "================================"
 echo "Chezmoi Source-State Tests"
 echo "================================"
@@ -91,9 +112,43 @@ assert_contains "$DOTFILES_DIR/Brewfile" 'brew "marksman"' "Marksman Markdown LS
 assert_contains "$DOTFILES_DIR/Brewfile" 'brew "tree-sitter"' "Tree-sitter CLI is declared in Brewfile"
 assert_contains "$DOTFILES_DIR/Brewfile" 'brew "yq"' "yq is declared in Brewfile"
 assert_contains "$DOTFILES_DIR/Brewfile" 'cask "vscodium"' "VSCodium is declared in Brewfile"
+assert_contains "$DOTFILES_DIR/Brewfile" 'brew "starship"' "Starship prompt is declared in Brewfile"
 assert_contains "$DOTFILES_DIR/home/dot_config/yazi/package.toml" "orhnk/system-clipboard" "Yazi system clipboard plugin is declared"
 assert_contains "$DOTFILES_DIR/home/dot_config/yazi/keymap.toml" "plugin system-clipboard" "Yazi system clipboard keymap is declared"
 assert_contains "$DOTFILES_DIR/home/dot_config/zsh/zshrc.commands" "svg-png()" "svg-png shell helper is declared"
+
+echo ""
+echo "Testing zsh prompt and theme setup..."
+assert_contains "$DOTFILES_DIR/home/dot_zshrc" "typeset -U path fpath" "zsh deduplicates path and fpath"
+assert_contains "$DOTFILES_DIR/home/dot_zshrc" "Some tools assign PATH directly" "zsh deduplicates path after tool initialization"
+assert_contains "$DOTFILES_DIR/home/dot_zshrc" '\[ -r "$HOME/.config/zsh/zshrc.commands" \]' "zsh guards command helper sourcing"
+assert_contains "$DOTFILES_DIR/home/dot_zshrc" "ANTIGEN_ZSH" "zsh resolves Antigen before sourcing it"
+assert_line_order "$DOTFILES_DIR/home/dot_zshrc" "antigen bundle zsh-users/zsh-autosuggestions" "antigen bundle zsh-users/zsh-syntax-highlighting" "zsh-syntax-highlighting loads after autosuggestions"
+assert_line_order "$DOTFILES_DIR/home/dot_zshrc" "antigen bundle zsh-users/zsh-completions" "antigen bundle zsh-users/zsh-syntax-highlighting" "zsh-syntax-highlighting loads after completions"
+assert_line_order "$DOTFILES_DIR/home/dot_zshrc" "antigen bundle zsh-users/zsh-history-substring-search" "antigen bundle zsh-users/zsh-syntax-highlighting" "zsh-syntax-highlighting loads after history substring search"
+assert_not_contains "$DOTFILES_DIR/home/dot_zshrc" "^source zsh-syntax-highlighting.zsh" "zsh does not manually source syntax highlighting after Antigen"
+assert_not_contains "$DOTFILES_DIR/home/dot_zshrc" "^source zsh-history-substring-search.zsh" "zsh does not manually source history substring search after Antigen"
+assert_contains "$DOTFILES_DIR/home/dot_zshrc" "STARSHIP_CONFIG" "zsh sets a Starship config"
+assert_contains "$DOTFILES_DIR/home/dot_zshrc" "starship init zsh" "zsh initializes Starship"
+assert_contains "$DOTFILES_DIR/home/dot_zshrc" "command -v starship" "zsh guards Starship initialization"
+assert_contains "$DOTFILES_DIR/home/dot_config/starship.toml" "config-schema.json" "Starship config declares its schema"
+assert_contains "$DOTFILES_DIR/home/dot_zshrc" "command -v mise" "zsh guards mise initialization"
+assert_contains "$DOTFILES_DIR/home/dot_zshrc" "command -v zoxide" "zsh guards zoxide initialization"
+assert_contains "$DOTFILES_DIR/home/dot_zshrc" '\[ -x /opt/homebrew/bin/terraform \]' "zsh guards Terraform completion"
+assert_not_contains "$DOTFILES_DIR/home/dot_zshrc" "_zoxide_z_complete" "zsh uses zoxide's default completion"
+assert_not_contains "$DOTFILES_DIR/home/dot_zshrc" "catppuccin" "zsh does not reference Catppuccin"
+assert_not_contains "$DOTFILES_DIR/home/dot_zshrc" "colorschemes" "zsh does not source shared colorschemes"
+
+echo ""
+echo "Testing Ghostty theme setup..."
+GHOSTTY_CONFIG="$DOTFILES_DIR/home/Library/Application Support/com.mitchellh.ghostty/config"
+GHOSTTY_AUTO_THEME="$DOTFILES_DIR/home/Library/Application Support/com.mitchellh.ghostty/auto/theme.ghostty"
+assert_file_exists "$GHOSTTY_CONFIG" "Ghostty config is managed"
+assert_file_exists "$GHOSTTY_AUTO_THEME" "Ghostty auto theme override is managed"
+assert_contains "$GHOSTTY_CONFIG" "theme = Cyberpunk Scarlet Protocol" "Ghostty uses Cyberpunk Scarlet Protocol"
+assert_not_contains "$GHOSTTY_AUTO_THEME" "^theme[[:space:]]*=" "Ghostty auto theme override is disabled"
+assert_contains "$GHOSTTY_CONFIG" "background-opacity = 1" "Ghostty background is opaque"
+assert_contains "$GHOSTTY_CONFIG" "background-blur = false" "Ghostty background blur is disabled"
 
 echo ""
 echo "Testing managed helper commands..."
@@ -125,10 +180,14 @@ echo ""
 echo "Testing scratchpad implementation..."
 assert_not_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" 'SCRATCHPAD_STATE_FILE' "Scratchpads CLI does not use a JSON registry"
 assert_not_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" 'scratchpads\.json' "Scratchpads CLI does not persist window IDs"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "SCRATCHPAD_PROJECTS_DIR" "Scratchpads CLI declares the projects root"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "SCRATCHPAD_PROJECTS_TMUX_SESSION" "Scratchpads CLI declares the projects tmux session"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "tmux new-session -d -s.*-n codex" "Projects scratchpad creates a codex tmux window"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "create_tmux_window_with_command.*nvim" "Projects scratchpad creates a nvim tmux window"
 assert_file_exists "$DOTFILES_DIR/home/dot_config/skhd/executable_app-mru.sh" "app-mru helper is declared"
 assert_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_focus_app.sh" 'app-mru.sh' "App focus helper uses MRU stacks"
 assert_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_focus_app.sh" 'app_mru_cycle' "App focus helper cycles by MRU"
-assert_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_focus_app.sh" 'EDITOR_APP:-VSCodium' "Alt+2 editor defaults to VSCodium"
+assert_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_focus_app.sh" 'EDITOR_APP:-VSCodium' "Editor app focus defaults to VSCodium"
 assert_not_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_focus_app.sh" 'focus recent' "App focus helper does not jump to unrelated windows"
 assert_not_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_app-mru.sh" 'focus recent' "App MRU helper stays within app windows"
 assert_file_exists "$DOTFILES_DIR/home/dot_config/yabai/executable_create-space" "Create-space helper is declared"

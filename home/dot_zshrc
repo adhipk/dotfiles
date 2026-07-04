@@ -1,36 +1,53 @@
-# Minimal zsh configuration
+# Daily-driver zsh configuration
 # man-me: name=y
 # man-me: category=Terminal and Sessions
 # man-me: usage=y [ARG ...]
 # man-me: description=Run Yazi and cd the parent shell to Yazi's final directory.
 # man-me: tags=yazi shell terminal cd file-manager
-export PATH="$HOME/.local/bin:$PATH"
-export PATH="/opt/homebrew/opt/openjdk/bin:$PATH"
+typeset -U path fpath
+path=("$HOME/.local/bin" "/opt/homebrew/opt/openjdk/bin" $path)
+export PATH
 export EDITOR=nvim
 export MANPAGER="sh -c 'col -bx | bat --paging=always -l man -p'"
+
+# Keep secrets and machine-specific env out of the repo.
+[ -f "$HOME/.zshrc.secrets" ] && source "$HOME/.zshrc.secrets"
+
 # Zsh plugins
-source "$HOME/.config/zsh/zshrc.commands"
-if [ -f "$HOME/antigen.zsh" ]; then
-    source "$HOME/antigen.zsh"
-elif [ -f /opt/homebrew/share/antigen/antigen.zsh ]; then
-    source /opt/homebrew/share/antigen/antigen.zsh
+[ -r "$HOME/.config/zsh/zshrc.commands" ] && source "$HOME/.config/zsh/zshrc.commands"
+ANTIGEN_ZSH=""
+for antigen_zsh in "$HOME/antigen.zsh" /opt/homebrew/share/antigen/antigen.zsh /usr/local/share/antigen/antigen.zsh; do
+    if [ -r "$antigen_zsh" ]; then
+        ANTIGEN_ZSH="$antigen_zsh"
+        break
+    fi
+done
+unset antigen_zsh
+
+if [ -n "$ANTIGEN_ZSH" ]; then
+    source "$ANTIGEN_ZSH"
+    antigen bundle zsh-users/zsh-autosuggestions
+    antigen bundle zsh-users/zsh-completions
+    antigen bundle zsh-users/zsh-history-substring-search
+    antigen bundle zsh-users/zsh-syntax-highlighting
+    antigen apply
 else
-    source /usr/local/share/antigen/antigen.zsh
+    print -u2 "zsh: antigen not found; skipping zsh plugins"
 fi
-antigen bundle zsh-users/zsh-autosuggestions
-antigen bundle zsh-users/zsh-completions
-antigen bundle zsh-users/zsh-syntax-highlighting
-antigen bundle zsh-users/zsh-history-substring-search
+unset ANTIGEN_ZSH
+
 # Starship prompt
 export STARSHIP_CONFIG="$HOME/.config/starship.toml"
-antigen apply
-eval "$(starship init zsh)"
-bindkey '^[[A' history-substring-search-up # or '\eOA'
-bindkey '^[[B' history-substring-search-down # or '\eOB'
-HISTORY_SUBSTRING_SEARCH_ENSURE_UNIQUE=1
+if command -v starship >/dev/null 2>&1; then
+    eval "$(starship init zsh)"
+fi
 
-source zsh-syntax-highlighting.zsh
-source zsh-history-substring-search.zsh
+if (( $+widgets[history-substring-search-up] )); then
+    bindkey '^[[A' history-substring-search-up # or '\eOA'
+    bindkey '^[[B' history-substring-search-down # or '\eOB'
+    HISTORY_SUBSTRING_SEARCH_ENSURE_UNIQUE=1
+fi
+
 # Docker completions
 fpath=("$HOME/.docker/completions" $fpath)
 autoload -Uz compinit
@@ -45,7 +62,7 @@ alias python=python3
 
 # bun
 export BUN_INSTALL="$HOME/.bun"
-export PATH="$BUN_INSTALL/bin:$PATH"
+path=("$BUN_INSTALL/bin" $path)
 alias ports='sudo lsof -i -n -P | grep LISTEN'
 function y() {
 	local tmp="$(mktemp -t "yazi-cwd.XXXXXX")" cwd
@@ -63,27 +80,28 @@ if [[ -n "$YAZI_ID" ]]; then
 	autoload -Uz add-zsh-hook
 	add-zsh-hook zshexit _yazi_cd
 fi
-eval "$(mise activate zsh)"
+if command -v mise >/dev/null 2>&1; then
+	eval "$(mise activate zsh)"
+fi
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
 
-autoload -U +X bashcompinit && bashcompinit
-complete -o nospace -C /opt/homebrew/bin/terraform terraform
+if [ -x /opt/homebrew/bin/terraform ]; then
+	autoload -U +X bashcompinit && bashcompinit
+	complete -o nospace -C /opt/homebrew/bin/terraform terraform
+fi
 
 # vapi
 export VAPI_INSTALL="$HOME/.vapi"
-export PATH="$VAPI_INSTALL/bin:$PATH"
+path=("$VAPI_INSTALL/bin" $path)
 export MANPATH=""$HOME/.vapi"/share/man:$MANPATH"
 
 # pnpm
 export PNPM_HOME="$HOME/Library/pnpm"
-case ":$PATH:" in
-  *":$PNPM_HOME:"*) ;;
-  *) export PATH="$PNPM_HOME:$PATH" ;;
-esac
+path=("$PNPM_HOME" $path)
 # pnpm end
 
 # sesh/tmux session manager integration
@@ -103,24 +121,12 @@ alias tl='tmux list-sessions'
 alias tksv='tmux kill-server'
 alias tkss='tmux kill-session -t'
 
-
-
-# === Claude Code + AWS Bedrock ===
-# Keep secrets and machine-specific env out of the repo.
-[ -f "$HOME/.zshrc.secrets" ] && source "$HOME/.zshrc.secrets"
-
-export PATH="$HOME/bin:$PATH"
+path=("$HOME/bin" $path)
 alias roigin="origin"
 
-eval "$(zoxide init zsh)"
+if command -v zoxide >/dev/null 2>&1; then
+	eval "$(zoxide init zsh)"
+fi
 
-# Zoxide tab completion for 'z' command
-_zoxide_z_complete() {
-    local tokens cmd
-    tokens=(${(z)LBUFFER})
-    cmd=${tokens[1]}
-    if [[ "$cmd" == "z" ]]; then
-        _values 'directories' $(zoxide query --list | tail -20)
-    fi
-}
-compdef _zoxide_z_complete z
+# Some tools assign PATH directly after zsh's unique-array setup.
+typeset -U path fpath

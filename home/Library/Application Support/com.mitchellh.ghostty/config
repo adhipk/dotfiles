@@ -1,0 +1,18 @@
+# tmux integration - send save-buffer command
+keybind = cmd+s=text:\x01\x73
+
+# tmux prefix to toggle zoom on current pane
+keybind = cmd+b=text:\x01\x7a
+
+# aesthetics
+theme = Cyberpunk Scarlet Protocol
+background-blur = false
+background-opacity = 1
+background=#000000
+macos-titlebar-style = hidden
+
+# typography
+font-size=16
+font-thicken=true
+font-thicken-strength=1
+adjust-cell-height=1

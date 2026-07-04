@@ -17,6 +17,7 @@ Your job is to maintain my dotfile configurations, this includes keyboard shortc
 - `alt + backtick` focuses Ghostty.
 - `alt + 1..5` focuses browser, Codex, editor, Teams, or Slack.
 - `alt + comma` opens a Codex scratchpad in `~/dotfiles`, then toggles visibility without closing it.
+- `alt + l` opens a projects scratchpad with a `~/projects` tmux session containing `codex` and `nvim` windows.
 - `alt + shift + backtick` creates a new terminal window on the focused space.
 
 ## Projects CLI

@@ -176,6 +176,7 @@ alt - 3 : ~/bin/hotkeys app-focus 3 "@editor"
 alt - 4 : ~/bin/hotkeys app-focus 4 "Microsoft Teams"
 alt - 5 : ~/bin/hotkeys app-focus 5 "Slack"
 alt - 0x2B : ~/bin/scratchpads open codex  # alt + comma
+alt - l : ~/bin/scratchpads open projects  # alt + l
 alt - 0x2A : ~/bin/hotkeys presentation toggle  # alt + backslash
 alt + shift - 0x2A : ~/bin/hotkeys zen toggle  # alt+shift+backslash
 

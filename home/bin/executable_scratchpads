@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # man-me: name=scratchpads
 # man-me: category=Window and Display
-# man-me: usage=scratchpads open quick; scratchpads open codex; scratchpads close; scratchpads rules; scratchpads debug
+# man-me: usage=scratchpads open quick; scratchpads open codex; scratchpads open projects; scratchpads close; scratchpads rules; scratchpads debug
 # man-me: description=Ghostty and yabai scratchpad manager.
 # man-me: tags=scratchpad scratchpads ghostty yabai window terminal
 
@@ -9,12 +9,16 @@ set -euo pipefail
 
 SCRATCHPAD_LOG_FILE="${SCRATCHPAD_LOG_FILE:-/tmp/scratchpads_${USER:-unknown}.log}"
 TMUX_SESSIONIZER="${TMUX_SESSIONIZER_CMD:-$HOME/bin/tmux-sessionizer-zoxide}"
+SCRATCHPAD_PROJECTS_DIR="${SCRATCHPAD_PROJECTS_DIR:-$HOME/projects}"
+SCRATCHPAD_PROJECTS_TMUX_SESSION="${SCRATCHPAD_PROJECTS_TMUX_SESSION:-projects}"
 
 usage() {
   cat <<'EOF'
 Usage:
   scratchpads open quick
   scratchpads open codex
+  scratchpads open projects
+  scratchpads tmux projects
   scratchpads close
   scratchpads debug
   scratchpads rules
@@ -407,6 +411,9 @@ scratchpad_profile_for_label() {
     codex_dotfiles)
       printf '%s\n' "codex"
       ;;
+    projects_tmux)
+      printf '%s\n' "codex"
+      ;;
     quick_terminal)
       printf '%s\n' "bottom"
       ;;
@@ -518,6 +525,7 @@ print_rule_for_label() {
 
 print_static_rules() {
   print_rule_for_label "codex_dotfiles"
+  print_rule_for_label "projects_tmux"
   print_rule_for_label "quick_terminal"
 }
 
@@ -768,10 +776,75 @@ open_codex_dotfiles_scratchpad() {
     "direct:/bin/zsh"
 }
 
+tmux_window_exists() {
+  local session="$1"
+  local window="$2"
+
+  tmux list-windows -t "=$session" -F '#{window_name}' 2>/dev/null \
+    | grep -Fqx -- "$window"
+}
+
+create_tmux_window_with_command() {
+  local session="$1"
+  local window="$2"
+  local cwd="$3"
+  local command_text="$4"
+
+  tmux new-window -t "=${session}:" -c "$cwd" -n "$window" >/dev/null
+  tmux send-keys -t "=${session}:${window}" "$command_text" C-m
+}
+
+ensure_projects_tmux_session() {
+  local session="$SCRATCHPAD_PROJECTS_TMUX_SESSION"
+  local project_dir="$SCRATCHPAD_PROJECTS_DIR"
+
+  if [ ! -d "$project_dir" ]; then
+    printf 'scratchpads: projects directory not found: %s\n' "$project_dir" >&2
+    return 1
+  fi
+
+  if ! command -v tmux >/dev/null 2>&1; then
+    printf 'scratchpads: tmux is required for the projects scratchpad.\n' >&2
+    return 1
+  fi
+
+  if ! tmux has-session -t "=$session" 2>/dev/null; then
+    tmux new-session -d -s "$session" -c "$project_dir" -n codex
+    tmux send-keys -t "=${session}:codex" "codex" C-m
+    create_tmux_window_with_command "$session" "nvim" "$project_dir" "nvim"
+  else
+    if ! tmux_window_exists "$session" "codex"; then
+      create_tmux_window_with_command "$session" "codex" "$project_dir" "codex"
+    fi
+    if ! tmux_window_exists "$session" "nvim"; then
+      create_tmux_window_with_command "$session" "nvim" "$project_dir" "nvim"
+    fi
+  fi
+
+  tmux select-window -t "=${session}:codex" >/dev/null 2>&1 || true
+
+  if [ -n "${TMUX:-}" ]; then
+    exec tmux switch-client -t "=$session"
+  fi
+
+  exec tmux attach -t "=$session"
+}
+
+open_projects_tmux_scratchpad() {
+  open_or_focus_scratchpad_with_profile \
+    "projects_tmux" \
+    "codex" \
+    "$SCRATCHPAD_PROJECTS_DIR" \
+    "$HOME/bin/scratchpads tmux projects" \
+    "direct:/bin/zsh"
+}
+
 debug_state() {
   {
     printf 'log_file=%s\n' "$SCRATCHPAD_LOG_FILE"
     printf 'tmux_sessionizer=%s\n' "$TMUX_SESSIONIZER"
+    printf 'projects_dir=%s\n' "$SCRATCHPAD_PROJECTS_DIR"
+    printf 'projects_tmux_session=%s\n' "$SCRATCHPAD_PROJECTS_TMUX_SESSION"
     printf '\nfocused_window:\n'
     if query_focused_window_json >/dev/null 2>&1; then
       query_focused_window_json | jq '{id, app, title, scratchpad, is_visible: ."is-visible", has_focus: ."has-focus"}'
@@ -802,6 +875,12 @@ main() {
     open:codex)
       open_codex_dotfiles_scratchpad
       ;;
+    open:projects)
+      open_projects_tmux_scratchpad
+      ;;
+    tmux:projects)
+      ensure_projects_tmux_session
+      ;;
     close:)
       close_all_scratchpads
       ;;
@@ -811,7 +890,7 @@ main() {
     rules:)
       print_static_rules
       ;;
-    :|help:|:help|:-h|:--help)
+    :|help:|:help|-h:|--help:|:-h|:--help)
       usage
       ;;
     *)

@@ -31,6 +31,7 @@ yabai -m config window_placement             second_child
 
 # padding and gaps
 BORDER_WIDTH=2.0
+BORDER_COLOR=0xff000000
 # Keep a minimal inset around the JankyBorders underlay so adjacent overlays
 # do not collide.
 BORDER_RESERVE=1
@@ -113,7 +114,7 @@ done
 # Draw a square underlay so native rounded window corners blend into the
 # tiled layout. Subsequent invocations update an existing borders process.
 if command -v borders >/dev/null 2>&1; then
-  borders style=square width="$BORDER_WIDTH" hidpi=on ax_focus=on active_color=0xff1e1e2e inactive_color=0xff1e1e2e background_color=0xff1e1e2e &
+  borders style=square width="$BORDER_WIDTH" hidpi=on ax_focus=on active_color="$BORDER_COLOR" inactive_color="$BORDER_COLOR" &
 fi
 
 echo "yabai configuration loaded..."
