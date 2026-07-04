@@ -154,6 +154,7 @@ an application name, application path, or bundle ID.
 - hold `caps lock` in Neovim: Control
 - `alt + n`: create a space and focus it
 - `alt + backtick`: focus Ghostty, skipping task windows titled like `nvim`, `vim`, `codex`, `claude`, or Codex's `Action Required` status
+- `alt + 1..5`: focus browser, Codex, editor, Teams, or Slack
 - `alt + comma`: open a Codex scratchpad in `~/dotfiles`, then toggle visibility without closing it
 - `alt + shift + backtick`: create a new Ghostty window on the focused space
 - `alt + r`: restart yabai and skhd
