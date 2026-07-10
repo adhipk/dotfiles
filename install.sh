@@ -2,8 +2,8 @@
 # man-me: name=install.sh
 # man-me: category=Repository Setup
 # man-me: usage=./install.sh [chezmoi apply args...]
-# man-me: description=Apply this source state, reload a running tmux server, and build the native ProjectDeck and shortcut-guide apps on macOS.
-# man-me: tags=install setup apply chezmoi dotfiles tmux projectdeck whichkey shortcut guide bootstrap
+# man-me: description=Apply this source state, install tmux plugins, reload tmux, and build the native ProjectDeck and shortcut-guide apps on macOS.
+# man-me: tags=install setup apply chezmoi dotfiles tmux plugins tpm projectdeck whichkey shortcut guide bootstrap
 set -euo pipefail
 
 DOTFILES_DIR="${DOTFILES_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
@@ -71,6 +71,24 @@ build_whichkey() {
         "$build_script"
 }
 
+ensure_workspace_directories() {
+    mkdir -p "$CHEZMOI_DESTINATION/projects"
+}
+
+install_tmux_plugins() {
+    local installer="$CHEZMOI_DESTINATION/.tmux/plugins/tpm/bin/install_plugins"
+
+    if [[ ! -x "$installer" ]]; then
+        echo "[dotfiles] tmux plugin manager is missing after chezmoi apply: $installer" >&2
+        return 1
+    fi
+
+    echo "[dotfiles] installing tmux plugins..."
+    HOME="$CHEZMOI_DESTINATION" \
+        TMUX_PLUGIN_MANAGER_PATH="$CHEZMOI_DESTINATION/.tmux/plugins/" \
+        "$installer"
+}
+
 reload_tmux_config() {
     command -v tmux >/dev/null 2>&1 || return 0
     tmux list-sessions >/dev/null 2>&1 || return 0
@@ -97,6 +115,8 @@ fi
 if [[ "$is_dry_run" == true ]]; then
     echo "[dotfiles] dry run complete; no files were changed."
 else
+    ensure_workspace_directories
+    install_tmux_plugins
     reload_tmux_config
     build_projectdeck
     build_whichkey

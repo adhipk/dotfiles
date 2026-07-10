@@ -10,6 +10,11 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
   exit 0
 fi
 
+if ! command -v swiftc >/dev/null 2>&1; then
+  echo "projectdeck: swiftc is required; install the Xcode Command Line Tools with: xcode-select --install" >&2
+  exit 1
+fi
+
 swiftc -parse-as-library -O \
   -framework SwiftUI \
   -framework AppKit \

@@ -40,14 +40,30 @@ On this checkout:
 ./bootstrap.sh
 ```
 
-`bootstrap.sh` installs Homebrew dependencies from `Brewfile`, including
-chezmoi, and applies this repository with `./install.sh`.
+`bootstrap.sh` installs Homebrew dependencies from `Brewfile`, including the
+Codex CLI and desktop app, applies this repository with `./install.sh`, installs
+the declared tmux plugins, builds ProjectDeck and the shortcut guide, creates
+`~/projects`, and starts the yabai and skhd launch services.
 
-On another Mac, chezmoi can clone and apply the repository directly:
+On another Mac, clone to the path used by the scratchpad workflow and run the
+same bootstrap:
 
 ```bash
-chezmoi init --apply git@github.com:adhipk/dotfiles.git
+git clone git@github.com:adhipk/dotfiles.git ~/dotfiles
+cd ~/dotfiles
+./bootstrap.sh
 ```
+
+A bare `chezmoi init --apply` only applies source state; it does not install the
+Homebrew packages or run the native build and service-start phases above.
+
+Two macOS approvals cannot be automated safely on a new client:
+
+- Grant Accessibility to yabai, skhd, and Ghostty, then approve Karabiner's
+  DriverKit extension and Input Monitoring access.
+- Follow yabai's documented SIP setup, reboot, and run `setup-yabai-sa`. The
+  helper installs a checksum-scoped sudoers rule for the current yabai binary,
+  loads the scripting addition, and restarts the service.
 
 Review and apply local changes with:
 
@@ -157,10 +173,14 @@ an application name, application path, or bundle ID.
 - `alt + 1..5`: focus browser, Codex, editor, Teams, or Slack
 - normal Ghostty windows use a transparent background; scratchpad Ghostty windows force opaque black
 - ordinary new tmux sessions start with `terminal` at `0`, `codex` at `1`, and `nvim` at `2`; command sessions and managed `hs-*` sessions are left unchanged
-- `alt + comma`: open the black terminal scratchpad and switch to the `dotfiles` tmux session with `terminal`, `codex`, and `nvim` windows
-- `alt + l`: open the same black terminal scratchpad and switch to the `projects` tmux session with `terminal`, `codex`, and `nvim` windows
+- `ctrl + 0/1/2` in tmux cycles windows by `terminal`/`codex`/`nvim` type; `ctrl + shift + 0/1/2` creates that type in the current pane's directory and switches to it, while `ctrl + 3..9` remains direct index switching
+- the minimal tmux bar stays at the bottom, shows the active folder at left, and centers `~`, `codex`, and `nvim`; a compact active-tab capsule and the focused Ghostty border share each session's accent, while inactive borders stay black; `Ctrl-a ,` renames a tab and starts Codex renames from its pane title
+- `fn + comma`: open the black terminal scratchpad and switch to the `dotfiles` tmux session with `terminal`, `codex`, and `nvim` windows
+- `fn + 1`: open the same black terminal scratchpad and switch to the `projects` tmux session with `terminal`, `codex`, and `nvim` windows
 - `cmd + backtick` in Ghostty: switch to tmux window `0` (`terminal`)
 - `cmd + 1` / `cmd + 2` in Ghostty: switch to tmux window `1` (`codex`) or `2` (`nvim`)
+- `cmd + b` in Ghostty: open Yazi in a 40%-wide full-height right tmux pane rooted in the active pane's directory
+- `cmd + shift + b` in Ghostty: open or select a dedicated Yazi tmux window rooted in the active pane's directory
 - `alt + shift + backtick`: create a new Ghostty window on the focused space
 - `alt + r`: restart yabai and skhd
 - `alt + /`: open the interactive shortcut guide without activating away from the current app; press a bare key to find every shortcut ending in it. Use `Option+Up/Down` to browse, `Option+Left/Right` for categories, `Option+F/P` for text/key search, `Option+C` to clear, and `Esc` to close

@@ -18,9 +18,10 @@ Your job is to maintain my dotfile configurations, this includes keyboard shortc
 - `alt + backtick` focuses normal Ghostty windows; scratchpads are excluded from the app MRU list.
 - `alt + 1..5` focuses browser, Codex, editor, Teams, or Slack.
 - normal Ghostty windows are transparent; scratchpad Ghostty windows force opaque black.
-- `alt + comma` opens the black terminal scratchpad and switches to a `~/dotfiles` tmux session containing `terminal`, `codex`, and `nvim` windows.
-- `alt + l` opens the same black terminal scratchpad and switches to a separate `~/projects` tmux session containing `terminal`, `codex`, and `nvim` windows.
+- `fn + comma` opens the black terminal scratchpad and switches to a `~/dotfiles` tmux session containing `terminal`, `codex`, and `nvim` windows.
+- `fn + 1` opens the same black terminal scratchpad and switches to a separate `~/projects` tmux session containing `terminal`, `codex`, and `nvim` windows.
 - In Ghostty, `cmd + backtick` switches to tmux window `0` (`terminal`), `cmd + 1` switches to window `1` (`codex`), and `cmd + 2` switches to window `2` (`nvim`).
+- In Ghostty, `cmd + b` opens Yazi in a 40%-wide full-height right tmux pane, while `cmd + shift + b` opens or selects a dedicated Yazi tmux window; new Yazi views inherit the active pane's directory.
 - `alt + shift + backtick` creates a new terminal window on the focused space.
 
 ## Projects CLI
@@ -33,10 +34,14 @@ Your job is to maintain my dotfile configurations, this includes keyboard shortc
 ## Terminal Defaults
 - `home/dot_config/skhd/executable_open_terminal_window.sh` defaults to Ghostty.
 - Ordinary new tmux sessions use the shared `terminal` `0`, `codex` `1`, `nvim` `2` template. Sessions created with an explicit command, `hs-*` sessions, and sessions with `DOTFILES_TMUX_TEMPLATE=skip` are left alone.
+- In tmux, `Ctrl+0/1/2` cycles windows by `terminal`/`codex`/`nvim` type; `Ctrl+Shift+0/1/2` creates that type in the current pane's directory and switches to it. `Ctrl+3..9` still selects a window by index.
+- The minimal tmux bar stays at the bottom, shows the active folder at left, and centers `~`, `codex`, and `nvim`; each session colors its active-tab capsule and focused Ghostty border, and `Ctrl-a ,` renames a tab and seeds Codex renames from the pane title.
 
 ## Chezmoi
 - `.chezmoiroot` points to `home/`, the desired state for `$HOME`.
 - `install.sh` applies the source state with chezmoi.
+- `bootstrap.sh` installs the Brewfile (including Codex, Yazi, and JankyBorders), provisions TPM plugins, creates `~/projects`, builds the native HUDs, and starts yabai/skhd for a clean client.
+- Fresh clients still require macOS approvals plus `setup-yabai-sa` after completing yabai's SIP setup.
 - Add helper commands under `home/bin/` with the `executable_` attribute.
 - Add one-time setup scripts under `home/.chezmoiscripts/` with a `run_once_` prefix.
 - Add personal agent defaults under `home/dot_agents/`; chezmoi applies this to `~/.agents/`.

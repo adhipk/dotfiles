@@ -21,6 +21,8 @@ TEST_SUITES=(
     "test_configs.sh"
     "test_projects.sh"
     "test_tmux_session_template.sh"
+    "test_tmux_border_accent.sh"
+    "test_tmux_yazi_pane.sh"
     "test_whichkey.sh"
     "test_source_state.sh"
     "test_default_apps.sh"

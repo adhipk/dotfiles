@@ -30,11 +30,12 @@ yabai -m config layout                       bsp
 yabai -m config window_placement             second_child
 
 # padding and gaps
-BORDER_WIDTH=2.0
+BORDER_WIDTH=4.0
 BORDER_COLOR=0xff000000
-# Keep a minimal inset around the JankyBorders underlay so adjacent overlays
-# do not collide.
-BORDER_RESERVE=1
+# Reserve half the border width around each tile so adjacent overlays do not
+# collide. Inactive borders stay black; focused tmux windows use their session
+# accent through tmux-border-accent.
+BORDER_RESERVE=2
 BORDER_GAP=$((BORDER_RESERVE * 2))
 yabai -m config top_padding                  "$BORDER_RESERVE"
 yabai -m config bottom_padding               "$BORDER_RESERVE"
@@ -111,10 +112,11 @@ done
 
 # No space assignments - windows open in current space by default
 
-# Draw a square underlay so native rounded window corners blend into the
-# tiled layout. Subsequent invocations update an existing borders process.
-if command -v borders >/dev/null 2>&1; then
-  borders style=square width="$BORDER_WIDTH" hidpi=on ax_focus=on active_color="$BORDER_COLOR" inactive_color="$BORDER_COLOR" &
+# Draw a square black underlay for inactive windows and a session-colored
+# border around the focused tmux client. The helper starts JankyBorders with
+# the full configuration; later tmux hooks only update its active color.
+if command -v borders >/dev/null 2>&1 && [ -x "$HOME/bin/tmux-border-accent" ]; then
+  "$HOME/bin/tmux-border-accent" start "$BORDER_WIDTH" "$BORDER_COLOR" &
 fi
 
 echo "yabai configuration loaded..."

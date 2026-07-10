@@ -1,9 +1,9 @@
 # man-me: name=Makefile
 # man-me: category=Repository Setup
 # man-me: usage=make test; make install; make diff; make watch; make reload
-# man-me: description=Convenience wrappers for tests, apply, diff, watch, reload, and native HUD builds.
-# man-me: tags=make setup test install apply diff watch reload projectdeck whichkey shortcuts
-.PHONY: test test-colorscheme test-configs test-projects test-tmux-session-template test-source-state test-install test-integration test-whichkey install apply apply-debug compile sync diff watch reload clean help build-projectdeck build-whichkey
+# man-me: description=Convenience wrappers for tests, source-state and tmux-plugin installation, diff, watch, reload, and native HUD builds.
+# man-me: tags=make setup test install apply diff watch reload tmux tpm projectdeck whichkey shortcuts
+.PHONY: test test-colorscheme test-configs test-projects test-tmux-session-template test-tmux-border-accent test-tmux-yazi-pane test-source-state test-install test-integration test-whichkey install apply apply-debug compile sync diff watch reload clean help build-projectdeck build-whichkey
 
 # Default target
 help:
@@ -14,10 +14,12 @@ help:
 	@echo "  make test-colorscheme  - Run colorscheme tests only"
 	@echo "  make test-configs      - Run config file tests only"
 	@echo "  make test-tmux-session-template - Run tmux template tests only"
+	@echo "  make test-tmux-border-accent - Run tmux/JankyBorders accent tests only"
+	@echo "  make test-tmux-yazi-pane - Run tmux Yazi side-pane tests only"
 	@echo "  make test-source-state - Run chezmoi source-state tests only"
 	@echo "  make test-install      - Run disposable installer tests only"
 	@echo "  make test-integration  - Run integration tests only"
-	@echo "  make install           - Apply dotfiles and build ProjectDeck + shortcut guide"
+	@echo "  make install           - Apply dotfiles, install tmux plugins, and build native HUDs"
 	@echo "  make apply             - Alias for install"
 	@echo "  make apply-debug       - Apply dotfiles with verbose chezmoi output"
 	@echo "  make compile           - Alias for install"
@@ -45,6 +47,12 @@ test-projects:
 
 test-tmux-session-template:
 	@./tests/test_tmux_session_template.sh
+
+test-tmux-border-accent:
+	@./tests/test_tmux_border_accent.sh
+
+test-tmux-yazi-pane:
+	@./tests/test_tmux_yazi_pane.sh
 
 test-source-state:
 	@./tests/test_source_state.sh

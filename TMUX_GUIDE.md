@@ -36,7 +36,10 @@ Ordinary new sessions automatically receive this window layout:
 - `2 nvim` — starts Neovim
 
 In Ghostty, `Cmd+Backtick`, `Cmd+1`, and `Cmd+2` jump directly to those
-windows. Sessions created with an explicit command remain single-purpose.
+windows. `Cmd+B` toggles one Yazi 40%-wide full-height right pane, while
+`Cmd+Shift+B` opens or selects a dedicated Yazi tmux window. New Yazi views
+start in the active pane's directory and close when Yazi exits. Sessions
+created with an explicit command remain single-purpose.
 Compound/orchestrated session creators that add their own windows or queue
 index-targeted commands must use
 `tmux new-session -e DOTFILES_TMUX_TEMPLATE=skip ...`; `hs-*` sessions opt out
@@ -47,8 +50,11 @@ automatically.
 ### Panes (most common)
 - `Ctrl+A \|` - Split pane horizontally (keep current directory)
 - `Ctrl+A -` - Split pane vertically (keep current directory)
+- `Cmd+B` in Ghostty - Toggle one Yazi 40%-wide full-height right pane
+- `Ctrl+A z` - Toggle zoom for the current pane
 
 ### Windows (like browser tabs)
+- `Cmd+Shift+B` in Ghostty - Open or select a dedicated Yazi window
 - `Ctrl+A c` - New window (tmux default)
 - `Ctrl+A p` - Previous window
 - `Ctrl+A n` - Next window

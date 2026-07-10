@@ -22,8 +22,9 @@ These commands are installed into `~/bin`, which `home/dot_zshrc` adds to
 | `lucide-icons-excalidraw` | Start the external Raycast development command for the Lucide Excalidraw picker. Additional arguments are passed to the Raycast extension's `npm run dev`. | [`home/bin/executable_lucide-icons-excalidraw.tmpl`](home/bin/executable_lucide-icons-excalidraw.tmpl) |
 | `reload-colors` | Restart yabai and skhd, then reload tmux configuration when tmux is running. | [`home/bin/executable_reload-colors`](home/bin/executable_reload-colors) |
 | `reset-yabai` | Reinstall and pin `yabai@7.1.16`, update its scripting-addition sudoers entry, and restart its service. This uses `sudo` and changes Homebrew packages and `/etc/sudoers.d/yabai`. | [`home/bin/executable_reset-yabai`](home/bin/executable_reset-yabai) |
+| `setup-yabai-sa` | Authorize the currently installed yabai binary with a checksum-scoped sudoers rule, load its scripting addition, and restart the service after the required SIP setup. | [`home/bin/executable_setup-yabai-sa`](home/bin/executable_setup-yabai-sa) |
 | `tmux-session-picker` | Select and switch to an existing tmux session with `sesh` + `fzf`. | [`home/bin/executable_tmux-session-picker`](home/bin/executable_tmux-session-picker) |
-| `tmux-session-template` | Apply the standard `terminal:0`, `codex:1`, `nvim:2` layout to a tmux session. The tmux new-session hook calls its guarded `auto` mode; scratchpads call `ensure`. | [`home/bin/executable_tmux-session-template`](home/bin/executable_tmux-session-template) |
+| `tmux-session-template` | Apply and navigate the standard `terminal:0`, `codex:1`, `nvim:2` tmux window types. The new-session hook calls guarded `auto`, scratchpads call `ensure`, and the type shortcuts call `cycle` or `new`. | [`home/bin/executable_tmux-session-template`](home/bin/executable_tmux-session-template) |
 | `tmux-sessionizer-zoxide` | Pick from existing tmux sessions or zoxide-ranked directories and connect via `sesh`. | [`home/bin/executable_tmux-sessionizer-zoxide`](home/bin/executable_tmux-sessionizer-zoxide) |
 | `tmux-sessionizer` | Compatibility wrapper for `-s <index>` and interactive selection, backed by `sesh`. | [`home/bin/executable_tmux-sessionizer`](home/bin/executable_tmux-sessionizer) |
 | `unescape-buffer` | Read escaped text from stdin and write unescaped newlines, tabs, carriage returns, quotes, and backslashes to stdout. Implemented in Node.js. | [`home/bin/executable_unescape-buffer`](home/bin/executable_unescape-buffer) |
@@ -154,11 +155,14 @@ with `-e DOTFILES_TMUX_TEMPLATE=skip`; `hs-*` sessions are also excluded.
 ## Repository Commands
 
 Run `./bootstrap.sh` on a new Mac. It installs Homebrew when needed, installs
-the `Brewfile`, and delegates the chezmoi apply to `./install.sh`.
+the `Brewfile` (including the Codex CLI/app), delegates the chezmoi apply to
+`./install.sh`, installs the TPM-managed tmux plugins, creates `~/projects`,
+builds the native HUDs, and starts the yabai and skhd launch services.
 
 Run `./install.sh [CHEZMOI APPLY ARG ...]` to apply this checkout. Arguments are
-passed through to `chezmoi apply`. When a tmux server is already running, the
-installer reloads `~/.tmux.conf` after the apply. For example:
+passed through to `chezmoi apply`. A real apply also installs declared tmux
+plugins before reloading an existing tmux server and rebuilding ProjectDeck and
+the shortcut guide. For example:
 
 ```bash
 ./install.sh --dry-run
@@ -178,7 +182,7 @@ DOTFILES_DEBUG=1 ./install.sh
 | `make test-source-state` | Run chezmoi source-state tests. |
 | `make test-install` | Run disposable installer tests. |
 | `make test-integration` | Run workstation integration tests. |
-| `make install`, `make apply`, `make compile`, `make sync` | Apply the chezmoi source state. |
+| `make install`, `make apply`, `make compile`, `make sync` | Apply chezmoi source state, install tmux plugins, create `~/projects`, and build the native HUDs. |
 | `make apply-debug` | Apply the source state with verbose chezmoi output. |
 | `make diff` | Preview chezmoi-managed changes. |
 | `make watch` | Run `watch-sync`. |
@@ -188,7 +192,8 @@ DOTFILES_DEBUG=1 ./install.sh
 
 The test runner is [`tests/run_all_tests.sh`](tests/run_all_tests.sh). Its
 individual suites are `test_colorscheme.sh`, `test_configs.sh`,
-`test_projects.sh`, `test_tmux_session_template.sh`, `test_whichkey.sh`, `test_source_state.sh`,
+`test_projects.sh`, `test_tmux_session_template.sh`, `test_tmux_border_accent.sh`, `test_tmux_yazi_pane.sh`,
+`test_whichkey.sh`, `test_source_state.sh`,
 `test_default_apps.sh`, `test_install.sh`, and `test_integration.sh`.
 
 ## Desktop Helpers
@@ -212,6 +217,8 @@ Installed below `~/.config/skhd/`:
 | [`snap_window.sh left\|right`](home/dot_config/skhd/executable_snap_window.sh) | Warp the current window and resize it to half the display width. |
 | [`toggle_ghostty_quick_terminal.sh`](home/dot_config/skhd/executable_toggle_ghostty_quick_terminal.sh) | Create or toggle a bottom-third Ghostty scratchpad named `quick_terminal`. |
 | [`scratchpads`](home/bin/executable_scratchpads) | Manage one floating Ghostty terminal scratchpad while switching between separate tmux sessions. Scratchpad Ghostty windows force opaque black, while normal Ghostty windows keep the global transparent background. `scratchpads open codex` targets `dotfiles`; `scratchpads open projects` targets `projects`. Both tmux sessions keep `terminal` at window `0`, `codex` at `1`, and `nvim` at `2`. |
+| [`tmux-border-accent`](home/bin/executable_tmux-border-accent) | Start JankyBorders with the tiled-layout geometry and keep the focused Ghostty border synchronized with its tmux session accent. |
+| [`tmux-yazi-pane`](home/bin/executable_tmux-yazi-pane) | Toggle one marked full-height Yazi side pane per tmux window. |
 | [`whichkey`](scripts/whichkey/WhichKey.swift) | Source-owned SwiftUI shortcut browser. It parses the live `~/.skhdrc`, searches by captured key chord or text, provides categories and mouse/keyboard selection, and keeps raw commands in a separate detail pane. Built locally to `~/.config/skhd/whichkey`. |
 
 ### yabai Helpers
@@ -261,9 +268,14 @@ operations to these shortcuts:
 | `Alt+n` | Create and focus a new space, moving the focused non-scratchpad window there only when another non-scratchpad window remains on the current space. |
 | `Alt+k` | Close empty spaces. |
 | `Alt+Backtick`, `Alt+1..5` | Focus Ghostty, the default browser, Codex, VSCodium (`EDITOR_APP`), Teams, or Slack. Repeat to MRU-cycle that app's non-scratchpad windows only. |
-| `Alt+Comma` | Open the opaque black terminal scratchpad and switch its tmux client to `dotfiles`, with `terminal`, `codex`, and `nvim` windows. |
-| `Alt+l` | Open the same opaque black terminal scratchpad and switch its tmux client to `projects`, with `terminal`, `codex`, and `nvim` windows. |
+| `Fn+Comma` | Open the opaque black terminal scratchpad and switch its tmux client to `dotfiles`, with `terminal`, `codex`, and `nvim` windows. |
+| `Fn+1` | Open the same opaque black terminal scratchpad and switch its tmux client to `projects`, with `terminal`, `codex`, and `nvim` windows. |
 | `Cmd+Backtick`, `Cmd+1`, `Cmd+2` in Ghostty | Send tmux prefix plus `0`, `1`, or `2`, switching to `terminal`, `codex`, or `nvim` without depending on terminal `Ctrl+number` encoding. |
+| `Cmd+B` in Ghostty | Toggle one Yazi 40%-wide full-height right tmux pane, starting in the active pane's directory without creating duplicates. |
+| `Cmd+Shift+B` in Ghostty | Open or select a dedicated Yazi tmux window, starting new views in the active pane's directory. |
+| `Ctrl+0/1/2` in tmux | Cycle windows tagged as `terminal`, `codex`, or `nvim`, including manually renamed duplicates. |
+| `Ctrl+Shift+0/1/2` in tmux | Create a `terminal`, `codex`, or `nvim` window in the current pane's directory and switch to it. |
+| `Ctrl+3..9` in tmux | Select the exact tmux window index. |
 | `Alt+Shift+Backtick` | Create a new terminal window on the focused space. |
 | `Alt+Shift+Backslash` | Toggle zen mode. In zen mode, terminal focus plus `Alt+1` browser and `Alt+2` Codex focus still work; `Alt+3..5` are disabled. |
 | `Ctrl+Alt+w`, `Ctrl+Alt+z` | Close or minimize the current window. |

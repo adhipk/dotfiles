@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# man-me: name=tmux-border-accent
+# man-me: category=Terminal and Sessions
+# man-me: usage=tmux-border-accent start [WIDTH] [INACTIVE_COLOR]; tmux-border-accent update
+# man-me: description=Match the focused Ghostty JankyBorder to its tmux session accent.
+# man-me: tags=tmux ghostty jankyborders borders accent focus session color
+
+set -euo pipefail
+
+BORDERS_BIN="${TMUX_BORDER_ACCENT_BORDERS_BIN:-borders}"
+TMUX_BIN="${TMUX_BORDER_ACCENT_TMUX_BIN:-tmux}"
+DEFAULT_BORDER_WIDTH="${TMUX_BORDER_ACCENT_WIDTH:-4.0}"
+DEFAULT_INACTIVE_COLOR="${TMUX_BORDER_ACCENT_INACTIVE_COLOR:-0xff000000}"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  tmux-border-accent start [WIDTH] [INACTIVE_COLOR]
+  tmux-border-accent update
+
+start   Start JankyBorders with the complete square-border configuration.
+update  Update an existing JankyBorders process from the focused tmux client.
+EOF
+}
+
+focused_tmux_accent() {
+  local accents
+
+  accents=$("$TMUX_BIN" list-clients \
+    -F '#{?#{m:*focused*,#{client_flags}},#{E:@dotfiles_status_accent},}' \
+    2>/dev/null) || return 0
+  awk 'NF { print; exit }' <<<"$accents"
+}
+
+border_color() {
+  local accent
+
+  accent=$(focused_tmux_accent)
+  if [[ "$accent" =~ ^#[[:xdigit:]]{6}$ ]]; then
+    printf '0xff%s\n' "${accent#\#}"
+  else
+    printf '%s\n' "$DEFAULT_INACTIVE_COLOR"
+  fi
+}
+
+borders_available() {
+  command -v "$BORDERS_BIN" >/dev/null 2>&1 || [[ -x "$BORDERS_BIN" ]]
+}
+
+borders_running() {
+  pgrep -x borders >/dev/null 2>&1
+}
+
+start_borders() {
+  local width="${1:-$DEFAULT_BORDER_WIDTH}"
+  local inactive_color="${2:-$DEFAULT_INACTIVE_COLOR}"
+  local active_color
+
+  active_color=$(border_color)
+  exec "$BORDERS_BIN" \
+    style=square \
+    "width=$width" \
+    hidpi=on \
+    ax_focus=on \
+    "active_color=$active_color" \
+    "inactive_color=$inactive_color"
+}
+
+update_borders() {
+  local active_color
+
+  borders_running || return 0
+  active_color=$(border_color)
+  "$BORDERS_BIN" "active_color=$active_color"
+}
+
+main() {
+  local mode="${1:-update}"
+
+  case "$mode" in
+    -h|--help|help)
+      usage
+      return 0
+      ;;
+    start|update)
+      ;;
+    *)
+      usage >&2
+      return 2
+      ;;
+  esac
+
+  borders_available || return 0
+
+  case "$mode" in
+    start)
+      start_borders "${2:-}" "${3:-}"
+      ;;
+    update)
+      update_borders
+      ;;
+  esac
+}
+
+main "$@"

@@ -208,12 +208,12 @@ else
 fi
 
 echo ""
-echo "Testing no border integration remains..."
+echo "Testing no legacy manual border integration remains..."
 if ! grep -R "config/borders\\|mark_window.sh\\|update_border.sh" "$DOTFILES_DIR/install.sh" "$DOTFILES_DIR/home/dot_skhdrc" "$DOTFILES_DIR/home/dot_yabairc" "$DOTFILES_DIR/README.md" > /dev/null 2>&1; then
-    echo "  ✓ Border integration removed from core configs"
+    echo "  ✓ Legacy window-ID border integration stays removed"
     ((PASSED++))
 else
-    echo "  ✗ Border integration references still present"
+    echo "  ✗ Legacy window-ID border integration references still present"
     ((FAILED++))
 fi
 

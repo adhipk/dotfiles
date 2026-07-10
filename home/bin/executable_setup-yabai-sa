@@ -1,0 +1,38 @@
+#!/bin/zsh
+# man-me: name=setup-yabai-sa
+# man-me: category=Window and Display
+# man-me: usage=setup-yabai-sa
+# man-me: description=Authorize and load yabai's scripting addition for the currently installed binary.
+# man-me: tags=yabai scripting addition sudoers spaces bootstrap macos
+
+set -euo pipefail
+
+YABAI_BIN="${YABAI_BIN:-$(command -v yabai || true)}"
+SUDOERS_FILE="${YABAI_SUDOERS_FILE:-/private/etc/sudoers.d/yabai}"
+TEMP_RULE=""
+
+cleanup() {
+  [[ -z "$TEMP_RULE" ]] || /bin/rm -f "$TEMP_RULE"
+}
+trap cleanup EXIT
+
+if [[ -z "$YABAI_BIN" || ! -x "$YABAI_BIN" ]]; then
+  echo "setup-yabai-sa: yabai is not installed." >&2
+  exit 1
+fi
+
+YABAI_SHA256=$(/usr/bin/shasum -a 256 "$YABAI_BIN" | /usr/bin/awk '{print $1}')
+SUDOERS_RULE="$(/usr/bin/id -un) ALL=(root) NOPASSWD: sha256:$YABAI_SHA256 $YABAI_BIN --load-sa"
+
+TEMP_RULE=$(/usr/bin/mktemp "${TMPDIR:-/tmp}/yabai-sudoers.XXXXXX")
+printf '%s\n' "$SUDOERS_RULE" > "$TEMP_RULE"
+sudo /usr/sbin/visudo -cf "$TEMP_RULE" >/dev/null
+sudo /usr/bin/install -o root -g wheel -m 0440 "$TEMP_RULE" "$SUDOERS_FILE"
+
+if ! sudo "$YABAI_BIN" --load-sa; then
+  echo "setup-yabai-sa: scripting addition load failed. Complete yabai's SIP setup, reboot, and rerun this command." >&2
+  exit 1
+fi
+
+"$YABAI_BIN" --restart-service
+echo "setup-yabai-sa: scripting addition authorized and loaded."

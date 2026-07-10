@@ -9,6 +9,7 @@ TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-tmux-template-test.XXXXXX")"
 SOCKET_NAME="dotfiles-template-test-$$"
 FAKE_BIN="$TEMP_DIR/bin"
 PROJECT_DIR="$TEMP_DIR/project"
+TYPE_DIR="$PROJECT_DIR/current-pane"
 TMUX_CONFIG="$TEMP_DIR/tmux.conf"
 
 PASSED=0
@@ -68,6 +69,22 @@ session_marker() {
     tmux_test show-options -qv -t "$1" @dotfiles_tmux_template 2>/dev/null || true
 }
 
+window_id_at_index() {
+    local session="$1"
+    local target_index="$2"
+
+    tmux_test list-windows -t "=$session" -F '#{window_index} #{window_id}' \
+        | awk -v target_index="$target_index" '$1 == target_index { print $2; exit }'
+}
+
+window_type() {
+    tmux_test show-options -wqv -t "$1" @dotfiles_window_type 2>/dev/null || true
+}
+
+active_window_id() {
+    tmux_test list-windows -t "=$1" -F '#{?window_active,#{window_id},}' | sed '/^$/d'
+}
+
 assert_auto_succeeds() {
     local session="$1"
     local name="$2"
@@ -79,7 +96,7 @@ assert_auto_succeeds() {
     fi
 }
 
-mkdir -p "$FAKE_BIN" "$PROJECT_DIR"
+mkdir -p "$FAKE_BIN" "$PROJECT_DIR" "$TYPE_DIR"
 
 cat > "$FAKE_BIN/codex" <<'EOF'
 #!/usr/bin/env bash
@@ -141,6 +158,14 @@ assert_equals \
     "templated sessions carry the standard marker" \
     "standard" \
     "$(tmux_test show-options -qv -t ordinary @dotfiles_tmux_template)"
+assert_equals \
+    "template windows carry stable terminal/codex/nvim type metadata" \
+    $'terminal\ncodex\nnvim' \
+    "$(
+        window_type "$(window_id_at_index ordinary 0)"
+        window_type "$(window_id_at_index ordinary 1)"
+        window_type "$(window_id_at_index ordinary 2)"
+    )"
 sleep 0.1
 assert_equals \
     "Codex and Neovim startup commands run in their windows" \
@@ -149,6 +174,124 @@ assert_equals \
         tmux_test list-panes -t '=ordinary:codex' -F '#{pane_current_command}'
         tmux_test list-panes -t '=ordinary:nvim' -F '#{pane_current_command}'
     )"
+
+echo ""
+echo "Testing typed window creation and cycling..."
+mkdir -p "$TEMP_DIR/home"
+tmux_test set-environment -t ordinary PATH "$FAKE_BIN:$PATH"
+tmux_test set-environment -t ordinary HOME "$TEMP_DIR/home"
+tmux_test set-option -t ordinary default-command \
+    "env PATH=$FAKE_BIN:$PATH HOME=$TEMP_DIR/home /bin/bash --noprofile --norc"
+TERMINAL_PANE=$(tmux_test list-panes -t '=ordinary:0' -F '#{pane_id}' | head -n 1)
+tmux_test send-keys -l -t "$TERMINAL_PANE" "cd -- '$TYPE_DIR'"
+tmux_test send-keys -t "$TERMINAL_PANE" C-m
+sleep 0.1
+CANONICAL_TYPE_DIR=$(cd "$TYPE_DIR" && pwd -P)
+CANONICAL_CODEX_ID=$(window_id_at_index ordinary 1)
+CANONICAL_NVIM_ID=$(window_id_at_index ordinary 2)
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" new ordinary codex "$TERMINAL_PANE"
+NEW_CODEX_ID=$(active_window_id ordinary)
+assert_equals \
+    "new Codex creates and selects one duplicate in the source pane directory" \
+    "4|codex|codex|$CANONICAL_TYPE_DIR|$NEW_CODEX_ID" \
+    "$(
+        printf '%s|' "$(session_window_count ordinary)"
+        printf '%s|' "$(window_type "$NEW_CODEX_ID")"
+        printf '%s|' "$(tmux_test display-message -p -t "$NEW_CODEX_ID" '#{window_name}')"
+        printf '%s|' "$(tmux_test display-message -p -t "$NEW_CODEX_ID" '#{pane_current_path}')"
+        active_window_id ordinary
+    )"
+sleep 0.1
+assert_equals \
+    "new Codex starts only in the captured duplicate window" \
+    $'sleep\nsleep' \
+    "$(
+        tmux_test display-message -p -t "$CANONICAL_CODEX_ID" '#{pane_current_command}'
+        tmux_test display-message -p -t "$NEW_CODEX_ID" '#{pane_current_command}'
+    )"
+
+tmux_test select-pane -t "$NEW_CODEX_ID" -T codex-pane-title
+tmux_test rename-window -t "$NEW_CODEX_ID" feature-auth
+assert_equals \
+    "renaming a duplicate preserves its Codex type" \
+    "codex" \
+    "$(window_type "$NEW_CODEX_ID")"
+assert_equals \
+    "renamed Codex windows still seed renames from the pane title" \
+    "codex-pane-title" \
+    "$(tmux_test display-message -p -t "$NEW_CODEX_ID" '#{?#{||:#{==:#{@dotfiles_window_type},codex},#{==:#W,codex}},#T,#W}')"
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" cycle ordinary codex "$NEW_CODEX_ID"
+assert_equals \
+    "cycling from the last Codex wraps to the canonical Codex" \
+    "$CANONICAL_CODEX_ID" \
+    "$(active_window_id ordinary)"
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" cycle ordinary codex "$CANONICAL_CODEX_ID"
+assert_equals \
+    "cycling reaches a renamed Codex duplicate by type metadata" \
+    "$NEW_CODEX_ID" \
+    "$(active_window_id ordinary)"
+tmux_test select-window -t "$CANONICAL_NVIM_ID"
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" cycle ordinary codex "$CANONICAL_NVIM_ID"
+assert_equals \
+    "cycling from another type selects the first Codex" \
+    "$CANONICAL_CODEX_ID" \
+    "$(active_window_id ordinary)"
+
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" ensure ordinary "$PROJECT_DIR"
+assert_equals \
+    "ensure remains idempotent after a renamed typed duplicate" \
+    $'4\nterminal\ncodex\nnvim\ncodex' \
+    "$(
+        printf '%s\n' "$(session_window_count ordinary)"
+        window_type "$(window_id_at_index ordinary 0)"
+        window_type "$(window_id_at_index ordinary 1)"
+        window_type "$(window_id_at_index ordinary 2)"
+        window_type "$NEW_CODEX_ID"
+    )"
+
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" new ordinary terminal "$TERMINAL_PANE"
+NEW_TERMINAL_ID=$(active_window_id ordinary)
+assert_equals \
+    "new terminal creates a typed shell and selects it" \
+    "terminal|terminal|bash|$NEW_TERMINAL_ID" \
+    "$(
+        printf '%s|' "$(window_type "$NEW_TERMINAL_ID")"
+        printf '%s|' "$(tmux_test display-message -p -t "$NEW_TERMINAL_ID" '#{window_name}')"
+        printf '%s|' "$(tmux_test display-message -p -t "$NEW_TERMINAL_ID" '#{pane_current_command}')"
+        active_window_id ordinary
+    )"
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" cycle ordinary terminal "$NEW_TERMINAL_ID"
+assert_equals \
+    "terminal cycling wraps to the canonical terminal" \
+    "$(window_id_at_index ordinary 0)" \
+    "$(active_window_id ordinary)"
+
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" new ordinary nvim "$TERMINAL_PANE"
+NEW_NVIM_ID=$(active_window_id ordinary)
+sleep 0.1
+assert_equals \
+    "new Neovim creates a typed editor and selects it" \
+    "nvim|nvim|sleep|$NEW_NVIM_ID" \
+    "$(
+        printf '%s|' "$(window_type "$NEW_NVIM_ID")"
+        printf '%s|' "$(tmux_test display-message -p -t "$NEW_NVIM_ID" '#{window_name}')"
+        printf '%s|' "$(tmux_test display-message -p -t "$NEW_NVIM_ID" '#{pane_current_command}')"
+        active_window_id ordinary
+    )"
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" cycle ordinary nvim "$NEW_NVIM_ID"
+assert_equals \
+    "Neovim cycling wraps to the canonical Neovim" \
+    "$CANONICAL_NVIM_ID" \
+    "$(active_window_id ordinary)"
 
 echo ""
 echo "Testing safety guards..."
@@ -196,6 +339,17 @@ assert_equals \
     "hook quoting supports session names with spaces" \
     $'0:terminal\n1:codex\n2:nvim' \
     "$(session_windows "space name")"
+
+DOLLAR_SESSION='$named-session'
+new_session -d -e DOTFILES_TMUX_TEMPLATE=skip -s "$DOLLAR_SESSION" -c "$PROJECT_DIR" -n terminal
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" ensure "$DOLLAR_SESSION" "$PROJECT_DIR"
+DOLLAR_SESSION_ID=$(tmux_test list-sessions -F '#{session_id}|#{session_name}' \
+    | awk -F '|' -v name="$DOLLAR_SESSION" '$2 == name { print $1; exit }')
+assert_equals \
+    "literal dollar-prefixed session names are not mistaken for tmux IDs" \
+    $'0:terminal\n1:codex\n2:nvim' \
+    "$(tmux_test list-windows -t "$DOLLAR_SESSION_ID" -F '#{window_index}:#{window_name}')"
 
 echo ""
 echo "Testing explicit reuse by scratchpads..."

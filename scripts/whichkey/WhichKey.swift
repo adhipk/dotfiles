@@ -242,7 +242,7 @@ enum SKHDParser {
             afterDivider = false
             guard let parsed = parseBindingLine(line) else { continue }
             if parsed.comment.contains("whichkey-internal") { continue }
-            let category = category(for: context, rawKey: parsed.key, command: parsed.command)
+            let category = category(for: context, command: parsed.command)
             let action = ActionDescriber.describe(
                 rawKey: parsed.key,
                 command: parsed.command,
@@ -386,13 +386,13 @@ enum SKHDParser {
         return (before, after)
     }
 
-    private static func category(for context: ParserContext, rawKey: String, command: String) -> ShortcutCategory {
+    private static func category(for context: ParserContext, command: String) -> ShortcutCategory {
         let source = "\(context.section) \(context.subsection) \(command)".lowercased()
         if source.contains("/projects ") || source.contains("project shortcuts") ||
             source.contains("space shortcuts") || source.contains("space_slot_mode") {
             return .projects
         }
-        if rawKey.lowercased().hasPrefix("fn ") || source.contains("screenshot") || source.contains("skhd -k") {
+        if source.contains("screenshot") || source.contains("skhd -k") {
             return .capture
         }
         if source.contains("window management") || source.contains("window close") ||
@@ -1368,7 +1368,7 @@ private func runSelfTest() -> Int32 {
     # ============================================================
     # Screenshots
     # ============================================================
-    fn - 1 : skhd -k "cmd + shift - 3"
+    fn - 2 : skhd -k "ctrl + cmd + shift - 3"
     """#
     let bindings = SKHDParser.parse(fixture)
     var failures: [String] = []
@@ -1381,11 +1381,11 @@ private func runSelfTest() -> Int32 {
     expect(bindings.contains { $0.displayKey == "⌥ ⌘ [" && $0.command.contains("--display prev") }, "joins multiline commands")
     expect(bindings.contains { $0.title == "Assign a project-space shortcut" }, "parses modal activators")
     expect(bindings.contains { $0.displayKey == "Hyper ⇧ ⌫" && $0.category == .projects }, "formats Hyper and keycodes")
-    expect(bindings.contains { $0.displayKey == "fn 1" && $0.category == .capture }, "parses Fn shortcuts")
+    expect(bindings.contains { $0.displayKey == "fn 2" && $0.category == .capture }, "parses Fn shortcuts")
     expect(bindings.first?.matches(query: "option previous") == true, "search matches modifier aliases and actions")
     let groups = ShortcutGrouper.groups(from: bindings)
     expect(groups.contains { $0.matches(capturedKey: CapturedKey(parts: ["Hyper", "⇧", "⌫"])) }, "key-chord search matches grouped shortcuts")
-    expect(groups.contains { $0.matches(capturedKey: CapturedKey(parts: ["1"])) }, "bare-key search matches shortcuts regardless of modifiers")
+    expect(groups.contains { $0.matches(capturedKey: CapturedKey(parts: ["2"])) }, "bare-key search matches shortcuts regardless of modifiers")
 
     if failures.isEmpty {
         print("whichkey self-test: 9 passed")

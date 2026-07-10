@@ -92,7 +92,9 @@ fi
 
 assert_jq 'length >= 85' "Parser covers the full shortcut surface"
 assert_jq 'any(.[]; .rawKey == "shift + alt - tab")' "Parser includes Shift+Alt bindings"
-assert_jq 'any(.[]; .displayKey == "fn 1" and .category == "Capture")' "Parser includes Fn screenshot bindings"
+assert_jq 'any(.[]; .displayKey == "fn 2" and .category == "Capture")' "Parser includes Fn screenshot bindings"
+assert_jq 'any(.[]; .displayKey == "fn ," and .title == "Open dotfiles scratchpad" and .category == "Apps & Focus")' "Parser categorizes Fn+Comma as the dotfiles scratchpad"
+assert_jq 'any(.[]; .displayKey == "fn 1" and .title == "Open projects scratchpad" and .category == "Apps & Focus")' "Parser categorizes Fn+1 as the projects scratchpad"
 assert_jq 'any(.[]; .displayKey == "⌥ ⇧ =" and .title == "Assign a project-space shortcut")' "Parser includes modal shortcut activators"
 assert_jq 'any(.[]; .displayKey == "Hyper ⇧ ⌫" and .title == "Detach current Space")' "Parser formats Hyper and physical keycodes"
 assert_jq 'any(.[]; .displayKey == "⌥ /" and .title == "Open shortcut guide")' "Parser understands the shortcut-guide mode trigger"

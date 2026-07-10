@@ -171,12 +171,13 @@ alt - k : ~/.config/yabai/close_empty_spaces.sh
 
 alt - 0x32 : ~/.config/skhd/focus_app.sh "Ghostty"  # alt + backtick
 alt - 1 : ~/bin/hotkeys app-focus 1 "@browser"
-alt - 2 : ~/bin/hotkeys app-focus 3 "@editor"
-alt - 3 : ~/bin/hotkeys app-focus 4 "Microsoft Teams"
-alt - 4 : ~/bin/hotkeys app-focus 5 "Slack"
+alt - 2 : ~/bin/hotkeys app-focus 2 "Codex"
+alt - 3 : ~/bin/hotkeys app-focus 3 "@editor"
+alt - 4 : ~/bin/hotkeys app-focus 4 "Microsoft Teams"
+alt - 5 : ~/bin/hotkeys app-focus 5 "Slack"
 
-alt - 0x2B : ~/bin/scratchpads open codex  # alt + comma
-alt - l : ~/bin/scratchpads open projects  # alt + l
+fn - 0x2B : ~/bin/scratchpads open codex  # fn + comma
+fn - 1 : ~/bin/scratchpads open projects  # fn + 1
 alt - 0x2A : ~/bin/hotkeys presentation toggle  # alt + backslash
 alt + shift - 0x2A : ~/bin/hotkeys zen toggle  # alt+shift+backslash
 
@@ -186,7 +187,6 @@ alt + shift - 0x32 : ~/bin/hotkeys terminal new  # alt + shift + backtick
 # Screenshots (fn) - delegate to macOS' default screenshot shortcuts.
 # ============================================================
 
-fn - 1 : skhd -k "cmd + shift - 3"
 fn - 2 : skhd -k "ctrl + cmd + shift - 3"
 fn - 3 : skhd -k "cmd + shift - 4"
 fn - 4 : skhd -k "ctrl + cmd + shift - 4"
