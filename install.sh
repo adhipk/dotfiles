@@ -2,8 +2,8 @@
 # man-me: name=install.sh
 # man-me: category=Repository Setup
 # man-me: usage=./install.sh [chezmoi apply args...]
-# man-me: description=Apply this source state with chezmoi and build ProjectDeck on macOS.
-# man-me: tags=install setup apply chezmoi dotfiles projectdeck bootstrap
+# man-me: description=Apply this source state, reload a running tmux server, and build the native ProjectDeck and shortcut-guide apps on macOS.
+# man-me: tags=install setup apply chezmoi dotfiles tmux projectdeck whichkey shortcut guide bootstrap
 set -euo pipefail
 
 DOTFILES_DIR="${DOTFILES_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
@@ -60,6 +60,27 @@ build_projectdeck() {
         "$build_script"
 }
 
+build_whichkey() {
+    local build_script="$DOTFILES_DIR/scripts/build-whichkey.sh"
+
+    [[ "$(uname -s)" == "Darwin" ]] || return 0
+    [[ -x "$build_script" ]] || return 0
+
+    echo "[dotfiles] building shortcut guide..."
+    WHICHKEY_INSTALL_PATH="$CHEZMOI_DESTINATION/.config/skhd/whichkey" \
+        "$build_script"
+}
+
+reload_tmux_config() {
+    command -v tmux >/dev/null 2>&1 || return 0
+    tmux list-sessions >/dev/null 2>&1 || return 0
+
+    echo "[dotfiles] reloading tmux configuration..."
+    if ! tmux source-file "$CHEZMOI_DESTINATION/.tmux.conf"; then
+        echo "[dotfiles] warning: tmux configuration reload failed; run 'make reload' after fixing tmux errors." >&2
+    fi
+}
+
 echo "[dotfiles] repository:  $DOTFILES_DIR"
 echo "[dotfiles] source:      $CHEZMOI_SOURCE_ROOT"
 echo "[dotfiles] destination: $CHEZMOI_DESTINATION"
@@ -76,7 +97,9 @@ fi
 if [[ "$is_dry_run" == true ]]; then
     echo "[dotfiles] dry run complete; no files were changed."
 else
+    reload_tmux_config
     build_projectdeck
+    build_whichkey
     echo "[dotfiles] pending changes after apply:"
     show_status
     show_managed_file_summary

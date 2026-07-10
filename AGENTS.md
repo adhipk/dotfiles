@@ -10,7 +10,8 @@ Your job is to maintain my dotfile configurations, this includes keyboard shortc
 - **`Hyper+a`** — adopt current space into project context.
 - **`Hyper+Shift+Backspace`** — detach current space from project (no confirm).
 - **`Alt+Shift+1..9`** / **`Alt+Shift+h/k`** — jump or cycle spaces in project context.
-- Built automatically on `make install` (not chezmoi-managed).
+- **`Alt+/`** — non-activating shortcut guide sourced from the live `~/.skhdrc`; a bare key such as `K` finds every shortcut ending in that key. Its own controls use unbound Option chords (`Option+Up/Down` results, `Option+Left/Right` categories, `Option+F/P` text/key search, `Option+C` clear).
+- ProjectDeck and the shortcut guide are built automatically on `make install` (not chezmoi-managed binaries).
 
 ## Key Bindings (skhd)
 - `alt + n` creates a new space and focuses it; when the current space has more than one non-scratchpad window, it moves the focused non-scratchpad window there.
@@ -31,6 +32,7 @@ Your job is to maintain my dotfile configurations, this includes keyboard shortc
 
 ## Terminal Defaults
 - `home/dot_config/skhd/executable_open_terminal_window.sh` defaults to Ghostty.
+- Ordinary new tmux sessions use the shared `terminal` `0`, `codex` `1`, `nvim` `2` template. Sessions created with an explicit command, `hs-*` sessions, and sessions with `DOTFILES_TMUX_TEMPLATE=skip` are left alone.
 
 ## Chezmoi
 - `.chezmoiroot` points to `home/`, the desired state for `$HOME`.

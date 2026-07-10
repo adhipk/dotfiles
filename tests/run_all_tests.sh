@@ -20,6 +20,8 @@ TEST_SUITES=(
     "test_colorscheme.sh"
     "test_configs.sh"
     "test_projects.sh"
+    "test_tmux_session_template.sh"
+    "test_whichkey.sh"
     "test_source_state.sh"
     "test_default_apps.sh"
     "test_install.sh"

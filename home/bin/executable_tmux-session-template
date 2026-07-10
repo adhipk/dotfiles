@@ -1,0 +1,287 @@
+#!/usr/bin/env bash
+# man-me: name=tmux-session-template
+# man-me: category=Terminal and Sessions
+# man-me: usage=tmux-session-template auto SESSION; tmux-session-template ensure SESSION [DIRECTORY]
+# man-me: description=Apply the standard terminal, Codex, and Neovim window layout to a tmux session.
+# man-me: tags=tmux terminal session template codex nvim
+
+set -euo pipefail
+
+TEMPLATE_MARKER_OPTION="@dotfiles_tmux_template"
+TEMPLATE_MARKER_VALUE="standard"
+TEMPLATE_SKIP_ENV="DOTFILES_TMUX_TEMPLATE"
+TEMPLATE_LOCK_CHANNEL=""
+TEMPLATE_LOCK_HELD=false
+
+usage() {
+  cat <<'EOF'
+Usage:
+  tmux-session-template auto SESSION
+  tmux-session-template ensure SESSION [DIRECTORY]
+
+Modes:
+  auto    Apply only to a new, ordinary one-window shell session.
+  ensure  Add or repair the standard layout in an existing session.
+
+The standard layout is:
+  0  terminal  raw shell
+  1  codex     runs codex
+  2  nvim      runs nvim
+EOF
+}
+
+tmux_cmd() {
+  if [[ -n "${TMUX_SESSION_TEMPLATE_SOCKET:-}" ]]; then
+    command tmux -L "$TMUX_SESSION_TEMPLATE_SOCKET" "$@"
+  else
+    command tmux "$@"
+  fi
+}
+
+session_target() {
+  printf '=%s\n' "$1"
+}
+
+session_pane_target() {
+  printf '=%s:\n' "$1"
+}
+
+session_exists() {
+  tmux_cmd has-session -t "$(session_target "$1")" 2>/dev/null
+}
+
+release_session_lock() {
+  if [[ "$TEMPLATE_LOCK_HELD" == true && -n "$TEMPLATE_LOCK_CHANNEL" ]]; then
+    tmux_cmd wait-for -U "$TEMPLATE_LOCK_CHANNEL" >/dev/null 2>&1 || true
+    TEMPLATE_LOCK_HELD=false
+  fi
+}
+
+acquire_session_lock() {
+  local session="$1"
+  local session_id
+
+  session_id=$(tmux_cmd display-message -p -t "$(session_pane_target "$session")" '#{session_id}')
+  [[ -n "$session_id" ]] || {
+    printf 'tmux-session-template: could not identify session: %s\n' "$session" >&2
+    return 1
+  }
+
+  TEMPLATE_LOCK_CHANNEL="dotfiles-tmux-template-${session_id#\$}"
+  tmux_cmd wait-for -L "$TEMPLATE_LOCK_CHANNEL"
+  TEMPLATE_LOCK_HELD=true
+}
+
+session_window_count() {
+  tmux_cmd list-windows -t "$(session_target "$1")" -F '#{window_id}' | wc -l | tr -d '[:space:]'
+}
+
+session_pane_count() {
+  tmux_cmd list-panes -s -t "$(session_target "$1")" -F '#{pane_id}' | wc -l | tr -d '[:space:]'
+}
+
+session_is_grouped() {
+  [[ "$(tmux_cmd display-message -p -t "$(session_pane_target "$1")" '#{session_grouped}')" == "1" ]]
+}
+
+session_template_setting() {
+  local setting
+
+  setting=$(tmux_cmd show-environment -t "$(session_target "$1")" "$TEMPLATE_SKIP_ENV" 2>/dev/null || true)
+  printf '%s\n' "${setting#*=}"
+}
+
+session_template_marker() {
+  tmux_cmd show-options -qv -t "$1" "$TEMPLATE_MARKER_OPTION" 2>/dev/null || true
+}
+
+initial_pane_format() {
+  local session="$1"
+  local format="$2"
+
+  tmux_cmd list-panes -s -t "$(session_target "$session")" -F "$format" | head -n 1
+}
+
+session_directory() {
+  local session="$1"
+  local directory
+
+  directory=$(initial_pane_format "$session" '#{pane_current_path}')
+  if [[ -z "$directory" ]]; then
+    directory=$(initial_pane_format "$session" '#{pane_start_path}')
+  fi
+  printf '%s\n' "$directory"
+}
+
+tmux_window_exists() {
+  local session="$1"
+  local window="$2"
+
+  tmux_cmd list-windows -t "$(session_target "$session")" -F '#{window_name}' 2>/dev/null \
+    | grep -Fqx -- "$window"
+}
+
+tmux_window_index() {
+  local session="$1"
+  local window="$2"
+
+  tmux_cmd list-windows -t "$(session_target "$session")" -F '#{window_index} #{window_name}' 2>/dev/null \
+    | awk -v window="$window" '$2 == window { print $1; exit }'
+}
+
+tmux_window_index_exists() {
+  local session="$1"
+  local index="$2"
+
+  tmux_cmd list-windows -t "$(session_target "$session")" -F '#{window_index}' 2>/dev/null \
+    | grep -Fqx -- "$index"
+}
+
+ensure_tmux_window_index() {
+  local session="$1"
+  local window="$2"
+  local index="$3"
+  local current_index
+
+  current_index=$(tmux_window_index "$session" "$window")
+  [[ -n "$current_index" ]] || return 1
+  [[ "$current_index" == "$index" ]] && return 0
+
+  if tmux_window_index_exists "$session" "$index"; then
+    tmux_cmd swap-window -d \
+      -s "=$(printf '%s:%s' "$session" "$current_index")" \
+      -t "=$(printf '%s:%s' "$session" "$index")" >/dev/null
+  else
+    tmux_cmd move-window -d \
+      -s "=$(printf '%s:%s' "$session" "$current_index")" \
+      -t "=$(printf '%s:%s' "$session" "$index")" >/dev/null
+  fi
+}
+
+create_tmux_window_with_command() {
+  local session="$1"
+  local window="$2"
+  local directory="$3"
+  local command_text="$4"
+
+  tmux_cmd new-window -d -t "=$(printf '%s:' "$session")" -c "$directory" -n "$window" >/dev/null
+  if [[ -n "$command_text" ]]; then
+    tmux_cmd send-keys -t "=$(printf '%s:%s' "$session" "$window")" "$command_text" C-m
+  fi
+}
+
+ensure_standard_tmux_windows() {
+  local session="$1"
+  local directory="$2"
+
+  if ! tmux_window_exists "$session" "terminal"; then
+    create_tmux_window_with_command "$session" "terminal" "$directory" ""
+  fi
+  if ! tmux_window_exists "$session" "codex"; then
+    create_tmux_window_with_command "$session" "codex" "$directory" "codex"
+  fi
+  if ! tmux_window_exists "$session" "nvim"; then
+    create_tmux_window_with_command "$session" "nvim" "$directory" "nvim"
+  fi
+
+  ensure_tmux_window_index "$session" "terminal" "0"
+  ensure_tmux_window_index "$session" "codex" "1"
+  ensure_tmux_window_index "$session" "nvim" "2"
+}
+
+mark_session_templated() {
+  tmux_cmd set-option -q -t "$1" "$TEMPLATE_MARKER_OPTION" "$TEMPLATE_MARKER_VALUE"
+}
+
+apply_automatic_template() {
+  local session="$1"
+  local directory
+  local initial_window_index
+  local initial_start_command
+
+  [[ "$session" != hs-* ]] || return 0
+  [[ "$(session_template_setting "$session")" != "skip" ]] || return 0
+  [[ "$(session_template_marker "$session")" != "$TEMPLATE_MARKER_VALUE" ]] || return 0
+  ! session_is_grouped "$session" || return 0
+  [[ "$(session_window_count "$session")" == "1" ]] || return 0
+  [[ "$(session_pane_count "$session")" == "1" ]] || return 0
+
+  initial_start_command=$(initial_pane_format "$session" '#{pane_start_command}')
+  [[ -z "$initial_start_command" ]] || return 0
+
+  directory=$(session_directory "$session")
+  [[ -d "$directory" ]] || {
+    printf 'tmux-session-template: session directory not found: %s\n' "$directory" >&2
+    return 1
+  }
+
+  initial_window_index=$(initial_pane_format "$session" '#{window_index}')
+  tmux_cmd rename-window -t "=$(printf '%s:%s' "$session" "$initial_window_index")" terminal
+  ensure_standard_tmux_windows "$session" "$directory"
+  tmux_cmd select-window -t "=$(printf '%s:terminal' "$session")" >/dev/null
+  mark_session_templated "$session"
+}
+
+ensure_template() {
+  local session="$1"
+  local directory="${2:-}"
+
+  if [[ -z "$directory" ]]; then
+    directory=$(session_directory "$session")
+  fi
+  [[ -d "$directory" ]] || {
+    printf 'tmux-session-template: session directory not found: %s\n' "$directory" >&2
+    return 1
+  }
+
+  ensure_standard_tmux_windows "$session" "$directory"
+  mark_session_templated "$session"
+}
+
+main() {
+  local mode="${1:-}"
+  local session="${2:-}"
+
+  case "$mode" in
+    -h|--help|help)
+      usage
+      return 0
+      ;;
+    auto|ensure)
+      ;;
+    *)
+      usage >&2
+      return 2
+      ;;
+  esac
+
+  if [[ -z "$session" ]]; then
+    usage >&2
+    return 2
+  fi
+  if ! command -v tmux >/dev/null 2>&1; then
+    printf 'tmux-session-template: tmux is required.\n' >&2
+    return 1
+  fi
+  if ! session_exists "$session"; then
+    printf 'tmux-session-template: session not found: %s\n' "$session" >&2
+    return 1
+  fi
+
+  trap release_session_lock EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  acquire_session_lock "$session"
+
+  case "$mode" in
+    auto)
+      apply_automatic_template "$session"
+      ;;
+    ensure)
+      ensure_template "$session" "${3:-}"
+      ;;
+  esac
+}
+
+main "$@"

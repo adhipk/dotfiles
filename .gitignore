@@ -5,6 +5,9 @@
 # ProjectDeck build output
 scripts/projectdeck/executable_projectdeck
 
+# Shortcut guide build output
+scripts/whichkey/executable_whichkey
+
 # Ignore local shell secrets
 zshrc.secrets
 

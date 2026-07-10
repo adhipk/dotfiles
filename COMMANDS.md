@@ -23,6 +23,7 @@ These commands are installed into `~/bin`, which `home/dot_zshrc` adds to
 | `reload-colors` | Restart yabai and skhd, then reload tmux configuration when tmux is running. | [`home/bin/executable_reload-colors`](home/bin/executable_reload-colors) |
 | `reset-yabai` | Reinstall and pin `yabai@7.1.16`, update its scripting-addition sudoers entry, and restart its service. This uses `sudo` and changes Homebrew packages and `/etc/sudoers.d/yabai`. | [`home/bin/executable_reset-yabai`](home/bin/executable_reset-yabai) |
 | `tmux-session-picker` | Select and switch to an existing tmux session with `sesh` + `fzf`. | [`home/bin/executable_tmux-session-picker`](home/bin/executable_tmux-session-picker) |
+| `tmux-session-template` | Apply the standard `terminal:0`, `codex:1`, `nvim:2` layout to a tmux session. The tmux new-session hook calls its guarded `auto` mode; scratchpads call `ensure`. | [`home/bin/executable_tmux-session-template`](home/bin/executable_tmux-session-template) |
 | `tmux-sessionizer-zoxide` | Pick from existing tmux sessions or zoxide-ranked directories and connect via `sesh`. | [`home/bin/executable_tmux-sessionizer-zoxide`](home/bin/executable_tmux-sessionizer-zoxide) |
 | `tmux-sessionizer` | Compatibility wrapper for `-s <index>` and interactive selection, backed by `sesh`. | [`home/bin/executable_tmux-sessionizer`](home/bin/executable_tmux-sessionizer) |
 | `unescape-buffer` | Read escaped text from stdin and write unescaped newlines, tabs, carriage returns, quotes, and backslashes to stdout. Implemented in Node.js. | [`home/bin/executable_unescape-buffer`](home/bin/executable_unescape-buffer) |
@@ -143,13 +144,21 @@ The shell binds `Alt+f` to `tmux-sessionizer-zoxide` and `Alt+e` to
 `Alt+h`, `Alt+t`, `Alt+n`, and `Alt+s` use `tmux-sessionizer -s 0..3`, and this repository
 includes a `tmux-sessionizer` wrapper that maps those slots to `sesh`.
 
+Ordinary sessions created by raw `tmux`, `ts`, `tms`, or `sesh` receive the
+same three-window template as the terminal scratchpads: `terminal` at `0`,
+`codex` at `1`, and `nvim` at `2`. A session created with an explicit command
+is preserved as-is. Compound/orchestrated creators that add their own windows
+or queue index-targeted tmux commands must opt out on their `new-session` call
+with `-e DOTFILES_TMUX_TEMPLATE=skip`; `hs-*` sessions are also excluded.
+
 ## Repository Commands
 
 Run `./bootstrap.sh` on a new Mac. It installs Homebrew when needed, installs
 the `Brewfile`, and delegates the chezmoi apply to `./install.sh`.
 
 Run `./install.sh [CHEZMOI APPLY ARG ...]` to apply this checkout. Arguments are
-passed through to `chezmoi apply`; for example:
+passed through to `chezmoi apply`. When a tmux server is already running, the
+installer reloads `~/.tmux.conf` after the apply. For example:
 
 ```bash
 ./install.sh --dry-run
@@ -164,6 +173,8 @@ DOTFILES_DEBUG=1 ./install.sh
 | `make test` | Run all test suites. |
 | `make test-colorscheme` | Run colorscheme tests. |
 | `make test-configs` | Run skhd and yabai configuration tests. |
+| `make test-tmux-session-template` | Run the isolated tmux template lifecycle tests. |
+| `make test-whichkey` | Build and exercise the shortcut-guide parser and search model. |
 | `make test-source-state` | Run chezmoi source-state tests. |
 | `make test-install` | Run disposable installer tests. |
 | `make test-integration` | Run workstation integration tests. |
@@ -172,12 +183,13 @@ DOTFILES_DEBUG=1 ./install.sh
 | `make diff` | Preview chezmoi-managed changes. |
 | `make watch` | Run `watch-sync`. |
 | `make reload` | Run `reload-colors`. |
+| `make build-projectdeck`, `make build-whichkey` | Build and install the native project picker or shortcut guide. |
 | `make clean` | Remove top-level `*.tmp` and `*.log` files. |
 
 The test runner is [`tests/run_all_tests.sh`](tests/run_all_tests.sh). Its
 individual suites are `test_colorscheme.sh`, `test_configs.sh`,
-`test_source_state.sh`, `test_default_apps.sh`, `test_install.sh`, and
-`test_integration.sh`.
+`test_projects.sh`, `test_tmux_session_template.sh`, `test_whichkey.sh`, `test_source_state.sh`,
+`test_default_apps.sh`, `test_install.sh`, and `test_integration.sh`.
 
 ## Desktop Helpers
 
@@ -195,12 +207,12 @@ Installed below `~/.config/skhd/`:
 | [`hotkeys`](home/bin/executable_hotkeys) | Miscellaneous skhd actions. `hotkeys zen toggle` flips zen mode, where `Alt+1`, `Alt+2`, and terminal focus keep working but `Alt+3..5` do nothing. New terminal windows are pinned back to the originating yabai display and space. |
 | [`media_key.sh ACTION`](home/dot_config/skhd/executable_media_key.sh) | Send a macOS media key event. Supported actions are `brightness_down`, `brightness_up`, `mission_control`, `launchpad`, `dictation`, `do_not_disturb`, `previous`, `play_pause`, `next`, `mute`, `volume_down`, and `volume_up`. |
 | [`open_terminal_window.sh`](home/dot_config/skhd/executable_open_terminal_window.sh) | Open a terminal window on the current yabai space. `TERMINAL_APP` defaults to `Ghostty`. The active binding uses `hotkeys terminal new`. |
-| [`show_keys.sh`](home/dot_config/skhd/executable_show_keys.sh) | Toggle the `whichkey` keybinding overlay. |
+| [`show_keys.sh`](home/dot_config/skhd/executable_show_keys.sh) | Open, close, or toggle the interactive shortcut guide. It lazily rebuilds the native app when its source is newer or the installed binary is missing. |
 | [`notify.sh TITLE MESSAGE`](home/dot_config/skhd/executable_notify.sh) | Show a macOS notification from skhd or yabai helpers. Uses `terminal-notifier` when available. |
 | [`snap_window.sh left\|right`](home/dot_config/skhd/executable_snap_window.sh) | Warp the current window and resize it to half the display width. |
 | [`toggle_ghostty_quick_terminal.sh`](home/dot_config/skhd/executable_toggle_ghostty_quick_terminal.sh) | Create or toggle a bottom-third Ghostty scratchpad named `quick_terminal`. |
 | [`scratchpads`](home/bin/executable_scratchpads) | Manage one floating Ghostty terminal scratchpad while switching between separate tmux sessions. Scratchpad Ghostty windows force opaque black, while normal Ghostty windows keep the global transparent background. `scratchpads open codex` targets `dotfiles`; `scratchpads open projects` targets `projects`. Both tmux sessions keep `terminal` at window `0`, `codex` at `1`, and `nvim` at `2`. |
-| [`whichkey`](home/dot_config/skhd/executable_whichkey) | Compiled arm64 SwiftUI keybinding overlay launched by `show_keys.sh`. |
+| [`whichkey`](scripts/whichkey/WhichKey.swift) | Source-owned SwiftUI shortcut browser. It parses the live `~/.skhdrc`, searches by captured key chord or text, provides categories and mouse/keyboard selection, and keeps raw commands in a separate detail pane. Built locally to `~/.config/skhd/whichkey`. |
 
 ### yabai Helpers
 
@@ -256,7 +268,7 @@ operations to these shortcuts:
 | `Alt+Shift+Backslash` | Toggle zen mode. In zen mode, terminal focus plus `Alt+1` browser and `Alt+2` Codex focus still work; `Alt+3..5` are disabled. |
 | `Ctrl+Alt+w`, `Ctrl+Alt+z` | Close or minimize the current window. |
 | `Alt+r` | Restart yabai and skhd. |
-| `Alt+/` | Toggle the `whichkey` overlay. |
+| `Alt+/` | Toggle the non-activating shortcut guide. A bare key finds every shortcut ending in it. Internal controls use otherwise-unbound Option chords: `Option+Up/Down` browse, `Option+Left/Right` categories, `Option+F/P` text/key search, `Option+C` clear, and `Esc` or `Option+/` close. |
 
 Experimental hyper bindings, including hyperspace session slots and the
 Spotlight scratchpad shortcut, are kept in

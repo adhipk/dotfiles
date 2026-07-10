@@ -28,6 +28,20 @@ assert_file_exists() {
     fi
 }
 
+assert_file_missing() {
+    local file="$1"
+    local test_name="$2"
+
+    if [ ! -e "$file" ]; then
+        echo "  ✓ $test_name"
+        ((PASSED++))
+    else
+        echo "  ✗ $test_name"
+        echo "    Unexpected file: $file"
+        ((FAILED++))
+    fi
+}
+
 assert_contains() {
     local file="$1"
     local pattern="$2"
@@ -175,6 +189,7 @@ for file in \
     executable_reload-colors \
     executable_hotkeys \
     executable_scratchpads \
+    executable_tmux-session-template \
     symlink_default-apps.tmpl \
     executable_projects \
     executable_tmux-session-picker \
@@ -189,9 +204,19 @@ assert_contains "$DOTFILES_DIR/home/bin/executable_man-me" "SEARCH_QUERY" "man-m
 assert_contains "$DOTFILES_DIR/home/bin/executable_man-me" "rg -iq" "man-me uses ripgrep for matching when available"
 assert_contains "$DOTFILES_DIR/home/bin/executable_hotkeys" "man-me: tags=.*hotkeys" "hotkeys command carries man-me search tags"
 assert_contains "$DOTFILES_DIR/home/dot_skhdrc" "man-me: name=skhdrc" "skhdrc carries man-me metadata"
+assert_file_exists "$DOTFILES_DIR/scripts/whichkey/WhichKey.swift" "Shortcut guide Swift source is declared"
+assert_file_exists "$DOTFILES_DIR/scripts/build-whichkey.sh" "Shortcut guide build script is declared"
+assert_contains "$DOTFILES_DIR/install.sh" "WHICHKEY_INSTALL_PATH=" "Installer builds the shortcut guide into the destination home"
+assert_contains "$DOTFILES_DIR/install.sh" 'tmux source-file.*CHEZMOI_DESTINATION' "Installer reloads a running tmux server after apply"
+assert_file_missing "$DOTFILES_DIR/home/dot_config/skhd/executable_whichkey" "Architecture-specific shortcut binary is not checked in"
 
 echo ""
 echo "Testing scratchpad implementation..."
+assert_contains "$DOTFILES_DIR/home/dot_tmux.conf" "after-new-session\[50\].*tmux-session-template auto.*session_name" "Tmux config applies the standard template to ordinary new sessions"
+assert_contains "$DOTFILES_DIR/home/bin/executable_tmux-session-template" "pane_start_command" "Tmux template preserves command sessions"
+assert_contains "$DOTFILES_DIR/home/bin/executable_tmux-session-template" "DOTFILES_TMUX_TEMPLATE" "Tmux template supports an explicit opt-out"
+assert_contains "$DOTFILES_DIR/home/bin/executable_tmux-session-template" 'session.*!= hs-\*' "Tmux template preserves hs orchestrator sessions"
+assert_contains "$DOTFILES_DIR/home/bin/executable_tmux-session-template" "wait-for -L" "Tmux template serializes concurrent layout creation"
 assert_not_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" 'SCRATCHPAD_STATE_FILE' "Scratchpads CLI does not use a JSON registry"
 assert_not_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" 'scratchpads\.json' "Scratchpads CLI does not persist window IDs"
 assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "SCRATCHPAD_TERMINAL_LABEL" "Scratchpads CLI declares one terminal scratchpad label"
@@ -216,14 +241,14 @@ assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "SCRATCHPAD_DOTF
 assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "background=#000000" "Scratchpad Ghostty windows use a black background"
 assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "background-opacity=1" "Scratchpad Ghostty windows stay opaque"
 assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "background-blur=false" "Scratchpad Ghostty windows disable blur"
-assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "tmux new-session -d -s.*-n terminal" "Scratchpad tmux sessions start with a raw terminal window"
-assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "create_tmux_window_with_command.*codex.*codex" "Scratchpad tmux sessions create a Codex window"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "tmux new-session -d -e DOTFILES_TMUX_TEMPLATE=skip.*-n terminal" "Scratchpad tmux sessions opt out while creating their raw terminal"
 assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "ensure_standard_scratchpad_tmux_windows" "Scratchpad tmux sessions keep standard windows"
-assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "ensure_tmux_window_index.*terminal.*0" "Scratchpad tmux sessions keep terminal at window 0"
-assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "ensure_tmux_window_index.*codex.*1" "Scratchpad tmux sessions keep Codex at window 1"
-assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "ensure_tmux_window_index.*nvim.*2" "Scratchpad tmux sessions keep nvim at window 2"
-assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "create_tmux_window_with_command.*nvim.*nvim" "Scratchpad tmux sessions create a nvim window"
-assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "create_tmux_window_with_command.*terminal.*\"\"" "Scratchpad tmux sessions create a raw terminal window"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "tmux-session-template.*ensure" "Scratchpad tmux sessions reuse the default template"
+assert_contains "$DOTFILES_DIR/home/bin/executable_tmux-session-template" "create_tmux_window_with_command.*codex.*codex" "Tmux template starts Codex"
+assert_contains "$DOTFILES_DIR/home/bin/executable_tmux-session-template" "create_tmux_window_with_command.*nvim.*nvim" "Tmux template starts Neovim"
+assert_contains "$DOTFILES_DIR/home/bin/executable_tmux-session-template" "ensure_tmux_window_index.*terminal.*0" "Tmux template keeps terminal at window 0"
+assert_contains "$DOTFILES_DIR/home/bin/executable_tmux-session-template" "ensure_tmux_window_index.*codex.*1" "Tmux template keeps Codex at window 1"
+assert_contains "$DOTFILES_DIR/home/bin/executable_tmux-session-template" "ensure_tmux_window_index.*nvim.*2" "Tmux template keeps nvim at window 2"
 assert_file_exists "$DOTFILES_DIR/home/dot_config/skhd/executable_app-mru.sh" "app-mru helper is declared"
 assert_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_focus_app.sh" 'app-mru.sh' "App focus helper uses MRU stacks"
 assert_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_focus_app.sh" 'app_mru_cycle' "App focus helper cycles by MRU"

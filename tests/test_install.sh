@@ -7,6 +7,7 @@ DOTFILES_DIR="$(dirname "$TEST_DIR")"
 TEMP_HOME="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-install-test.XXXXXX")"
 FAKE_BIN="$TEMP_HOME/bin"
 ARGS_FILE="$TEMP_HOME/chezmoi-args"
+TMUX_ARGS_FILE="$TEMP_HOME/tmux-args"
 
 PASSED=0
 FAILED=0
@@ -38,11 +39,22 @@ echo "================================"
 mkdir -p "$FAKE_BIN"
 printf '#!/usr/bin/env bash\nprintf \"%%s\\\\n\" \"$*\" >> \"$CHEZMOI_ARGS_FILE\"\n' > "$FAKE_BIN/chezmoi"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$FAKE_BIN/brew"
-chmod +x "$FAKE_BIN/chezmoi" "$FAKE_BIN/brew"
+cat > "$FAKE_BIN/tmux" <<'EOF'
+#!/usr/bin/env bash
+case "${1:-}" in
+  list-sessions)
+    exit 0
+    ;;
+  source-file)
+    printf '%s\n' "$*" >> "$TMUX_ARGS_FILE"
+    ;;
+esac
+EOF
+chmod +x "$FAKE_BIN/chezmoi" "$FAKE_BIN/brew" "$FAKE_BIN/tmux"
 
 echo ""
 echo "Testing install wrapper..."
-if HOME="$TEMP_HOME" PATH="$FAKE_BIN:/usr/bin:/bin" CHEZMOI_ARGS_FILE="$ARGS_FILE" DOTFILES_DIR="$DOTFILES_DIR" "$DOTFILES_DIR/install.sh" --dry-run >/dev/null; then
+if HOME="$TEMP_HOME" PATH="$FAKE_BIN:/usr/bin:/bin" CHEZMOI_ARGS_FILE="$ARGS_FILE" TMUX_ARGS_FILE="$TMUX_ARGS_FILE" DOTFILES_DIR="$DOTFILES_DIR" "$DOTFILES_DIR/install.sh" --dry-run >/dev/null; then
     echo "  ✓ install.sh delegates to chezmoi"
     ((PASSED++))
 else
@@ -53,7 +65,7 @@ assert_contains "$ARGS_FILE" "^-S $DOTFILES_DIR apply --dry-run$" "install.sh pa
 
 echo ""
 echo "Testing bootstrap wrapper..."
-if HOME="$TEMP_HOME" PATH="$FAKE_BIN:/usr/bin:/bin" CHEZMOI_ARGS_FILE="$ARGS_FILE" DOTFILES_DIR="$DOTFILES_DIR" "$DOTFILES_DIR/bootstrap.sh" >/dev/null; then
+if HOME="$TEMP_HOME" PATH="$FAKE_BIN:/usr/bin:/bin" CHEZMOI_ARGS_FILE="$ARGS_FILE" TMUX_ARGS_FILE="$TMUX_ARGS_FILE" DOTFILES_DIR="$DOTFILES_DIR" "$DOTFILES_DIR/bootstrap.sh" >/dev/null; then
     echo "  ✓ bootstrap.sh delegates to install.sh"
     ((PASSED++))
 else
@@ -61,6 +73,7 @@ else
     ((FAILED++))
 fi
 assert_contains "$ARGS_FILE" "^-S $DOTFILES_DIR apply$" "bootstrap applies the chezmoi source state"
+assert_contains "$TMUX_ARGS_FILE" "^source-file $TEMP_HOME/.tmux.conf$" "bootstrap reloads a running tmux server"
 
 echo ""
 echo "================================"

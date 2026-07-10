@@ -208,7 +208,7 @@ alt - r : yabai --restart-service; skhd --restart-service
 # ============================================================
 
 # ============================================================
-# Which-key cheat sheet (opt + /)
+# Interactive shortcut guide (opt + /)
 # ============================================================
 
 alt - 0x2C : ~/.config/skhd/show_keys.sh

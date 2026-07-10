@@ -1,9 +1,9 @@
 # man-me: name=Makefile
 # man-me: category=Repository Setup
 # man-me: usage=make test; make install; make diff; make watch; make reload
-# man-me: description=Convenience wrappers for tests, apply, diff, watch, reload, and ProjectDeck build.
-# man-me: tags=make setup test install apply diff watch reload projectdeck
-.PHONY: test test-colorscheme test-configs test-projects test-source-state test-install test-integration install apply apply-debug compile sync diff watch reload clean help build-projectdeck
+# man-me: description=Convenience wrappers for tests, apply, diff, watch, reload, and native HUD builds.
+# man-me: tags=make setup test install apply diff watch reload projectdeck whichkey shortcuts
+.PHONY: test test-colorscheme test-configs test-projects test-tmux-session-template test-source-state test-install test-integration test-whichkey install apply apply-debug compile sync diff watch reload clean help build-projectdeck build-whichkey
 
 # Default target
 help:
@@ -13,10 +13,11 @@ help:
 	@echo "  make test              - Run all tests"
 	@echo "  make test-colorscheme  - Run colorscheme tests only"
 	@echo "  make test-configs      - Run config file tests only"
+	@echo "  make test-tmux-session-template - Run tmux template tests only"
 	@echo "  make test-source-state - Run chezmoi source-state tests only"
 	@echo "  make test-install      - Run disposable installer tests only"
 	@echo "  make test-integration  - Run integration tests only"
-	@echo "  make install           - Apply dotfiles with chezmoi and build ProjectDeck"
+	@echo "  make install           - Apply dotfiles and build ProjectDeck + shortcut guide"
 	@echo "  make apply             - Alias for install"
 	@echo "  make apply-debug       - Apply dotfiles with verbose chezmoi output"
 	@echo "  make compile           - Alias for install"
@@ -24,6 +25,7 @@ help:
 	@echo "  make diff              - Preview chezmoi changes"
 	@echo "  make watch             - Auto-apply source-state changes"
 	@echo "  make build-projectdeck - Build the ProjectDeck picker binary"
+	@echo "  make build-whichkey    - Build the interactive shortcut guide"
 	@echo "  make reload            - Reload configurations"
 	@echo "  make clean             - Clean up temporary files"
 
@@ -41,6 +43,9 @@ test-configs:
 test-projects:
 	@./tests/test_projects.sh
 
+test-tmux-session-template:
+	@./tests/test_tmux_session_template.sh
+
 test-source-state:
 	@./tests/test_source_state.sh
 
@@ -49,6 +54,9 @@ test-install:
 
 test-integration:
 	@./tests/test_integration.sh
+
+test-whichkey:
+	@./tests/test_whichkey.sh
 
 # Apply dotfiles
 install:
@@ -67,6 +75,9 @@ diff:
 
 build-projectdeck:
 	@./scripts/build-projectdeck.sh
+
+build-whichkey:
+	@./scripts/build-whichkey.sh
 
 # Watch for changes and auto-sync (macOS: requires fswatch)
 watch:

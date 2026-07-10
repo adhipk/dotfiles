@@ -29,6 +29,19 @@ tl
 tkss myproject
 ```
 
+Ordinary new sessions automatically receive this window layout:
+
+- `0 terminal` — raw shell
+- `1 codex` — starts Codex
+- `2 nvim` — starts Neovim
+
+In Ghostty, `Cmd+Backtick`, `Cmd+1`, and `Cmd+2` jump directly to those
+windows. Sessions created with an explicit command remain single-purpose.
+Compound/orchestrated session creators that add their own windows or queue
+index-targeted commands must use
+`tmux new-session -e DOTFILES_TMUX_TEMPLATE=skip ...`; `hs-*` sessions opt out
+automatically.
+
 ## Key Bindings
 
 ### Panes (most common)

@@ -837,76 +837,11 @@ open_codex_dotfiles_scratchpad() {
   open_terminal_tmux_scratchpad "dotfiles"
 }
 
-tmux_window_exists() {
-  local session="$1"
-  local window="$2"
-
-  tmux list-windows -t "=$session" -F '#{window_name}' 2>/dev/null \
-    | grep -Fqx -- "$window"
-}
-
-tmux_window_index() {
-  local session="$1"
-  local window="$2"
-
-  tmux list-windows -t "=$session" -F '#{window_index} #{window_name}' 2>/dev/null \
-    | awk -v window="$window" '$2 == window { print $1; exit }'
-}
-
-tmux_window_index_exists() {
-  local session="$1"
-  local index="$2"
-
-  tmux list-windows -t "=$session" -F '#{window_index}' 2>/dev/null \
-    | grep -Fqx -- "$index"
-}
-
-ensure_tmux_window_index() {
-  local session="$1"
-  local window="$2"
-  local index="$3"
-  local current_index
-
-  current_index=$(tmux_window_index "$session" "$window")
-  [ -n "$current_index" ] || return 1
-  [ "$current_index" = "$index" ] && return 0
-
-  if tmux_window_index_exists "$session" "$index"; then
-    tmux swap-window -d -s "=${session}:${current_index}" -t "=${session}:${index}" >/dev/null
-  else
-    tmux move-window -d -s "=${session}:${current_index}" -t "=${session}:${index}" >/dev/null
-  fi
-}
-
-create_tmux_window_with_command() {
-  local session="$1"
-  local window="$2"
-  local cwd="$3"
-  local command_text="$4"
-
-  tmux new-window -t "=${session}:" -c "$cwd" -n "$window" >/dev/null
-  if [ -n "$command_text" ]; then
-    tmux send-keys -t "=${session}:${window}" "$command_text" C-m
-  fi
-}
-
 ensure_standard_scratchpad_tmux_windows() {
   local session="$1"
   local cwd="$2"
 
-  if ! tmux_window_exists "$session" "terminal"; then
-    create_tmux_window_with_command "$session" "terminal" "$cwd" ""
-  fi
-  if ! tmux_window_exists "$session" "codex"; then
-    create_tmux_window_with_command "$session" "codex" "$cwd" "codex"
-  fi
-  if ! tmux_window_exists "$session" "nvim"; then
-    create_tmux_window_with_command "$session" "nvim" "$cwd" "nvim"
-  fi
-
-  ensure_tmux_window_index "$session" "terminal" "0"
-  ensure_tmux_window_index "$session" "codex" "1"
-  ensure_tmux_window_index "$session" "nvim" "2"
+  "$HOME/bin/tmux-session-template" ensure "$session" "$cwd"
 }
 
 ensure_dotfiles_tmux_session() {
@@ -924,7 +859,7 @@ ensure_dotfiles_tmux_session() {
   fi
 
   if ! tmux has-session -t "=$session" 2>/dev/null; then
-    tmux new-session -d -s "$session" -c "$dotfiles_dir" -n terminal
+    tmux new-session -d -e DOTFILES_TMUX_TEMPLATE=skip -s "$session" -c "$dotfiles_dir" -n terminal
   fi
   ensure_standard_scratchpad_tmux_windows "$session" "$dotfiles_dir"
 
@@ -947,7 +882,7 @@ ensure_projects_tmux_session() {
   fi
 
   if ! tmux has-session -t "=$session" 2>/dev/null; then
-    tmux new-session -d -s "$session" -c "$project_dir" -n terminal
+    tmux new-session -d -e DOTFILES_TMUX_TEMPLATE=skip -s "$session" -c "$project_dir" -n terminal
   fi
   ensure_standard_scratchpad_tmux_windows "$session" "$project_dir"
 
