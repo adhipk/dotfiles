@@ -1,24 +1,30 @@
-# tmux integration - send save-buffer command
-keybind = cmd+s=text:\x01\x73
+# Ghostty's Command layer stays app-local. These shortcuts present tmux window
+# types and Yazi as terminal-app navigation; the broader tmux command set stays
+# behind Control and the Ctrl-a prefix. Hyper is intentionally unbound.
 
-# tmux Yazi launchers - send prefix + b/B
+# Cycle terminal, Codex, Neovim, and Tuxedo tmux windows by type. CSI-u carries
+# the same keys as the no-prefix Ctrl+0/1/2/3 bindings without selecting indices.
+keybind = cmd+backquote=csi:48;5u
+keybind = cmd+digit_1=csi:49;5u
+keybind = cmd+1=csi:49;5u
+keybind = cmd+digit_2=csi:50;5u
+keybind = cmd+2=csi:50;5u
+keybind = cmd+digit_3=csi:51;5u
+keybind = cmd+3=csi:51;5u
+
+# App-local file-manager views.
 keybind = cmd+b=text:\x01\x62
 keybind = cmd+shift+b=text:\x01\x42
 
-# tmux scratchpad window switching - send prefix + target
-keybind = cmd+backquote=text:\x01\x30
-keybind = cmd+digit_1=text:\x01\x31
-keybind = cmd+1=text:\x01\x31
-keybind = cmd+digit_2=text:\x01\x32
-keybind = cmd+2=text:\x01\x32
-
-# Distinguish Ctrl+Shift+0/1/2 from Ctrl+0/1/2 for tmux type creation.
+# Distinguish Ctrl+Shift+0/1/2/3 from Ctrl+0/1/2/3 for tmux type creation.
 keybind = ctrl+shift+digit_0=csi:48;6u
 keybind = ctrl+shift+0=csi:48;6u
 keybind = ctrl+shift+digit_1=csi:49;6u
 keybind = ctrl+shift+1=csi:49;6u
 keybind = ctrl+shift+digit_2=csi:50;6u
 keybind = ctrl+shift+2=csi:50;6u
+keybind = ctrl+shift+digit_3=csi:51;6u
+keybind = ctrl+shift+3=csi:51;6u
 
 # aesthetics
 # theme = Cyberpunk Scarlet Protocol

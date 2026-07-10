@@ -3,7 +3,7 @@
 # man-me: usage=make test; make install; make diff; make watch; make reload
 # man-me: description=Convenience wrappers for tests, source-state and tmux-plugin installation, diff, watch, reload, and native HUD builds.
 # man-me: tags=make setup test install apply diff watch reload tmux tpm projectdeck whichkey shortcuts
-.PHONY: test test-colorscheme test-configs test-projects test-tmux-session-template test-tmux-workspace test-tmux-which-key test-tmux-persistence test-tmux-border-accent test-tmux-yazi-pane test-source-state test-install test-integration test-whichkey install apply apply-debug compile sync diff watch reload clean help build-projectdeck build-whichkey
+.PHONY: test test-colorscheme test-configs test-scratchpads test-projects test-todo test-tmux-session-template test-tmux-workspace test-tmux-which-key test-tmux-persistence test-tmux-border-accent test-tmux-yazi-pane test-source-state test-install test-integration test-whichkey install apply apply-debug compile sync diff watch reload clean help build-projectdeck build-whichkey
 
 # Default target
 help:
@@ -13,6 +13,8 @@ help:
 	@echo "  make test              - Run all tests"
 	@echo "  make test-colorscheme  - Run colorscheme tests only"
 	@echo "  make test-configs      - Run config file tests only"
+	@echo "  make test-scratchpads  - Run scratchpad behavior tests only"
+	@echo "  make test-todo         - Run canonical todo.txt wrapper tests only"
 	@echo "  make test-tmux-session-template - Run tmux template tests only"
 	@echo "  make test-tmux-workspace - Run declarative tmux layout tests only"
 	@echo "  make test-tmux-which-key - Run tmux command-center tests only"
@@ -45,8 +47,14 @@ test-colorscheme:
 test-configs:
 	@./tests/test_configs.sh
 
+test-scratchpads:
+	@./tests/test_scratchpads.sh
+
 test-projects:
 	@./tests/test_projects.sh
+
+test-todo:
+	@./tests/test_todo.sh
 
 test-tmux-session-template:
 	@./tests/test_tmux_session_template.sh

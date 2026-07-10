@@ -89,8 +89,8 @@ toggle_side_pane() {
     return 0
   fi
 
-  # Cmd+B inside the dedicated full-window Yazi view should not split Yazi
-  # beside itself. Cmd+Shift+B remains responsible for that window.
+  # Hyper+B inside the dedicated full-window Yazi view should not split Yazi
+  # beside itself. Hyper+Shift+B remains responsible for that window.
   directory=$(tmux_cmd display-message -p -t "$source_pane" '#{pane_current_path}')
   new_pane=$(
     tmux_cmd split-window \

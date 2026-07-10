@@ -19,7 +19,8 @@ yabai -m signal --remove "tile_pip_on_create" >/dev/null 2>&1 || true
 yabai -m signal --remove "tile_pip_on_title_change" >/dev/null 2>&1 || true
 yabai -m signal --remove "normalize_pip_on_create" >/dev/null 2>&1 || true
 yabai -m signal --remove "normalize_pip_on_title_change" >/dev/null 2>&1 || true
-yabai -m signal --add label=projects_record_focus event=window_focused action="$HOME/.config/yabai/projects record-focus"
+# Project contexts are dormant; the removal above cleans up any signal left by
+# an older config without reinstalling it.
 yabai -m signal --add label=app_mru_update event=window_focused action="$HOME/.config/skhd/app-mru.sh update"
 yabai -m signal --add label=tile_pip_on_create event=window_created title="^Picture in Picture$" action="$HOME/.config/yabai/tile-pip-window"
 yabai -m signal --add label=tile_pip_on_title_change event=window_title_changed title="^Picture in Picture$" action="$HOME/.config/yabai/tile-pip-window"

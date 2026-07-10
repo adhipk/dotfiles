@@ -5,6 +5,7 @@ normal workflows.
 
 ## Editing Rules
 
+- Follow the canonical todo.txt workflow in `AGENTS.md` for non-trivial work.
 - Edit desired home files under `home/`.
 - Preserve chezmoi attributes such as `dot_`, `executable_`, and `symlink_`.
 - Add helper commands under `home/bin/`.

@@ -2,8 +2,8 @@
 # man-me: name=install.sh
 # man-me: category=Repository Setup
 # man-me: usage=./install.sh [chezmoi apply args...]
-# man-me: description=Apply this source state, install tmux plugins and the managed command center, reload tmux, and build the native ProjectDeck and shortcut-guide apps on macOS.
-# man-me: tags=install setup apply chezmoi dotfiles tmux plugins tpm command center projectdeck whichkey shortcut guide bootstrap
+# man-me: description=Apply this source state, install tmux plugins and the managed command center, reload tmux and Ghostty, and build the native shortcut-guide app on macOS.
+# man-me: tags=install setup apply chezmoi dotfiles todo tasks tuxedo tmux ghostty plugins tpm command center whichkey shortcut guide bootstrap
 set -euo pipefail
 
 DOTFILES_DIR="${DOTFILES_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
@@ -47,17 +47,6 @@ show_managed_file_summary() {
     else
         echo "[dotfiles] managed files are up to date."
     fi
-}
-
-build_projectdeck() {
-    local build_script="$DOTFILES_DIR/scripts/build-projectdeck.sh"
-
-    [[ "$(uname -s)" == "Darwin" ]] || return 0
-    [[ -x "$build_script" ]] || return 0
-
-    echo "[dotfiles] building projectdeck..."
-    PROJECTDECK_INSTALL_PATH="$CHEZMOI_DESTINATION/.config/yabai/projectdeck" \
-        "$build_script"
 }
 
 build_whichkey() {
@@ -121,6 +110,17 @@ reload_tmux_config() {
     fi
 }
 
+reload_ghostty_config() {
+    [[ "$(uname -s)" == "Darwin" ]] || return 0
+    command -v pkill >/dev/null 2>&1 || return 0
+
+    # Ghostty does not watch its config. SIGUSR2 reloads every independently
+    # launched app process, including the opaque scratchpad instance.
+    if pkill -USR2 -f '/Ghostty[.]app/Contents/MacOS/ghostty([[:space:]]|$)' 2>/dev/null; then
+        echo "[dotfiles] reloaded Ghostty configuration..."
+    fi
+}
+
 echo "[dotfiles] repository:  $DOTFILES_DIR"
 echo "[dotfiles] source:      $CHEZMOI_SOURCE_ROOT"
 echo "[dotfiles] destination: $CHEZMOI_DESTINATION"
@@ -141,7 +141,7 @@ else
     install_tmux_plugins
     install_tmux_command_center
     reload_tmux_config
-    build_projectdeck
+    reload_ghostty_config
     build_whichkey
     echo "[dotfiles] pending changes after apply:"
     show_status

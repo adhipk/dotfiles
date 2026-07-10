@@ -1,25 +1,35 @@
 #!/usr/bin/env bash
 # man-me: name=tmux-border-accent
 # man-me: category=Terminal and Sessions
-# man-me: usage=tmux-border-accent start [WIDTH] [INACTIVE_COLOR]; tmux-border-accent update
-# man-me: description=Match the focused Ghostty JankyBorder to its tmux session accent.
-# man-me: tags=tmux ghostty jankyborders borders accent focus session color
+# man-me: usage=tmux-border-accent start [WIDTH] [INACTIVE_COLOR]; tmux-border-accent update; tmux-border-accent suppress-scratchpads [WINDOW_ID]
+# man-me: description=Match normal Ghostty borders to tmux accents while keeping scratchpads borderless.
+# man-me: tags=tmux ghostty jankyborders borders accent focus session color scratchpad
 
 set -euo pipefail
 
 BORDERS_BIN="${TMUX_BORDER_ACCENT_BORDERS_BIN:-borders}"
 TMUX_BIN="${TMUX_BORDER_ACCENT_TMUX_BIN:-tmux}"
+YABAI_BIN="${TMUX_BORDER_ACCENT_YABAI_BIN:-yabai}"
+JQ_BIN="${TMUX_BORDER_ACCENT_JQ_BIN:-jq}"
+LAUNCHCTL_BIN="${TMUX_BORDER_ACCENT_LAUNCHCTL_BIN:-launchctl}"
+BORDERS_MACH_SERVICE="${TMUX_BORDER_ACCENT_MACH_SERVICE:-git.felix.borders}"
 DEFAULT_BORDER_WIDTH="${TMUX_BORDER_ACCENT_WIDTH:-4.0}"
 DEFAULT_INACTIVE_COLOR="${TMUX_BORDER_ACCENT_INACTIVE_COLOR:-0xff000000}"
+TRANSPARENT_COLOR="${TMUX_BORDER_ACCENT_TRANSPARENT_COLOR:-0x00000000}"
+SUPPRESS_ATTEMPTS="${TMUX_BORDER_ACCENT_SUPPRESS_ATTEMPTS:-4}"
+SUPPRESS_RETRY_DELAY="${TMUX_BORDER_ACCENT_SUPPRESS_RETRY_DELAY:-0.05}"
 
 usage() {
   cat <<'EOF'
 Usage:
   tmux-border-accent start [WIDTH] [INACTIVE_COLOR]
   tmux-border-accent update
+  tmux-border-accent suppress-scratchpads [WINDOW_ID]
 
 start   Start JankyBorders with the complete square-border configuration.
 update  Update an existing JankyBorders process from the focused tmux client.
+suppress-scratchpads
+        Remove JankyBorders from one scratchpad window, or every yabai scratchpad.
 EOF
 }
 
@@ -51,27 +61,115 @@ borders_running() {
   pgrep -x borders >/dev/null 2>&1
 }
 
+borders_endpoint_ready() {
+  local launchd_state
+
+  command -v "$LAUNCHCTL_BIN" >/dev/null 2>&1 || [[ -x "$LAUNCHCTL_BIN" ]] || return 1
+  launchd_state=$("$LAUNCHCTL_BIN" print "gui/$(id -u)" 2>/dev/null) || return 1
+  [[ "$launchd_state" == *"\"$BORDERS_MACH_SERVICE\" ="* ]]
+}
+
+scratchpad_window_ids() {
+  command -v "$YABAI_BIN" >/dev/null 2>&1 || return 0
+  command -v "$JQ_BIN" >/dev/null 2>&1 || return 0
+
+  "$YABAI_BIN" -m query --windows 2>/dev/null \
+    | "$JQ_BIN" -r '.[] | select((.scratchpad // "") | length > 0) | .id' \
+      2>/dev/null \
+    || true
+}
+
+suppress_scratchpad_border() {
+  local window_id="$1"
+  local attempts="${2:-1}"
+  local attempt
+
+  [[ "$window_id" =~ ^[0-9]+$ ]] || return 0
+  [[ "$attempts" =~ ^[1-9][0-9]*$ ]] || attempts=1
+
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    "$BORDERS_BIN" \
+      "apply-to=$window_id" \
+      width=0 \
+      "active_color=$TRANSPARENT_COLOR" \
+      "inactive_color=$TRANSPARENT_COLOR"
+    if ((attempt < attempts)); then
+      sleep "$SUPPRESS_RETRY_DELAY"
+    fi
+  done
+}
+
+suppress_scratchpad_borders() {
+  local requested_id="${1:-}"
+  local attempts="${2:-1}"
+  local window_id
+
+  borders_running || return 0
+  borders_endpoint_ready || return 0
+
+  if [[ -n "$requested_id" ]]; then
+    suppress_scratchpad_border "$requested_id" "$attempts"
+    return 0
+  fi
+
+  while IFS= read -r window_id; do
+    [[ -n "$window_id" ]] || continue
+    suppress_scratchpad_border "$window_id" "$attempts"
+  done < <(scratchpad_window_ids)
+}
+
 start_borders() {
   local width="${1:-$DEFAULT_BORDER_WIDTH}"
   local inactive_color="${2:-$DEFAULT_INACTIVE_COLOR}"
   local active_color
+  local borders_pid
+  local -a border_args
 
   active_color=$(border_color)
-  exec "$BORDERS_BIN" \
-    style=square \
-    "width=$width" \
-    hidpi=on \
-    ax_focus=on \
-    "active_color=$active_color" \
+  border_args=(
+    style=square
+    "width=$width"
+    hidpi=on
+    ax_focus=on
+    "active_color=$active_color"
     "inactive_color=$inactive_color"
+  )
+
+  if borders_running; then
+    borders_endpoint_ready || return 0
+    "$BORDERS_BIN" "${border_args[@]}"
+    suppress_scratchpad_borders
+    return 0
+  fi
+
+  "$BORDERS_BIN" "${border_args[@]}" &
+  borders_pid=$!
+
+  # The process becomes visible to pgrep before its Mach service is published.
+  # Wait for the command endpoint before sending exact-window overrides, then
+  # retain the original blocking service lifecycle.
+  for _ in {1..20}; do
+    if borders_endpoint_ready; then
+      suppress_scratchpad_borders "" "$SUPPRESS_ATTEMPTS"
+      break
+    fi
+    kill -0 "$borders_pid" >/dev/null 2>&1 || break
+    sleep "$SUPPRESS_RETRY_DELAY"
+  done
+
+  wait "$borders_pid"
 }
 
 update_borders() {
   local active_color
 
   borders_running || return 0
+  borders_endpoint_ready || return 0
   active_color=$(border_color)
   "$BORDERS_BIN" "active_color=$active_color"
+  # Global color updates are propagated into JankyBorders' per-window
+  # overrides, so restore the transparent scratchpad override afterwards.
+  suppress_scratchpad_borders
 }
 
 main() {
@@ -82,7 +180,7 @@ main() {
       usage
       return 0
       ;;
-    start|update)
+    start|update|suppress-scratchpads)
       ;;
     *)
       usage >&2
@@ -98,6 +196,9 @@ main() {
       ;;
     update)
       update_borders
+      ;;
+    suppress-scratchpads)
+      suppress_scratchpad_borders "${2:-}" "$SUPPRESS_ATTEMPTS"
       ;;
   esac
 }

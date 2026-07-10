@@ -10,6 +10,7 @@ ARGS_FILE="$TEMP_HOME/chezmoi-args"
 TMUX_ARGS_FILE="$TEMP_HOME/tmux-args"
 TMUX_PLUGIN_ARGS_FILE="$TEMP_HOME/tmux-plugin-args"
 SERVICE_ARGS_FILE="$TEMP_HOME/service-args"
+PKILL_ARGS_FILE="$TEMP_HOME/pkill-args"
 
 PASSED=0
 FAILED=0
@@ -34,6 +35,21 @@ assert_contains() {
     fi
 }
 
+assert_not_contains() {
+    local file="$1"
+    local pattern="$2"
+    local test_name="$3"
+
+    if ! grep -q "$pattern" "$file"; then
+        echo "  ✓ $test_name"
+        ((PASSED++))
+    else
+        echo "  ✗ $test_name"
+        echo "    Pattern should not exist: $pattern"
+        ((FAILED++))
+    fi
+}
+
 assert_executable() {
     local file="$1"
     local test_name="$2"
@@ -44,6 +60,20 @@ assert_executable() {
     else
         echo "  ✗ $test_name"
         echo "    Missing executable: $file"
+        ((FAILED++))
+    fi
+}
+
+assert_missing() {
+    local file="$1"
+    local test_name="$2"
+
+    if [[ ! -e "$file" ]]; then
+        echo "  ✓ $test_name"
+        ((PASSED++))
+    else
+        echo "  ✗ $test_name"
+        echo "    Unexpected path: $file"
         ((FAILED++))
     fi
 }
@@ -106,7 +136,11 @@ cat > "$FAKE_BIN/skhd" <<'EOF'
 #!/usr/bin/env bash
 printf '%s %s\n' "${0##*/}" "$*" >> "$SERVICE_ARGS_FILE"
 EOF
-chmod +x "$FAKE_BIN/chezmoi" "$FAKE_BIN/brew" "$FAKE_BIN/tmux" "$FAKE_BIN/yabai" "$FAKE_BIN/skhd"
+cat > "$FAKE_BIN/pkill" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$PKILL_ARGS_FILE"
+EOF
+chmod +x "$FAKE_BIN/chezmoi" "$FAKE_BIN/brew" "$FAKE_BIN/tmux" "$FAKE_BIN/yabai" "$FAKE_BIN/skhd" "$FAKE_BIN/pkill"
 
 echo ""
 echo "Testing install wrapper..."
@@ -137,6 +171,7 @@ if HOME="$TEMP_HOME" \
     TMUX_ARGS_FILE="$TMUX_ARGS_FILE" \
     TMUX_PLUGIN_ARGS_FILE="$TMUX_PLUGIN_ARGS_FILE" \
     SERVICE_ARGS_FILE="$SERVICE_ARGS_FILE" \
+    PKILL_ARGS_FILE="$PKILL_ARGS_FILE" \
     DOTFILES_DIR="$DOTFILES_DIR" \
     "$DOTFILES_DIR/bootstrap.sh" >/dev/null; then
     echo "  ✓ bootstrap.sh delegates to install.sh"
@@ -147,6 +182,7 @@ else
 fi
 assert_contains "$ARGS_FILE" "^-S $DOTFILES_DIR apply$" "bootstrap applies the chezmoi source state"
 assert_contains "$TMUX_ARGS_FILE" "^source-file $TEMP_HOME/.tmux.conf$" "bootstrap reloads a running tmux server"
+assert_contains "$PKILL_ARGS_FILE" "^-USR2 -f /Ghostty" "bootstrap reloads every running Ghostty process with SIGUSR2"
 assert_contains "$TMUX_PLUGIN_ARGS_FILE" "^$TEMP_HOME|$TEMP_HOME/.tmux/plugins/$" "bootstrap installs tmux plugins into the destination home"
 assert_symlink_target \
     "$TEMP_HOME/.tmux/plugins/tmux-which-key/config.yaml" \
@@ -155,7 +191,8 @@ assert_symlink_target \
 assert_contains "$SERVICE_ARGS_FILE" "^yabai --start-service$" "bootstrap starts yabai on a clean client"
 assert_contains "$SERVICE_ARGS_FILE" "^skhd --start-service$" "bootstrap starts skhd on a clean client"
 assert_directory "$TEMP_HOME/projects" "bootstrap creates the projects scratchpad root"
-assert_executable "$TEMP_HOME/.config/yabai/projectdeck" "bootstrap builds ProjectDeck for the destination home"
+assert_missing "$TEMP_HOME/.todo" "bootstrap does not create a global task directory"
+assert_missing "$TEMP_HOME/.config/yabai/projectdeck" "bootstrap leaves dormant ProjectDeck unbuilt"
 assert_executable "$TEMP_HOME/.config/skhd/whichkey" "bootstrap builds the shortcut guide for the destination home"
 
 echo ""
@@ -173,17 +210,79 @@ else
     echo "  ✗ chezmoi could not apply the source state to an empty home"
     ((FAILED++))
 fi
+assert_contains "$COLD_HOME/.agents/AGENTS.md" "Canonical Task Tracking" "clean apply installs shared agent guidance"
+assert_symlink_target "$COLD_HOME/.codex/AGENTS.md" "$HOME/.agents/AGENTS.md" "clean apply links Codex to shared agent guidance"
+assert_symlink_target "$COLD_HOME/.claude/CLAUDE.md" "$HOME/.agents/AGENTS.md" "clean apply links Claude to shared agent guidance"
+assert_symlink_target "$COLD_HOME/.config/opencode/AGENTS.md" "$HOME/.agents/AGENTS.md" "clean apply links OpenCode to shared agent guidance"
+assert_contains "$COLD_HOME/.config/opencode/opencode.json" "active project's todo\\.txt" "clean apply configures the OpenCode personal agent for project-local todo.txt"
+assert_not_contains "$COLD_HOME/.config/opencode/opencode.json" 'Todoist' "clean apply removes OpenCode's Todoist task guidance"
+assert_executable "$COLD_HOME/bin/todo" "clean apply installs the canonical todo wrapper"
+assert_contains "$COLD_HOME/bin/todo" 'TODO_AGENT_LOCK=' "clean apply installs serialized agent writes"
+assert_contains "$COLD_HOME/bin/todo" 'TODO_DIR="[$]PWD"' "clean apply keeps todo.txt in the caller's working directory"
 assert_executable "$COLD_HOME/bin/tmux-session-template" "clean apply installs the tmux session helper"
+assert_executable "$COLD_HOME/bin/tmux-session-picker" "clean apply installs the sesh tmux-session picker"
+assert_executable "$COLD_HOME/bin/tmux-sessionizer" "clean apply installs the general sesh sessionizer"
+assert_executable "$COLD_HOME/bin/tmux-sessionizer-zoxide" "clean apply installs the project-aware sesh sessionizer"
 assert_executable "$COLD_HOME/bin/tmux-workspace" "clean apply installs the declarative tmux workspace helper"
 assert_executable "$COLD_HOME/bin/tmux-border-accent" "clean apply installs the tmux border helper"
 assert_executable "$COLD_HOME/bin/tmux-yazi-pane" "clean apply installs the tmux Yazi helper"
 assert_executable "$COLD_HOME/bin/setup-yabai-sa" "clean apply installs the yabai scripting-addition setup helper"
 assert_contains "$COLD_HOME/.tmux.conf" "tmux-session-template cycle" "clean apply installs typed tmux bindings"
+assert_contains "$COLD_HOME/.tmux.conf" "C-3.*tmux-session-template cycle.*tuxedo" "clean apply installs Tuxedo type cycling"
+assert_contains "$COLD_HOME/.tmux.conf" "C-S-3.*tmux-session-template new.*tuxedo" "clean apply installs Tuxedo type creation"
+assert_contains "$COLD_HOME/bin/tmux-session-template" "ensure_standard_tmux_window.*tuxedo 3 todo" "clean apply installs the canonical Tuxedo window"
+assert_contains "$COLD_HOME/bin/tmux-session-template" "duplicate_window_type" "clean apply installs typed tmux duplication"
+assert_contains "$COLD_HOME/.tmux.conf" 'S-F4.*tmux-session-template duplicate' "clean apply installs the Right Command duplicate bridge"
+assert_contains "$COLD_HOME/.tmux.conf" '^set-option -g detach-on-destroy off$' "clean apply keeps tmux attached across session destruction"
+assert_contains "$COLD_HOME/.tmux.conf" 'L switch-client -l' "clean apply keeps last-session selection local to each tmux client"
+assert_contains "$COLD_HOME/.tmux.conf" 'Rename #S · #{b:pane_current_path}' "clean apply installs the contextual session rename prompt"
+assert_contains "$COLD_HOME/.tmux.conf" 'command-prompt -F -l' "clean apply installs literal contextual rename input"
+assert_contains "$COLD_HOME/.tmux.conf" 'rename-session -t "#{session_id}" -- "%%%"' "clean apply installs punctuation-safe session rename forwarding"
 assert_contains "$COLD_HOME/.tmux.conf" "tmux-plugins/tmux-resurrect" "clean apply installs tmux persistence config"
+assert_contains "$COLD_HOME/.tmux.conf" "@resurrect-processes 'codex tuxedo yazi'" "clean apply restores Tuxedo sessions"
 assert_contains "$COLD_HOME/.config/tmux/layouts/project.tmux.tsx" "<Session root=\"\$PROJECT_ROOT\">" "clean apply installs the React-like project layout"
 assert_contains "$COLD_HOME/.config/tmux/which-key.yaml" "tmux-workspace pick" "clean apply installs the tmux command-center layout action"
+assert_contains "$COLD_HOME/.config/tmux/which-key.yaml" "tmux-session-template duplicate" "clean apply installs command-center window duplication"
+assert_contains "$COLD_HOME/.config/tmux/which-key.yaml" "cycle.*tuxedo" "clean apply installs command-center Tuxedo cycling"
+assert_contains "$COLD_HOME/.config/tmux/which-key.yaml" "new.*tuxedo" "clean apply installs command-center Tuxedo creation"
+assert_contains "$COLD_HOME/.config/tmux/which-key.yaml" "tmux-sessionizer-zoxide" "clean apply points the command center at the built-in sesh picker"
+assert_contains "$COLD_HOME/.config/sesh/sesh.toml" '^\[tui\]$' "clean apply installs the managed sesh picker config"
+assert_contains "$COLD_HOME/.config/sesh/sesh.toml" '^strict_mode = true$' "clean apply installs strict sesh config validation"
+assert_not_contains "$COLD_HOME/.config/sesh/sesh.toml" '^\[default_session\]$' "clean apply does not install a default sesh layout"
+assert_not_contains "$COLD_HOME/.config/sesh/sesh.toml" '^\[\[window\]\]$' "clean apply does not install mutable sesh window templates"
+assert_not_contains "$COLD_HOME/.config/sesh/sesh.toml" '^\[\[session\]\]$' "clean apply does not install sessions that can mutate the caller"
 assert_contains "$COLD_HOME/.skhdrc" "scratchpads open projects" "clean apply installs project scratchpad bindings"
-assert_contains "$COLD_HOME/Library/Application Support/com.mitchellh.ghostty/config" "cmd+b=text" "clean apply installs Ghostty tmux bindings"
+assert_contains "$COLD_HOME/.skhdrc" 'rcmd - d \[' "clean apply installs the Ghostty-only Right Command layer"
+assert_contains "$COLD_HOME/.skhdrc" '^[[:space:]]*\* ~$' "clean apply preserves Right Command passthrough outside Ghostty"
+assert_not_contains "$COLD_HOME/.skhdrc" '^ctrl + alt + cmd' "clean apply reserves the global Hyper layer"
+assert_not_contains "$COLD_HOME/.skhdrc" '\.config/yabai/projects ' "clean apply leaves project contexts dormant"
+assert_contains "$COLD_HOME/Library/Application Support/com.mitchellh.ghostty/config" "cmd+backquote=csi:48;5u" "clean apply installs Cmd+Backtick terminal cycling"
+assert_contains "$COLD_HOME/Library/Application Support/com.mitchellh.ghostty/config" "cmd+digit_1=csi:49;5u" "clean apply installs Cmd+1 Codex cycling"
+assert_contains "$COLD_HOME/Library/Application Support/com.mitchellh.ghostty/config" "cmd+digit_2=csi:50;5u" "clean apply installs Cmd+2 Neovim cycling"
+assert_contains "$COLD_HOME/Library/Application Support/com.mitchellh.ghostty/config" "cmd+digit_3=csi:51;5u" "clean apply installs Cmd+3 Tuxedo cycling"
+assert_contains "$COLD_HOME/Library/Application Support/com.mitchellh.ghostty/config" "ctrl+shift+digit_3=csi:51;6u" "clean apply installs Ctrl+Shift+3 Tuxedo creation input"
+assert_contains "$COLD_HOME/Library/Application Support/com.mitchellh.ghostty/config" "cmd+b=text:\\\\x01\\\\x62" "clean apply installs the Cmd+B Yazi side pane"
+assert_contains "$COLD_HOME/Library/Application Support/com.mitchellh.ghostty/config" "cmd+shift+b=text:\\\\x01\\\\x42" "clean apply installs the Cmd+Shift+B Yazi window"
+assert_not_contains "$COLD_HOME/Library/Application Support/com.mitchellh.ghostty/config" '^keybind = ctrl+alt+cmd' "clean apply reserves Hyper in Ghostty"
+assert_not_contains "$COLD_HOME/.config/karabiner/karabiner.json" 'nvim_caps_lock_control' "clean apply installs no Neovim-specific Karabiner state"
+assert_not_contains "$COLD_HOME/.config/nvim/init.lua" 'karabiner_cli' "clean apply leaves Neovim independent of Karabiner"
+
+if jq -e '
+    .profiles[] | select(.selected == true)
+    | [.complex_modifications.rules[].manipulators[] | select(.from.key_code == "caps_lock")] as $caps
+    | ($caps | length == 1)
+      and ($caps[0].to[0].key_code == "left_control")
+      and ($caps[0].to[0].lazy == true)
+      and ($caps[0].to[0].modifiers == ["left_option", "left_command"])
+      and ($caps[0].to_if_alone[0].key_code == "escape")
+      and ($caps[0] | has("conditions") | not)
+' "$COLD_HOME/.config/karabiner/karabiner.json" >/dev/null; then
+    echo "  ✓ clean apply installs unconditional Caps Lock Hyper hold and Escape tap"
+    ((PASSED++))
+else
+    echo "  ✗ clean apply did not reconstruct the unconditional Caps Lock mapping"
+    ((FAILED++))
+fi
 
 if HOME="$COLD_HOME" "$COLD_HOME/bin/tmux-workspace" list | grep -qx project; then
     echo "  ✓ cold-home workspace CLI discovers its managed layout"

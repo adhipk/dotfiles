@@ -85,6 +85,20 @@ else
     fail "generated command center loads in tmux" "source exit 0" "$SOURCE_OUTPUT"
 fi
 
+# Ghostty/skhd send F16-F19, which xterm-compatible terminal protocols expose
+# to tmux as Shift+F4 through Shift+F7. Parse the actual bridge declarations so
+# unsupported tmux key names fail this suite instead of failing only at reload.
+LAYER_SOURCE_OUTPUT=$(
+    grep -E '^bind-key -n -N .*S-F[4-7]' "$TMUX_CONFIG" \
+        | tmux -L "$SOCKET_NAME" source-file - 2>&1
+)
+LAYER_SOURCE_STATUS=$?
+if [[ "$LAYER_SOURCE_STATUS" -eq 0 ]]; then
+    pass "Right Command terminal bridge loads in tmux"
+else
+    fail "Right Command terminal bridge loads in tmux" "source exit 0" "$LAYER_SOURCE_OUTPUT"
+fi
+
 PREFIX_BINDING=$(tmux -L "$SOCKET_NAME" list-keys -T prefix Space 2>/dev/null || true)
 assert_contains "Ctrl-a Space opens the command center" "display-menu" "$PREFIX_BINDING"
 
@@ -158,11 +172,16 @@ else
 fi
 
 SESSIONS=$(tmux -L "$SOCKET_NAME" show-options -gv @wk_menu_sessions 2>/dev/null || true)
-assert_contains "session menu switches sessions" "choose-tree -Zs" "$SESSIONS"
+assert_contains "session menu opens the sesh picker" "tmux-sessionizer-zoxide" "$SESSIONS"
+assert_contains "session menu uses client-local tmux history" "switch-client -l" "$SESSIONS"
 assert_contains "session menu navigates previous sessions" "switch-client -p" "$SESSIONS"
 assert_contains "session menu navigates next sessions" "switch-client -n" "$SESSIONS"
 assert_contains "session menu creates named sessions" "New named session" "$SESSIONS"
 assert_contains "session menu renames sessions" "rename-session" "$SESSIONS"
+assert_contains "session rename shows active folder context" "pane_current_path" "$SESSIONS"
+assert_contains "numeric sessions receive a contextual suggestion" "m/r:" "$SESSIONS"
+assert_contains "session rename accepts literal punctuation" "command-prompt -l" "$SESSIONS"
+assert_contains "session rename preserves the full prompted name" "%%%" "$SESSIONS"
 assert_contains "session close is confirmed" "Close session" "$SESSIONS"
 assert_contains "session menu exposes server-wide persistence" "Save all state" "$SESSIONS"
 assert_contains "session menu cleans detached managed layouts" "tmux-workspace clean" "$SESSIONS"
@@ -171,6 +190,9 @@ WINDOWS=$(tmux -L "$SOCKET_NAME" show-options -gv @wk_menu_windows 2>/dev/null |
 NEW_WINDOWS=$(tmux -L "$SOCKET_NAME" show-options -gv @wk_menu_new 2>/dev/null || true)
 assert_contains "window menu uses typed cycling" "tmux-session-template cycle" "$WINDOWS"
 assert_contains "window menu creates typed windows" "tmux-session-template new" "$NEW_WINDOWS"
+assert_contains "window menu cycles Tuxedo windows" "cycle #{session_id} tuxedo" "$WINDOWS"
+assert_contains "window menu creates Tuxedo windows" "new #{session_id} tuxedo" "$NEW_WINDOWS"
+assert_contains "window menu duplicates the current typed window" "tmux-session-template duplicate" "$WINDOWS"
 assert_contains "window menu renames windows" "rename-window" "$WINDOWS"
 assert_contains "window close is confirmed" "Close window" "$WINDOWS"
 
@@ -200,8 +222,8 @@ assert_contains "copy menu exposes forward search" "search-forward" "$COPY_MENU"
 assert_contains "copy menu exposes backward search" "search-backward" "$COPY_MENU"
 
 assert_contains \
-    "tmux config includes persistent session identity" \
-    "▌ #S" \
+    "tmux config includes meaningful persistent session identity" \
+    "▌ #{?#{m/r:" \
     "$(grep 'status-left ' "$TMUX_CONFIG")"
 assert_contains \
     "tmux config declares automatic persistence" \
@@ -212,8 +234,8 @@ assert_contains \
     "tmux-workspace snapshot restore" \
     "$(cat "$TMUX_CONFIG")"
 assert_contains \
-    "tmux config uses a conservative extra process allowlist" \
-    "@resurrect-processes 'codex yazi'" \
+    "tmux config restores Codex, Tuxedo, and Yazi processes" \
+    "@resurrect-processes 'codex tuxedo yazi'" \
     "$(cat "$TMUX_CONFIG")"
 assert_contains \
     "tmux persistence plugin is version-pinned" \

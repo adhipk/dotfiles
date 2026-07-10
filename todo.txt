@@ -1,0 +1,6 @@
+x 2026-07-10 2026-07-10 Establish todo.txt as the canonical agent task system +dotfiles @agent id:de4b0b73-0d60-434b-abe1-479a38c93334 owner:codex
+x 2026-07-10 2026-07-10 Install and configure Tuxedo against ~/.todo/todo.txt +dotfiles @terminal id:46a71fb3-3db1-4ff7-914b-d084a9fdeb82 owner:codex
+x 2026-07-10 2026-07-10 Add a typed Tuxedo tmux window and shortcuts +dotfiles @tmux id:dfe2178b-612c-45fa-a529-bd0f430dfefd owner:codex
+x 2026-07-10 2026-07-10 Apply todo.txt instructions to all agents and Codex +dotfiles @agent id:13b525bd-202b-45f8-841a-d872eb6fa533 owner:codex
+x 2026-07-10 2026-07-10 Verify bootstrap, tests, and live workflow +dotfiles @test id:0e84d1df-752a-46f1-8d70-d3f38833a23d owner:codex
+x 2026-07-10 2026-07-10 Make Tuxedo and tmux-accessible apps use the session working directory +dotfiles @agent id:5d76698f-0f2b-48f2-89e7-a195db055901 owner:codex

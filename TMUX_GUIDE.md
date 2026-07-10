@@ -5,7 +5,7 @@
 **Your workflow:**
 - **yabai** manages physical window placement (tiling windows on macOS)
 - **tmux** manages terminal sessions/panes inside Ghostty windows
-- **sesh** command (`tmux-sessionizer-zoxide`) quickly switches between project sessions
+- **sesh** provides the shared built-in picker for tmux, configured, and zoxide sessions
 
 ## Quick Start
 
@@ -34,12 +34,16 @@ Ordinary new sessions automatically receive this window layout:
 - `0 terminal` — raw shell
 - `1 codex` — starts Codex
 - `2 nvim` — starts Neovim
+- `3 tuxedo` — opens that session directory's `todo.txt` through the `todo` wrapper
 
-In Ghostty, `Cmd+Backtick`, `Cmd+1`, and `Cmd+2` jump directly to those
-windows. `Cmd+B` toggles one Yazi 40%-wide full-height right pane, while
-`Cmd+Shift+B` opens or selects a dedicated Yazi tmux window. New Yazi views
-start in the active pane's directory and close when Yazi exits. Sessions
-created with an explicit command remain single-purpose.
+In Ghostty, the left Command layer stays application-local: `Cmd+Backtick/1/2/3`
+cycles terminal/Codex/Neovim/Tuxedo windows by type, `Cmd+B` toggles one Yazi side
+pane, and `Cmd+Shift+B` opens its dedicated tmux window. Terminal lifecycle
+actions stay behind Control and the `Ctrl+A` prefix. Right Command carries only
+four infrequent tmux-management actions in Ghostty; its chords pass through in
+other apps, while sided Option and Hyper remain reserved. Sessions created with
+an explicit command remain single-purpose. As with every tmux-accessible app,
+Tuxedo inherits the same working directory as the session's other windows.
 Compound/orchestrated session creators that add their own windows or queue
 index-targeted commands must use
 `tmux new-session -e DOTFILES_TMUX_TEMPLATE=skip ...`; `hs-*` sessions opt out
@@ -50,14 +54,24 @@ automatically.
 Press `Ctrl+A Space`. The repo-owned menu groups the complete lifecycle:
 
 - `s` — switch, create, rename, close, save/restore all state, or close detached managed layouts
-- `w` — choose, create typed windows, reorder, rename, or close windows
+- `w` — choose, create or duplicate typed windows, reorder, rename, or close windows
 - `p` — navigate, split, resize, swap, break, or close panes
 - `l` — open, reapply, or repair a declarative workspace layout
 
+Sessions > Last uses tmux's per-client history, matching the direct `Ctrl+A L`
+binding. Closing a session does not detach its clients; tmux keeps them
+connected and moves them to a surviving session so the picker or last-session
+action remains immediately available.
+
 The active session name remains visible beside the current folder in the
-bottom bar. Resurrect and Continuum save structure, directories, pane contents,
-and an allowlist of interactive processes in the background. Neovim, Codex, and
-Yazi are restored; arbitrary development commands are deliberately not
+bottom bar. Generated numeric sessions display their active folder instead,
+and when a named session already matches its folder the duplicate context is
+omitted. Its centered `~ · codex · nvim · tuxedo` selector uses a foreground-only
+session accent for the active label, keeping normal and padded scratchpad
+terminals aligned without a full-height color block. Resurrect and Continuum
+save structure, directories, pane contents,
+and an allowlist of interactive processes in the background. Neovim, Codex,
+Tuxedo, and Yazi are restored; arbitrary development commands are deliberately not
 restarted automatically. A workspace sidecar restores the custom layout IDs
 that Resurrect itself does not retain.
 
@@ -96,7 +110,7 @@ tmux-workspace repair project --root "$PWD" --yes
 `apply` creates missing windows without restarting healthy panes. If the pane
 tree has drifted, it reports the affected window; `repair --yes` replaces only
 those managed windows. Layout-created sessions opt out of the automatic
-three-window hook and retain typed terminal/Codex/Neovim metadata. A layout
+four-window hook and retain their declared typed terminal/Codex/Neovim metadata. A layout
 will not take over a same-named unmanaged session unless `--adopt` is supplied.
 
 Layouts are trusted local configuration: component functions execute while
@@ -114,7 +128,13 @@ until that pane is first created.
 
 ### Windows (like browser tabs)
 - `Cmd+Shift+B` in Ghostty - Open or select a dedicated Yazi window
-- `Ctrl+A c` - New window (tmux default)
+- `Cmd+Backtick/1/2/3` in Ghostty - Cycle terminal/Codex/Neovim/Tuxedo windows by type
+- `Ctrl+0/1/2/3` - Cycle typed terminal/Codex/Neovim/Tuxedo windows without the prefix
+- `Ctrl+Shift+0/1/2/3` - Create that typed window in the active pane's directory
+- `Ctrl+4..9` - Select an exact higher window index without the prefix
+- `Right Cmd+D` in Ghostty - Duplicate the current typed window in the active directory
+- Command Center > Windows > Duplicate - The same duplicate action without the sided shortcut
+- `Ctrl+A c` - Create a typed terminal window in the active directory
 - `Ctrl+A p` - Previous window
 - `Ctrl+A n` - Next window
 - `Ctrl+A 0-9` - Switch to window by number (uses prefix)
@@ -123,8 +143,18 @@ until that pane is first created.
 
 ### Sessions (uses prefix)
 - `Ctrl+A d` - Detach from session
-- `Ctrl+A s` - List and switch sessions
-- `Ctrl+A $` - Rename session
+- `Ctrl+A s` - Open sesh's built-in session picker
+- `Ctrl+A L` - Switch to this client's last tmux session
+- `Ctrl+A $` - Rename the session with the same contextual, editable suggestion
+
+### Ghostty controls
+- `Cmd+Backtick/1/2/3` - Cycle tmux `terminal`/`codex`/`nvim`/`tuxedo` windows by type
+- `Cmd+B` / `Cmd+Shift+B` - Toggle a Yazi side pane or open its dedicated window
+- `Right Cmd+D/R/S/Space` - Duplicate, rename, choose a session, or open the command center
+- Left Command and all unlisted Command chords - Keep Ghostty and macOS defaults
+- Right Command chords outside Ghostty - Pass through to the current app
+- Left/Right Option - No additional sided layer yet
+- Hyper - Reserved and intentionally unbound
 
 ### Copy Mode (vim-style)
 - `Ctrl+A [` - Enter copy mode
@@ -149,10 +179,14 @@ tmux new -s frontend
 
 ### Option 2: Use sesh (already configured!)
 ```bash
-# Run `tmux-sessionizer-zoxide` to fuzzy find projects
-# Then switch between sessions instantly
-# Works great with your existing setup and uses `sesh`
+# Open sesh's built-in picker directly, or press Ctrl+A s
+sesh picker
 ```
+
+The shell and tmux session shortcuts use this built-in picker instead of
+maintaining hand-rolled `fzf` pipelines. Chezmoi manages the shared picker
+settings in `~/.config/sesh/sesh.toml`; declarative window layouts stay in the
+repo's `.tmux.tsx` workspace system.
 
 ### Option 3: Detached sessions as "workspaces"
 Keep long-running tasks in background:
@@ -190,6 +224,8 @@ ta api
 
 6. **Reload deliberately** - `alt+r` restarts yabai and skhd. Run
    `reload-colors` to restart those services and reload tmux configuration.
+   A real `./install.sh` or `make install` also reloads tmux and signals every
+   running Ghostty process, including the scratchpad, to reload its config.
 
 ## Troubleshooting
 

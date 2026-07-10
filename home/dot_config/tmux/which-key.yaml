@@ -38,7 +38,7 @@ items:
     menu:
       - name: Choose
         key: s
-        command: choose-tree -Zs
+        command: 'display-popup -EE -w 70% -h 70% -d "#{pane_current_path}" -T "sesh" "$HOME/bin/tmux-sessionizer-zoxide"'
       - name: Last
         key: tab
         command: switch-client -l
@@ -54,11 +54,13 @@ items:
         command: >-
           command-prompt -p "New session:"
           { new-session -A -s "%%" -c "#{pane_current_path}" }
-      - name: Rename
+      - name: Rename contextually
         key: r
         command: >-
-          command-prompt -p "Rename session:" -I "#S"
-          { rename-session -- "%%" }
+          command-prompt -l
+          -p "Rename #S · #{b:pane_current_path}:"
+          -I "#{?#{m/r:^[0-9]+$,#S},#{s|[-_]+| |:#{b:pane_current_path}},#S}"
+          { rename-session -- "%%%" }
       - name: Close
         key: x
         command: 'confirm-before -p "Close session #S? (y/n)" "kill-session -t #{session_id}"'
@@ -99,6 +101,9 @@ items:
       - name: Cycle Neovim
         key: '2'
         command: 'run-shell "$HOME/bin/tmux-session-template cycle #{session_id} nvim #{window_id}"'
+      - name: Cycle Tuxedo
+        key: '3'
+        command: 'run-shell "$HOME/bin/tmux-session-template cycle #{session_id} tuxedo #{window_id}"'
       - name: +New
         key: n
         menu:
@@ -111,12 +116,18 @@ items:
           - name: Neovim
             key: '2'
             command: 'run-shell "$HOME/bin/tmux-session-template new #{session_id} nvim #{pane_id}"'
+          - name: Tuxedo
+            key: '3'
+            command: 'run-shell "$HOME/bin/tmux-session-template new #{session_id} tuxedo #{pane_id}"'
           - name: Shell
             key: s
             command: 'new-window -c "#{pane_current_path}"'
           - name: Yazi
             key: y
             command: 'new-window -S -n yazi -c "#{pane_current_path}" yazi'
+      - name: Duplicate current
+        key: d
+        command: 'run-shell "$HOME/bin/tmux-session-template duplicate #{session_id} #{pane_id}"'
       - name: Move left
         key: H
         command: swap-window -d -t :-1

@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# man-me: name=todo
+# man-me: category=Tasks
+# man-me: usage=todo [TUXEDO COMMAND ...]
+# man-me: description=Open or update the current working directory's todo.txt through Tuxedo with serialized agent writes.
+# man-me: tags=todo tasks todo.txt tuxedo agents tui
+
+set -euo pipefail
+umask 077
+
+TODO_DIR="$PWD"
+TODO_FILE="$TODO_DIR/todo.txt"
+DONE_FILE="$TODO_DIR/done.txt"
+TODO_AGENT_LOCK="$TODO_DIR/.agent-write-lock"
+TODO_AGENT_LOCK_HELD=false
+
+export TODO_DIR TODO_FILE DONE_FILE
+
+ensure_task_store() {
+  touch "$TODO_FILE" "$DONE_FILE"
+  chmod 600 "$TODO_FILE" "$DONE_FILE"
+}
+
+release_agent_lock() {
+  if [[ "$TODO_AGENT_LOCK_HELD" == true ]]; then
+    rm -f "$TODO_AGENT_LOCK/pid"
+    rmdir "$TODO_AGENT_LOCK" 2>/dev/null || true
+    TODO_AGENT_LOCK_HELD=false
+  fi
+}
+
+remove_stale_agent_lock() {
+  local owner_pid=""
+  local stale_lock=""
+
+  [[ -r "$TODO_AGENT_LOCK/pid" ]] || return 1
+  IFS= read -r owner_pid < "$TODO_AGENT_LOCK/pid" || true
+  [[ "$owner_pid" =~ ^[0-9]+$ ]] || return 1
+  kill -0 "$owner_pid" 2>/dev/null && return 1
+
+  stale_lock="$TODO_AGENT_LOCK.stale.$$"
+  if mv "$TODO_AGENT_LOCK" "$stale_lock" 2>/dev/null; then
+    rm -f "$stale_lock/pid"
+    rmdir "$stale_lock" 2>/dev/null || true
+    return 0
+  fi
+  return 1
+}
+
+acquire_agent_lock() {
+  local attempt=0
+  local max_attempts="${TODO_LOCK_ATTEMPTS:-600}"
+
+  while (( attempt < max_attempts )); do
+    if mkdir "$TODO_AGENT_LOCK" 2>/dev/null; then
+      printf '%s\n' "$$" > "$TODO_AGENT_LOCK/pid"
+      TODO_AGENT_LOCK_HELD=true
+      return 0
+    fi
+
+    remove_stale_agent_lock || true
+    sleep 0.05
+    attempt=$((attempt + 1))
+  done
+
+  printf 'todo: timed out waiting for the agent write lock: %s\n' "$TODO_AGENT_LOCK" >&2
+  return 1
+}
+
+main() {
+  ensure_task_store
+
+  if ! command -v tuxedo >/dev/null 2>&1; then
+    printf 'todo: tuxedo is required; run ./bootstrap.sh or brew install tuxedo.\n' >&2
+    return 1
+  fi
+
+  if [[ "$#" -eq 0 ]]; then
+    exec tuxedo
+  fi
+
+  trap release_agent_lock EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  acquire_agent_lock
+  command tuxedo "$@"
+}
+
+main "$@"

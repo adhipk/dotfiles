@@ -5,12 +5,14 @@
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOTFILES_DIR="$(dirname "$TEST_DIR")"
 TEMPLATE_HELPER="$DOTFILES_DIR/home/bin/executable_tmux-session-template"
+TODO_HELPER="$DOTFILES_DIR/home/bin/executable_todo"
 TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-tmux-template-test.XXXXXX")"
 SOCKET_NAME="dotfiles-template-test-$$"
 FAKE_BIN="$TEMP_DIR/bin"
 PROJECT_DIR="$TEMP_DIR/project"
 TYPE_DIR="$PROJECT_DIR/current-pane"
 TMUX_CONFIG="$TEMP_DIR/tmux.conf"
+TUXEDO_CALLS_FILE="$TEMP_DIR/tuxedo-calls"
 
 PASSED=0
 FAILED=0
@@ -96,6 +98,20 @@ assert_auto_succeeds() {
     fi
 }
 
+wait_for_tuxedo_calls() {
+    local expected="$1"
+    local attempt
+
+    for attempt in {1..100}; do
+        if [[ -f "$TUXEDO_CALLS_FILE" ]] \
+            && [[ "$(wc -l < "$TUXEDO_CALLS_FILE" | tr -d '[:space:]')" -ge "$expected" ]]; then
+            return 0
+        fi
+        sleep 0.02
+    done
+    return 1
+}
+
 mkdir -p "$FAKE_BIN" "$PROJECT_DIR" "$TYPE_DIR"
 
 cat > "$FAKE_BIN/codex" <<'EOF'
@@ -106,7 +122,18 @@ cat > "$FAKE_BIN/nvim" <<'EOF'
 #!/usr/bin/env bash
 exec sleep 300
 EOF
-chmod +x "$FAKE_BIN/codex" "$FAKE_BIN/nvim"
+TODO_HELPER_QUOTED=$(printf '%q' "$TODO_HELPER")
+TUXEDO_CALLS_FILE_QUOTED=$(printf '%q' "$TUXEDO_CALLS_FILE")
+cat > "$FAKE_BIN/todo" <<EOF
+#!/usr/bin/env bash
+exec $TODO_HELPER_QUOTED "\$@"
+EOF
+cat > "$FAKE_BIN/tuxedo" <<EOF
+#!/usr/bin/env bash
+printf '%s|%s|%s|%s\n' "\$PWD" "\$TODO_DIR" "\$TODO_FILE" "\$DONE_FILE" >> $TUXEDO_CALLS_FILE_QUOTED
+exec sleep 300
+EOF
+chmod +x "$FAKE_BIN/codex" "$FAKE_BIN/nvim" "$FAKE_BIN/todo" "$FAKE_BIN/tuxedo"
 
 cat > "$TMUX_CONFIG" <<EOF
 set -g default-shell /bin/bash
@@ -133,6 +160,9 @@ fi
 
 # Keep the isolated server alive with a command session. The hook must skip it.
 PATH="$FAKE_BIN:$PATH" \
+    TODO_DIR="$TEMP_DIR/wrong" \
+    TODO_FILE="$TEMP_DIR/wrong/todo.txt" \
+    DONE_FILE="$TEMP_DIR/wrong/done.txt" \
     tmux -L "$SOCKET_NAME" -f "$TMUX_CONFIG" \
     new-session -d -s bootstrap "sleep 300"
 tmux_test set-environment -g PATH "$FAKE_BIN:$PATH"
@@ -141,8 +171,8 @@ echo ""
 echo "Testing the automatic template..."
 new_session -d -s ordinary -c "$PROJECT_DIR"
 assert_equals \
-    "ordinary sessions get terminal/codex/nvim at 0/1/2" \
-    $'0:terminal\n1:codex\n2:nvim' \
+    "ordinary sessions get terminal/codex/nvim/tuxedo at 0/1/2/3" \
+    $'0:terminal\n1:codex\n2:nvim\n3:tuxedo' \
     "$(session_windows ordinary)"
 
 CANONICAL_PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd -P)"
@@ -159,20 +189,27 @@ assert_equals \
     "standard" \
     "$(tmux_test show-options -qv -t ordinary @dotfiles_tmux_template)"
 assert_equals \
-    "template windows carry stable terminal/codex/nvim type metadata" \
-    $'terminal\ncodex\nnvim' \
+    "template windows carry stable terminal/codex/nvim/tuxedo type metadata" \
+    $'terminal\ncodex\nnvim\ntuxedo' \
     "$(
         window_type "$(window_id_at_index ordinary 0)"
         window_type "$(window_id_at_index ordinary 1)"
         window_type "$(window_id_at_index ordinary 2)"
+        window_type "$(window_id_at_index ordinary 3)"
     )"
 sleep 0.1
+wait_for_tuxedo_calls 1 || true
 assert_equals \
-    "Codex and Neovim startup commands run in their windows" \
-    $'sleep\nsleep' \
+    "automatic Tuxedo resolves task files from the session directory" \
+    "$CANONICAL_PROJECT_DIR|$CANONICAL_PROJECT_DIR|$CANONICAL_PROJECT_DIR/todo.txt|$CANONICAL_PROJECT_DIR/done.txt" \
+    "$(head -n 1 "$TUXEDO_CALLS_FILE" 2>/dev/null || true)"
+assert_equals \
+    "Codex, Neovim, and the todo wrapper run in their windows" \
+    $'sleep\nsleep\nsleep' \
     "$(
         tmux_test list-panes -t '=ordinary:codex' -F '#{pane_current_command}'
         tmux_test list-panes -t '=ordinary:nvim' -F '#{pane_current_command}'
+        tmux_test list-panes -t '=ordinary:tuxedo' -F '#{pane_current_command}'
     )"
 
 echo ""
@@ -189,12 +226,13 @@ sleep 0.1
 CANONICAL_TYPE_DIR=$(cd "$TYPE_DIR" && pwd -P)
 CANONICAL_CODEX_ID=$(window_id_at_index ordinary 1)
 CANONICAL_NVIM_ID=$(window_id_at_index ordinary 2)
+CANONICAL_TUXEDO_ID=$(window_id_at_index ordinary 3)
 TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
     "$TEMPLATE_HELPER" new ordinary codex "$TERMINAL_PANE"
 NEW_CODEX_ID=$(active_window_id ordinary)
 assert_equals \
     "new Codex creates and selects one duplicate in the source pane directory" \
-    "4|codex|codex|$CANONICAL_TYPE_DIR|$NEW_CODEX_ID" \
+    "5|codex|codex|$CANONICAL_TYPE_DIR|$NEW_CODEX_ID" \
     "$(
         printf '%s|' "$(session_window_count ordinary)"
         printf '%s|' "$(window_type "$NEW_CODEX_ID")"
@@ -245,12 +283,13 @@ TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
     "$TEMPLATE_HELPER" ensure ordinary "$PROJECT_DIR"
 assert_equals \
     "ensure remains idempotent after a renamed typed duplicate" \
-    $'4\nterminal\ncodex\nnvim\ncodex' \
+    $'5\nterminal\ncodex\nnvim\ntuxedo\ncodex' \
     "$(
         printf '%s\n' "$(session_window_count ordinary)"
         window_type "$(window_id_at_index ordinary 0)"
         window_type "$(window_id_at_index ordinary 1)"
         window_type "$(window_id_at_index ordinary 2)"
+        window_type "$(window_id_at_index ordinary 3)"
         window_type "$NEW_CODEX_ID"
     )"
 
@@ -292,6 +331,164 @@ assert_equals \
     "Neovim cycling wraps to the canonical Neovim" \
     "$CANONICAL_NVIM_ID" \
     "$(active_window_id ordinary)"
+
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" new ordinary tuxedo "$TERMINAL_PANE"
+NEW_TUXEDO_ID=$(active_window_id ordinary)
+sleep 0.1
+assert_equals \
+    "new Tuxedo creates a typed task window through the todo wrapper" \
+    "tuxedo|tuxedo|$CANONICAL_TYPE_DIR|sleep|$NEW_TUXEDO_ID" \
+    "$(
+        printf '%s|' "$(window_type "$NEW_TUXEDO_ID")"
+        printf '%s|' "$(tmux_test display-message -p -t "$NEW_TUXEDO_ID" '#{window_name}')"
+        printf '%s|' "$(tmux_test display-message -p -t "$NEW_TUXEDO_ID" '#{pane_current_path}')"
+        printf '%s|' "$(tmux_test display-message -p -t "$NEW_TUXEDO_ID" '#{pane_current_command}')"
+        active_window_id ordinary
+    )"
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" cycle ordinary tuxedo "$NEW_TUXEDO_ID"
+assert_equals \
+    "Tuxedo cycling wraps to the canonical Tuxedo" \
+    "$CANONICAL_TUXEDO_ID" \
+    "$(active_window_id ordinary)"
+
+echo ""
+echo "Testing typed window duplication..."
+NEW_CODEX_PANE=$(tmux_test list-panes -t "$NEW_CODEX_ID" -F '#{pane_id}' | head -n 1)
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" duplicate ordinary "$NEW_CODEX_PANE"
+DUPLICATE_CODEX_ID=$(active_window_id ordinary)
+sleep 0.1
+assert_equals \
+    "duplicate Codex creates and selects a uniquely named typed window" \
+    "codex-2|codex|$CANONICAL_TYPE_DIR|sleep|$DUPLICATE_CODEX_ID" \
+    "$(
+        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_CODEX_ID" '#{window_name}')"
+        printf '%s|' "$(window_type "$DUPLICATE_CODEX_ID")"
+        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_CODEX_ID" '#{pane_current_path}')"
+        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_CODEX_ID" '#{pane_current_command}')"
+        active_window_id ordinary
+    )"
+
+DUPLICATE_CODEX_PANE=$(tmux_test list-panes -t "$DUPLICATE_CODEX_ID" -F '#{pane_id}' | head -n 1)
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" duplicate ordinary "$DUPLICATE_CODEX_PANE"
+DUPLICATE_CODEX_THREE_ID=$(active_window_id ordinary)
+sleep 0.1
+assert_equals \
+    "duplicating a Codex duplicate advances the visible suffix" \
+    "codex-3|codex|sleep|$DUPLICATE_CODEX_THREE_ID" \
+    "$(
+        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_CODEX_THREE_ID" '#{window_name}')"
+        printf '%s|' "$(window_type "$DUPLICATE_CODEX_THREE_ID")"
+        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_CODEX_THREE_ID" '#{pane_current_command}')"
+        active_window_id ordinary
+    )"
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" cycle ordinary codex "$DUPLICATE_CODEX_ID"
+assert_equals \
+    "typed cycling includes duplicated Codex windows" \
+    "$DUPLICATE_CODEX_THREE_ID" \
+    "$(active_window_id ordinary)"
+
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" duplicate ordinary "$TERMINAL_PANE"
+DUPLICATE_TERMINAL_ID=$(active_window_id ordinary)
+assert_equals \
+    "duplicate terminal starts a shell in the source pane directory" \
+    "terminal-2|terminal|$CANONICAL_TYPE_DIR|bash|$DUPLICATE_TERMINAL_ID" \
+    "$(
+        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_TERMINAL_ID" '#{window_name}')"
+        printf '%s|' "$(window_type "$DUPLICATE_TERMINAL_ID")"
+        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_TERMINAL_ID" '#{pane_current_path}')"
+        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_TERMINAL_ID" '#{pane_current_command}')"
+        active_window_id ordinary
+    )"
+
+NEW_NVIM_PANE=$(tmux_test list-panes -t "$NEW_NVIM_ID" -F '#{pane_id}' | head -n 1)
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" duplicate ordinary "$NEW_NVIM_PANE"
+DUPLICATE_NVIM_ID=$(active_window_id ordinary)
+sleep 0.1
+assert_equals \
+    "duplicate Neovim starts the same type in the source pane directory" \
+    "nvim-2|nvim|$CANONICAL_TYPE_DIR|sleep|$DUPLICATE_NVIM_ID" \
+    "$(
+        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_NVIM_ID" '#{window_name}')"
+        printf '%s|' "$(window_type "$DUPLICATE_NVIM_ID")"
+        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_NVIM_ID" '#{pane_current_path}')"
+        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_NVIM_ID" '#{pane_current_command}')"
+        active_window_id ordinary
+    )"
+
+NEW_TUXEDO_PANE=$(tmux_test list-panes -t "$NEW_TUXEDO_ID" -F '#{pane_id}' | head -n 1)
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" duplicate ordinary "$NEW_TUXEDO_PANE"
+DUPLICATE_TUXEDO_ID=$(active_window_id ordinary)
+sleep 0.1
+assert_equals \
+    "duplicate Tuxedo starts the todo wrapper in the source pane directory" \
+    "tuxedo-2|tuxedo|$CANONICAL_TYPE_DIR|sleep|$DUPLICATE_TUXEDO_ID" \
+    "$(
+        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_TUXEDO_ID" '#{window_name}')"
+        printf '%s|' "$(window_type "$DUPLICATE_TUXEDO_ID")"
+        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_TUXEDO_ID" '#{pane_current_path}')"
+        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_TUXEDO_ID" '#{pane_current_command}')"
+        active_window_id ordinary
+    )"
+
+tmux_test new-window -d -t '=ordinary:' -n untyped -c "$PROJECT_DIR" "sleep 300"
+UNTYPED_ID=$(tmux_test list-windows -t '=ordinary' -F '#{window_id}|#{window_name}' \
+    | awk -F '|' '$2 == "untyped" { print $1; exit }')
+UNTYPED_PANE=$(tmux_test list-panes -t "$UNTYPED_ID" -F '#{pane_id}' | head -n 1)
+WINDOW_COUNT_BEFORE_REJECTED_DUPLICATE=$(session_window_count ordinary)
+UNTYPED_DUPLICATE_STATUS=0
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" duplicate ordinary "$UNTYPED_PANE" >/dev/null 2>&1 \
+    || UNTYPED_DUPLICATE_STATUS=$?
+assert_equals \
+    "duplicate rejects untyped windows without creating anything" \
+    "2|$WINDOW_COUNT_BEFORE_REJECTED_DUPLICATE" \
+    "$UNTYPED_DUPLICATE_STATUS|$(session_window_count ordinary)"
+
+echo ""
+echo "Testing upgrade safety for the new Tuxedo slot..."
+new_session -d -e DOTFILES_TMUX_TEMPLATE=skip -s pre-tuxedo -c "$PROJECT_DIR" -n terminal
+tmux_test move-window -s '=pre-tuxedo:1' -t '=pre-tuxedo:0'
+tmux_test set-option -wq -t '=pre-tuxedo:0' @dotfiles_window_type terminal
+tmux_test new-window -d -t '=pre-tuxedo:1' -n codex -c "$PROJECT_DIR" "sleep 300"
+tmux_test set-option -wq -t '=pre-tuxedo:1' @dotfiles_window_type codex
+tmux_test new-window -d -t '=pre-tuxedo:2' -n nvim -c "$PROJECT_DIR" "sleep 300"
+tmux_test set-option -wq -t '=pre-tuxedo:2' @dotfiles_window_type nvim
+tmux_test new-window -d -t '=pre-tuxedo:3' -n notes -c "$PROJECT_DIR" "sleep 300"
+tmux_test set-option -q -t '=pre-tuxedo' @dotfiles_tmux_template standard
+PREEXISTING_INDEX_THREE_ID=$(window_id_at_index pre-tuxedo 3)
+tmux_test select-window -t "$PREEXISTING_INDEX_THREE_ID"
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" cycle pre-tuxedo tuxedo "$PREEXISTING_INDEX_THREE_ID"
+assert_equals \
+    "Tuxedo cycling does not claim an existing untyped index-three window" \
+    "$PREEXISTING_INDEX_THREE_ID||notes" \
+    "$(
+        printf '%s|' "$(active_window_id pre-tuxedo)"
+        printf '%s|' "$(window_type "$PREEXISTING_INDEX_THREE_ID")"
+        tmux_test display-message -p -t "$PREEXISTING_INDEX_THREE_ID" '#{window_name}'
+    )"
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" ensure pre-tuxedo "$PROJECT_DIR"
+sleep 0.1
+assert_equals \
+    "ensure preserves an existing index-three window while adding Tuxedo" \
+    "$PREEXISTING_INDEX_THREE_ID|4|notes||tuxedo|tuxedo" \
+    "$(
+        printf '%s|' "$PREEXISTING_INDEX_THREE_ID"
+        printf '%s|' "$(tmux_test display-message -p -t "$PREEXISTING_INDEX_THREE_ID" '#{window_index}')"
+        printf '%s|' "$(tmux_test display-message -p -t "$PREEXISTING_INDEX_THREE_ID" '#{window_name}')"
+        printf '%s|' "$(window_type "$PREEXISTING_INDEX_THREE_ID")"
+        printf '%s|' "$(tmux_test display-message -p -t '=pre-tuxedo:3' '#{window_name}')"
+        window_type "$(window_id_at_index pre-tuxedo 3)"
+    )"
 
 echo ""
 echo "Testing safety guards..."
@@ -337,7 +534,7 @@ assert_equals \
 new_session -d -s "space name" -c "$PROJECT_DIR"
 assert_equals \
     "hook quoting supports session names with spaces" \
-    $'0:terminal\n1:codex\n2:nvim' \
+    $'0:terminal\n1:codex\n2:nvim\n3:tuxedo' \
     "$(session_windows "space name")"
 
 DOLLAR_SESSION='$named-session'
@@ -348,23 +545,32 @@ DOLLAR_SESSION_ID=$(tmux_test list-sessions -F '#{session_id}|#{session_name}' \
     | awk -F '|' -v name="$DOLLAR_SESSION" '$2 == name { print $1; exit }')
 assert_equals \
     "literal dollar-prefixed session names are not mistaken for tmux IDs" \
-    $'0:terminal\n1:codex\n2:nvim' \
+    $'0:terminal\n1:codex\n2:nvim\n3:tuxedo' \
     "$(tmux_test list-windows -t "$DOLLAR_SESSION_ID" -F '#{window_index}:#{window_name}')"
 
 echo ""
 echo "Testing explicit reuse by scratchpads..."
+: > "$TUXEDO_CALLS_FILE"
 new_session -d -e DOTFILES_TMUX_TEMPLATE=skip -s scratchpad -c "$PROJECT_DIR" -n terminal
+tmux_test set-environment -t scratchpad PATH "$FAKE_BIN:$PATH"
+tmux_test set-option -t scratchpad default-command \
+    "env PATH=$FAKE_BIN:$PATH HOME=$TEMP_DIR/home /bin/bash --noprofile --norc"
 TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
     "$TEMPLATE_HELPER" ensure scratchpad "$PROJECT_DIR"
 TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
     "$TEMPLATE_HELPER" ensure scratchpad "$PROJECT_DIR"
+wait_for_tuxedo_calls 1 || true
+assert_equals \
+    "explicit ensure starts Tuxedo against the requested session directory" \
+    "$TEMP_DIR/project|$TEMP_DIR/project|$TEMP_DIR/project/todo.txt|$TEMP_DIR/project/done.txt" \
+    "$(head -n 1 "$TUXEDO_CALLS_FILE" 2>/dev/null || true)"
 assert_equals \
     "explicit ensure mode creates the shared layout idempotently" \
-    $'0:terminal\n1:codex\n2:nvim' \
+    $'0:terminal\n1:codex\n2:nvim\n3:tuxedo' \
     "$(session_windows scratchpad)"
 assert_equals \
     "explicit ensure mode does not duplicate windows" \
-    "3" \
+    "4" \
     "$(session_window_count scratchpad)"
 
 new_session -d -e DOTFILES_TMUX_TEMPLATE=skip -s concurrent -c "$PROJECT_DIR" -n terminal
@@ -384,7 +590,7 @@ assert_equals \
     "$FIRST_ENSURE_STATUS:$SECOND_ENSURE_STATUS"
 assert_equals \
     "concurrent ensure calls create one copy of each window" \
-    $'0:terminal\n1:codex\n2:nvim' \
+    $'0:terminal\n1:codex\n2:nvim\n3:tuxedo' \
     "$(session_windows concurrent)"
 
 echo ""

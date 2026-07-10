@@ -67,6 +67,14 @@ struct ShortcutBinding: Codable, Identifiable, Equatable {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !needle.isEmpty else { return true }
         let modifierWords = rawKey
+            .replacingOccurrences(of: "rcmd", with: "right command")
+            .replacingOccurrences(of: "lcmd", with: "left command")
+            .replacingOccurrences(of: "ralt", with: "right option")
+            .replacingOccurrences(of: "lalt", with: "left option")
+            .replacingOccurrences(of: "rctrl", with: "right control")
+            .replacingOccurrences(of: "lctrl", with: "left control")
+            .replacingOccurrences(of: "rshift", with: "right shift")
+            .replacingOccurrences(of: "lshift", with: "left shift")
             .replacingOccurrences(of: "ctrl", with: "control")
             .replacingOccurrences(of: "alt", with: "option")
             .replacingOccurrences(of: "cmd", with: "command")
@@ -136,7 +144,23 @@ struct ShortcutGroup: Identifiable, Equatable {
         if capturedKey.parts.count == 1, let key = capturedKey.parts.last {
             return bindings.contains { $0.keyParts.last == key }
         }
-        return bindings.contains { $0.displayKey == capturedKey.displayKey }
+        // AppKit's device-independent flags do not retain which physical
+        // modifier side was pressed. Treat a captured generic modifier as a
+        // match for either sided binding so RCmd+D still finds R⌘ D.
+        let capturedParts = unsidedModifierParts(capturedKey.parts)
+        return bindings.contains { unsidedModifierParts($0.keyParts) == capturedParts }
+    }
+
+    private func unsidedModifierParts(_ parts: [String]) -> [String] {
+        parts.map {
+            switch $0 {
+            case "L⌃", "R⌃": return "⌃"
+            case "L⌥", "R⌥": return "⌥"
+            case "L⌘", "R⌘": return "⌘"
+            case "L⇧", "R⇧": return "⇧"
+            default: return $0
+            }
+        }
     }
 
     private func uniqueSequences(_ sequences: [[String]]) -> [[String]] {
@@ -204,6 +228,13 @@ private struct LogicalLine {
     let text: String
 }
 
+private struct ParsedBinding {
+    let key: String
+    let command: String
+    let comment: String
+    let contextDetail: String?
+}
+
 enum SKHDParser {
     static func parseFile(at path: String) throws -> [ShortcutBinding] {
         let content = try String(contentsOfFile: path, encoding: .utf8)
@@ -216,19 +247,26 @@ enum SKHDParser {
         var afterDivider = false
         var bindings: [ShortcutBinding] = []
 
-        for logicalLine in lines {
+        var lineIndex = 0
+        while lineIndex < lines.count {
+            let logicalLine = lines[lineIndex]
             let line = logicalLine.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !line.isEmpty else { continue }
+            guard !line.isEmpty else {
+                lineIndex += 1
+                continue
+            }
 
             if line.hasPrefix("#") {
                 let comment = line.dropFirst().trimmingCharacters(in: .whitespaces)
                 if isDivider(comment) {
                     afterDivider = true
+                    lineIndex += 1
                     continue
                 }
                 if let subsection = subsectionTitle(from: comment) {
                     context.subsection = subsection
                     afterDivider = false
+                    lineIndex += 1
                     continue
                 }
                 if afterDivider, !comment.isEmpty, !comment.hasPrefix("man-me:") {
@@ -236,18 +274,33 @@ enum SKHDParser {
                     context.subsection = ""
                     afterDivider = false
                 }
+                lineIndex += 1
                 continue
             }
 
             afterDivider = false
-            guard let parsed = parseBindingLine(line) else { continue }
+            let parsed: ParsedBinding?
+            if let processMap = parseProcessMap(startingAt: lineIndex, in: lines) {
+                parsed = processMap.binding
+                lineIndex += processMap.consumedLineCount
+            } else {
+                parsed = parseBindingLine(line)
+                lineIndex += 1
+            }
+            guard let parsed else { continue }
             if parsed.comment.contains("whichkey-internal") { continue }
             let category = category(for: context, command: parsed.command)
-            let action = ActionDescriber.describe(
+            let describedAction = ActionDescriber.describe(
                 rawKey: parsed.key,
                 command: parsed.command,
                 inlineComment: parsed.comment,
                 context: context
+            )
+            let action = ActionInfo(
+                title: describedAction.title,
+                detail: [describedAction.detail, parsed.contextDetail]
+                    .compactMap { $0 }
+                    .joined(separator: " ")
             )
             let displayKey = KeyFormatter.display(for: parsed.key)
             let id = "\(logicalLine.number):\(parsed.key):\(parsed.command)"
@@ -324,7 +377,7 @@ enum SKHDParser {
         return title
     }
 
-    private static func parseBindingLine(_ line: String) -> (key: String, command: String, comment: String)? {
+    private static func parseBindingLine(_ line: String) -> ParsedBinding? {
         if line.hasPrefix("::") { return nil }
         if line.range(of: #"^[A-Za-z0-9_]+\s*<"#, options: .regularExpression) != nil { return nil }
 
@@ -334,7 +387,7 @@ enum SKHDParser {
             let commandStart = withoutComment.index(after: separator)
             let command = withoutComment[commandStart...].trimmingCharacters(in: .whitespaces)
             guard isShortcutKey(key), !command.isEmpty else { return nil }
-            return (key, command, comment)
+            return ParsedBinding(key: key, command: command, comment: comment, contextDetail: nil)
         }
 
         if let separator = firstUnquotedSeparator(in: withoutComment, character: ";") {
@@ -342,9 +395,117 @@ enum SKHDParser {
             let commandStart = withoutComment.index(after: separator)
             let mode = withoutComment[commandStart...].trimmingCharacters(in: .whitespaces)
             guard isShortcutKey(key), !mode.isEmpty else { return nil }
-            return (key, "mode:\(mode)", comment)
+            return ParsedBinding(key: key, command: "mode:\(mode)", comment: comment, contextDetail: nil)
         }
         return nil
+    }
+
+    private static func parseProcessMap(
+        startingAt startIndex: Int,
+        in lines: [LogicalLine]
+    ) -> (binding: ParsedBinding?, consumedLineCount: Int)? {
+        let header = lines[startIndex].text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let (headerWithoutComment, _) = splitInlineComment(header)
+        guard headerWithoutComment.hasSuffix("[") else { return nil }
+
+        let key = headerWithoutComment.dropLast().trimmingCharacters(in: .whitespaces)
+        guard isShortcutKey(key) else { return nil }
+
+        var passthroughApps: [String] = []
+        var applicationCommand: (application: String, command: String, comment: String)?
+        var wildcardPassthrough = false
+        var wildcardCommand: String?
+        var wildcardComment = ""
+        var index = startIndex + 1
+
+        while index < lines.count {
+            let entry = lines[index].text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if entry == "]" {
+                let consumedLineCount = index - startIndex + 1
+                if let wildcardCommand {
+                    let contextDetail: String?
+                    if passthroughApps.isEmpty {
+                        contextDetail = nil
+                    } else {
+                        let apps = friendlyList(passthroughApps)
+                        let receives = passthroughApps.count == 1 ? "receives" : "receive"
+                        contextDetail = "The global action runs outside \(apps); \(apps) \(receives) the chord directly."
+                    }
+                    return (
+                        ParsedBinding(
+                            key: key,
+                            command: wildcardCommand,
+                            comment: wildcardComment,
+                            contextDetail: contextDetail
+                        ),
+                        consumedLineCount
+                    )
+                }
+
+                if wildcardPassthrough, let applicationCommand {
+                    return (
+                        ParsedBinding(
+                            key: key,
+                            command: applicationCommand.command,
+                            comment: applicationCommand.comment,
+                            contextDetail: "Runs only in \(applicationCommand.application); every other app receives the chord directly."
+                        ),
+                        consumedLineCount
+                    )
+                }
+
+                return (nil, consumedLineCount)
+            }
+
+            let (entryWithoutComment, comment) = splitInlineComment(entry)
+            if wildcardPassthroughEntry(entryWithoutComment) {
+                wildcardPassthrough = true
+            } else if let application = passthroughApplication(from: entryWithoutComment) {
+                passthroughApps.append(application)
+            } else if let separator = firstUnquotedSeparator(in: entryWithoutComment, character: ":") {
+                let selector = entryWithoutComment[..<separator].trimmingCharacters(in: .whitespaces)
+                let commandStart = entryWithoutComment.index(after: separator)
+                let command = entryWithoutComment[commandStart...].trimmingCharacters(in: .whitespaces)
+                if selector == "*", !command.isEmpty {
+                    wildcardCommand = command
+                    wildcardComment = comment
+                } else if let application = applicationName(from: selector), !command.isEmpty {
+                    applicationCommand = (application, command, comment)
+                }
+            }
+            index += 1
+        }
+
+        return nil
+    }
+
+    private static func passthroughApplication(from entry: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: #"^\"([^\"]+)\"\s*~$"#) else { return nil }
+        let range = NSRange(entry.startIndex..., in: entry)
+        guard let match = regex.firstMatch(in: entry, range: range),
+              let applicationRange = Range(match.range(at: 1), in: entry) else { return nil }
+        return String(entry[applicationRange])
+    }
+
+    private static func wildcardPassthroughEntry(_ entry: String) -> Bool {
+        entry.range(of: #"^\*\s*~$"#, options: .regularExpression) != nil
+    }
+
+    private static func applicationName(from selector: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: #"^\"([^\"]+)\"$"#) else { return nil }
+        let range = NSRange(selector.startIndex..., in: selector)
+        guard let match = regex.firstMatch(in: selector, range: range),
+              let applicationRange = Range(match.range(at: 1), in: selector) else { return nil }
+        return String(selector[applicationRange])
+    }
+
+    private static func friendlyList(_ values: [String]) -> String {
+        let unique = values.reduce(into: [String]()) { result, value in
+            if !result.contains(value) { result.append(value) }
+        }
+        guard unique.count > 1 else { return unique.first ?? "the excluded app" }
+        if unique.count == 2 { return unique.joined(separator: " and ") }
+        return unique.dropLast().joined(separator: ", ") + ", and " + unique.last!
     }
 
     private static func isShortcutKey(_ key: String) -> Bool {
@@ -392,7 +553,7 @@ enum SKHDParser {
             source.contains("space shortcuts") || source.contains("space_slot_mode") {
             return .projects
         }
-        if source.contains("screenshot") || source.contains("skhd -k") {
+        if source.contains("screenshot") {
             return .capture
         }
         if source.contains("window management") || source.contains("window close") ||
@@ -442,10 +603,18 @@ enum KeyFormatter {
         if hasHyper {
             parts.append("Hyper")
         } else {
+            if modifierTokens.contains("lctrl") { parts.append("L⌃") }
+            if modifierTokens.contains("rctrl") { parts.append("R⌃") }
             if modifierTokens.contains("ctrl") { parts.append("⌃") }
+            if modifierTokens.contains("lalt") { parts.append("L⌥") }
+            if modifierTokens.contains("ralt") { parts.append("R⌥") }
             if modifierTokens.contains("alt") { parts.append("⌥") }
+            if modifierTokens.contains("lcmd") { parts.append("L⌘") }
+            if modifierTokens.contains("rcmd") { parts.append("R⌘") }
             if modifierTokens.contains("cmd") { parts.append("⌘") }
         }
+        if modifierTokens.contains("lshift") { parts.append("L⇧") }
+        if modifierTokens.contains("rshift") { parts.append("R⇧") }
         if modifierTokens.contains("shift") { parts.append("⇧") }
         if modifierTokens.contains("fn") { parts.append("fn") }
         parts.append(formatKeyToken(keyToken))
@@ -1365,6 +1534,18 @@ private func runSelfTest() -> Int32 {
     # -- Projects: space shortcuts --
     alt + shift - 0x18 ; space_slot_mode
     ctrl + alt + cmd + shift - 0x33 : ~/.config/yabai/projects detach
+    ctrl + alt + cmd - h [
+      "Ghostty" ~
+      * : yabai -m window --resize left:-100:0
+    ]
+    # ============================================================
+    # App Focus
+    # ============================================================
+    # -- Ghostty management (right Command) --
+    rcmd - d [
+      "Ghostty" : skhd -k "f16" # Duplicate current tmux window
+      * ~
+    ]
     # ============================================================
     # Screenshots
     # ============================================================
@@ -1376,19 +1557,42 @@ private func runSelfTest() -> Int32 {
         if !condition() { failures.append(message) }
     }
 
-    expect(bindings.count == 5, "expected all five fixture shortcuts")
+    expect(bindings.count == 7, "expected all seven fixture shortcuts")
     expect(bindings.contains { $0.displayKey == "⌥ ⇧ ⇥" }, "formats Shift+Option+Tab")
     expect(bindings.contains { $0.displayKey == "⌥ ⌘ [" && $0.command.contains("--display prev") }, "joins multiline commands")
     expect(bindings.contains { $0.title == "Assign a project-space shortcut" }, "parses modal activators")
     expect(bindings.contains { $0.displayKey == "Hyper ⇧ ⌫" && $0.category == .projects }, "formats Hyper and keycodes")
     expect(bindings.contains { $0.displayKey == "fn 2" && $0.category == .capture }, "parses Fn shortcuts")
+    expect(bindings.contains {
+        $0.displayKey == "Hyper H" && $0.command == "yabai -m window --resize left:-100:0"
+    }, "retains the wildcard action from an application process map")
+    expect(bindings.contains {
+        $0.displayKey == "Hyper H" && $0.detail.contains("global action runs outside Ghostty")
+    }, "describes application passthrough without exposing it as shell")
+    expect(bindings.contains {
+        $0.displayKey == "R⌘ D" && $0.command == #"skhd -k "f16""#
+    }, "formats a right-Command application binding")
+    expect(bindings.contains {
+        $0.title == "Duplicate current tmux window" && $0.category == .apps
+    }, "retains the app-specific action and its inline description")
+    expect(bindings.contains {
+        $0.displayKey == "R⌘ D" && $0.detail.contains("Runs only in Ghostty")
+    }, "describes wildcard passthrough for an app-specific action")
+    expect(bindings.contains {
+        $0.matches(query: "right command duplicate")
+    }, "search expands the sided Command modifier")
+    expect(KeyFormatter.display(for: "ralt - x") == "R⌥ X", "formats a reserved sided Option chord")
     expect(bindings.first?.matches(query: "option previous") == true, "search matches modifier aliases and actions")
     let groups = ShortcutGrouper.groups(from: bindings)
     expect(groups.contains { $0.matches(capturedKey: CapturedKey(parts: ["Hyper", "⇧", "⌫"])) }, "key-chord search matches grouped shortcuts")
     expect(groups.contains { $0.matches(capturedKey: CapturedKey(parts: ["2"])) }, "bare-key search matches shortcuts regardless of modifiers")
+    expect(groups.contains {
+        $0.matches(capturedKey: CapturedKey(parts: ["⌘", "D"])) &&
+            $0.bindings.contains { $0.rawKey == "rcmd - d" }
+    }, "generic AppKit Command capture finds sided Command bindings")
 
     if failures.isEmpty {
-        print("whichkey self-test: 9 passed")
+        print("whichkey self-test: 17 passed")
         return 0
     }
     failures.forEach { fputs("whichkey self-test: \($0)\n", stderr) }

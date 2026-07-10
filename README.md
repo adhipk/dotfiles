@@ -15,10 +15,14 @@ home/
 ├── .chezmoiscripts/                  # Apply hooks and one-time setup scripts
 ├── bin/                              # Helper commands installed into ~/bin
 ├── Library/Application Support/VSCodium/User/  # VSCodium settings
-├── dot_agents/                       # Personal agent skills and docs -> ~/.agents
+├── dot_agents/                       # Shared personal agent instructions, skills, and docs
+├── dot_claude/                       # Claude Code bridge to shared agent instructions
+├── dot_codex/                        # Codex bridge to shared agent instructions
 ├── dot_config/
+│   ├── opencode/                     # OpenCode bridge to shared agent instructions
 │   ├── symlink_nvim.tmpl              # ~/.config/nvim -> repository nvim/
-│   ├── karabiner/                     # Caps Lock contextual key remap configuration
+│   ├── karabiner/                     # Caps Lock Hyper/Escape remap configuration
+│   ├── sesh/                          # Session picker configuration
 │   ├── skhd/                         # skhd helper scripts
 │   ├── yabai/                        # yabai helper scripts
 │   ├── yazi/                         # Yazi configuration
@@ -41,10 +45,15 @@ On this checkout:
 ```
 
 `bootstrap.sh` installs Homebrew dependencies from `Brewfile`, including Bun,
-Python, the Codex CLI, and the desktop app; applies this repository with
+Python, Tuxedo, the Codex CLI, and the desktop app; applies this repository with
 `./install.sh`; installs the declared tmux plugins and command center; builds
-ProjectDeck and the shortcut guide; creates `~/projects`; and starts the yabai
+the shortcut guide; creates `~/projects`; and starts the yabai
 and skhd launch services.
+
+A real `./install.sh` or `make install` reloads the active tmux server and sends
+Ghostty's configuration-reload signal to every running Ghostty process,
+including the scratchpad instance. Shortcut edits therefore take effect after
+install without manually pressing `Cmd+Shift+,`.
 
 On another Mac, clone to the path used by the scratchpad workflow and run the
 same bootstrap:
@@ -129,7 +138,31 @@ Use `run_onchange_` when a script should run again after its contents change.
 Personal agent behavior is checked in under `home/dot_agents/`, which chezmoi
 applies to `~/.agents/`. Use `home/dot_agents/skills/` for personal Codex
 skills and `home/dot_agents/docs/` for centralized agent-readable
-documentation.
+documentation. Managed symlinks expose the same `AGENTS.md` as Codex's
+`~/.codex/AGENTS.md`, Claude Code's `~/.claude/CLAUDE.md`, and OpenCode's
+`~/.config/opencode/AGENTS.md`, so every installed agent receives one policy.
+The managed OpenCode configuration also points its personal agent at todo.txt
+and removes the former Todoist-specific task prompt.
+
+## Canonical Tasks
+
+Todo.txt is the task system of record. Each project or tmux session working
+directory owns its `./todo.txt` and `./done.txt`. The repo-owned `todo` command
+resolves those paths from the caller's current directory and serializes agent
+CLI operations; running it without arguments opens Tuxedo there.
+
+```bash
+todo
+todo ls --json
+todo add "(B) $(date +%F) Describe the outcome +project @agent id:$(uuidgen) owner:codex"
+todo do 1
+```
+
+Tuxedo does not auto-archive completed entries. Use `todo archive` explicitly
+when you want to move completed lines to `done.txt`. Agent guidance requires a
+fresh task-number lookup before numbered mutations because todo.txt numbers are
+physical line positions. Tmux-accessible apps inherit the session's working
+directory unless another root is requested explicitly.
 
 ## Shell Secrets
 
@@ -167,23 +200,29 @@ an application name, application path, or bundle ID.
 ## Keyboard Shortcuts
 
 - tap `caps lock`: Escape
-- hold `caps lock`: Hyper (`ctrl + opt + cmd`)
-- hold `caps lock` in Neovim: Control
+- hold `caps lock`: emit the currently reserved Hyper chord (`ctrl + opt + cmd`); no active shortcuts consume it
+- Option-centered chords are the sparse global layer for app focus plus macOS window, space, HUD, and reload actions
+- Left Command remains application-local; Ghostty uses `cmd + backtick/1/2/3` to cycle terminal/Codex/Neovim/Tuxedo tmux windows by type and `cmd + b` / `cmd + shift + b` for Yazi views
+- Right Command is a deliberately small Ghostty-only maintenance layer: `right cmd + d` duplicates the current typed tmux window, `right cmd + r` renames it, `right cmd + s` opens sesh, and `right cmd + space` opens the command center; the same right-side chords pass through in other apps, and sided Option is reserved
+- Control is the terminal layer: `ctrl + 0/1/2/3` cycles typed windows, `ctrl + shift + 0/1/2/3` creates them, and `ctrl + a` enters tmux's prefix namespace
+- Fn is reserved for transient scratchpads; native macOS screenshot chords remain on `cmd + shift + 3/4`
 - `alt + n`: create and focus a space, moving the focused non-scratchpad window there only when the current space has another non-scratchpad window
 - `alt + backtick`: focus non-scratchpad Ghostty windows, skipping task windows titled like `nvim`, `vim`, `codex`, `claude`, or Codex's `Action Required` status
 - `alt + 1..5`: focus browser, Codex, editor, Teams, or Slack
-- normal Ghostty windows use a transparent background; scratchpad Ghostty windows force opaque black
-- ordinary new tmux sessions start with `terminal` at `0`, `codex` at `1`, and `nvim` at `2`; command sessions and managed `hs-*` sessions are left unchanged
-- `ctrl + 0/1/2` in tmux cycles windows by `terminal`/`codex`/`nvim` type; `ctrl + shift + 0/1/2` creates that type in the current pane's directory and switches to it, while `ctrl + 3..9` remains direct index switching
+- normal Ghostty windows use a transparent background and keep their tmux-colored JankyBorder; scratchpads are borderless, opaque black panels with balanced terminal padding, rounded corners, and a native shadow
+- ordinary new tmux sessions start with `terminal` at `0`, `codex` at `1`, `nvim` at `2`, and `tuxedo` at `3`; command sessions and managed `hs-*` sessions are left unchanged
+- `ctrl + 0/1/2/3` in tmux cycles windows by `terminal`/`codex`/`nvim`/`tuxedo` type; `ctrl + shift + 0/1/2/3` creates that type in the current pane's directory and switches to it, while `ctrl + 4..9` remains direct index switching
 - `ctrl + a`, then `space`, opens the repo-owned command center for session/window/pane lifecycle, saved state, and React-like workspace layouts
+- `ctrl + a`, then `L`, and the command center's Sessions > Last action use tmux's per-client history; closing a session keeps the client inside tmux and selects a surviving session instead of detaching
 - `tmux-workspace open project --root DIR` builds the managed `.tmux.tsx` project layout; applying it again preserves running panes, while `repair --yes` rebuilds only drifted managed windows and `--adopt` is required before taking over a same-named unmanaged session
-- the minimal tmux bar stays at the bottom, shows the session plus active folder at left, and centers `~`, `codex`, and `nvim`; a compact active-tab capsule and the focused Ghostty border share each session's accent, while inactive borders stay black; `Ctrl-a ,` renames a tab and starts Codex renames from its pane title
-- `fn + comma`: open the black terminal scratchpad and switch to the `dotfiles` tmux session with `terminal`, `codex`, and `nvim` windows
-- `fn + 1`: open the same black terminal scratchpad and switch to the `projects` tmux session with `terminal`, `codex`, and `nvim` windows
-- `cmd + backtick` in Ghostty: switch to tmux window `0` (`terminal`)
-- `cmd + 1` / `cmd + 2` in Ghostty: switch to tmux window `1` (`codex`) or `2` (`nvim`)
-- `cmd + b` in Ghostty: open Yazi in a 40%-wide full-height right tmux pane rooted in the active pane's directory
-- `cmd + shift + b` in Ghostty: open or select a dedicated Yazi tmux window rooted in the active pane's directory
+- the minimal tmux bar stays at the bottom and centers `~ · codex · nvim · tuxedo`; its left label substitutes the active folder for generated numeric sessions and omits redundant `session · folder` pairs; the foreground-only active label and normal focused Ghostty borders share each session's accent, while scratchpads suppress their border; `Ctrl-a ,` renames a tab and starts Codex renames from its pane title
+- `right cmd + d` or Command Center > Windows > Duplicate creates another typed terminal/Codex/Neovim/Tuxedo window in the active pane's directory, gives it a readable numeric suffix, and keeps type cycling intact
+- `fn + comma`: open the black terminal scratchpad and switch to the `dotfiles` tmux session with `terminal`, `codex`, `nvim`, and `tuxedo` windows
+- `fn + 1`: open the same black terminal scratchpad and switch to the `projects` tmux session with `terminal`, `codex`, `nvim`, and `tuxedo` windows
+- `option + shift + arrows` or `option + shift + h/j/k/u` resizes the current macOS window; `option + shift + [` / `]` moves it between displays
+- ProjectDeck and its system-wide project-context bindings are dormant; `make build-projectdeck` remains available for explicit experiments
+- broader tmux lifecycle actions stay discoverable under `ctrl + a` and `ctrl + a`, then `space`, rather than occupying Hyper
+- shell and tmux session selectors now open sesh's built-in picker instead of maintaining separate `fzf` pipelines; chezmoi installs the shared picker configuration at `~/.config/sesh/sesh.toml`
 - `alt + shift + backtick`: create a new Ghostty window on the focused space
 - `alt + r`: restart yabai and skhd
 - `alt + /`: open the interactive shortcut guide without activating away from the current app; press a bare key to find every shortcut ending in it. Use `Option+Up/Down` to browse, `Option+Left/Right` for categories, `Option+F/P` for text/key search, `Option+C` to clear, and `Esc` to close

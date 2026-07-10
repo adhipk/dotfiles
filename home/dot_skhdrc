@@ -1,17 +1,17 @@
 # man-me: name=skhdrc
 # man-me: category=Hotkeys and Keybindings
-# man-me: usage=alt+/; Hyper+p; Hyper+n; Alt+Shift+1..9; Alt+1..5
+# man-me: usage=alt+/; Alt+1..5; Fn+Comma; Fn+1; Right Cmd+D/R/S/Space in Ghostty
 # man-me: description=Primary skhd keyboard shortcut map.
-# man-me: tags=hotkeys hotkey keyboard shortcut shortcuts keybinding keybindings keys skhd hyper caps lock karabiner projectdeck
+# man-me: tags=hotkeys hotkey keyboard shortcut shortcuts keybinding keybindings keys skhd option fn caps lock karabiner
 # man-me: name=caps lock key
 # man-me: source=home/dot_config/private_karabiner/karabiner.json
 # man-me: category=Hotkeys and Keybindings
-# man-me: usage=hold Caps Lock for Hyper; tap Caps Lock for Escape; hold Caps Lock in Neovim for Control
-# man-me: description=Karabiner maps held Caps Lock to ctrl+opt+cmd by default and Control while Neovim is focused.
+# man-me: usage=hold Caps Lock for reserved Hyper; tap Caps Lock for Escape
+# man-me: description=Karabiner emits ctrl+opt+cmd on hold, but the Hyper layer is intentionally unbound.
 # man-me: tags=hotkeys hotkey keyboard shortcut shortcuts keybinding keybindings hyper caps lock karabiner
 # ============================================================
-# Window Management (ctrl + opt + <key>) — BSP tiling
-# Caps Lock sends ctrl + opt + cmd on hold via Karabiner-Elements, except Neovim sets it to Control while focused.
+# Global Option layer — app focus, spaces, windows, and HUD controls.
+# Hyper (ctrl+opt+cmd) is deliberately reserved and has no active bindings.
 # ============================================================
 
 # -- Cycle through windows on current desktop --
@@ -34,15 +34,15 @@ ctrl + alt + shift - k : yabai -m window --swap east
 ctrl + alt + shift - u : yabai -m window --swap north
 ctrl + alt + shift - j : yabai -m window --swap south
 
-# -- Resize window incrementally --
-ctrl + alt + cmd - left  : yabai -m window --resize left:-100:0 || yabai -m window --resize right:-100:0
-ctrl + alt + cmd - right : yabai -m window --resize right:100:0 || yabai -m window --resize left:100:0
-ctrl + alt + cmd - up    : yabai -m window --resize top:0:-100 || yabai -m window --resize bottom:0:-100
-ctrl + alt + cmd - down  : yabai -m window --resize bottom:0:100 || yabai -m window --resize top:0:100
-ctrl + alt + cmd - h : yabai -m window --resize left:-100:0 || yabai -m window --resize right:-100:0
-ctrl + alt + cmd - k : yabai -m window --resize right:100:0 || yabai -m window --resize left:100:0
-ctrl + alt + cmd - u : yabai -m window --resize top:0:-100 || yabai -m window --resize bottom:0:-100
-ctrl + alt + cmd - j : yabai -m window --resize bottom:0:100 || yabai -m window --resize top:0:100
+# -- Resize window incrementally (Option+Shift) --
+alt + shift - left  : yabai -m window --resize left:-100:0 || yabai -m window --resize right:-100:0
+alt + shift - right : yabai -m window --resize right:100:0 || yabai -m window --resize left:100:0
+alt + shift - up    : yabai -m window --resize top:0:-100 || yabai -m window --resize bottom:0:-100
+alt + shift - down  : yabai -m window --resize bottom:0:100 || yabai -m window --resize top:0:100
+alt + shift - h : yabai -m window --resize left:-100:0 || yabai -m window --resize right:-100:0
+alt + shift - k : yabai -m window --resize right:100:0 || yabai -m window --resize left:100:0
+alt + shift - u : yabai -m window --resize top:0:-100 || yabai -m window --resize bottom:0:-100
+alt + shift - j : yabai -m window --resize bottom:0:100 || yabai -m window --resize top:0:100
 
 # -- Fullscreen --
 ctrl + alt - return : yabai -m window --toggle zoom-fullscreen
@@ -71,90 +71,20 @@ ctrl + alt - g : yabai -m space --layout $(yabai -m query --spaces --space | jq 
 # Space management
 # ============================================================
 
-# -- Move window to different display (alt + cmd) --
+# -- Move window to previous/next display (Option+Shift+[ / ]) --
 # Capture window ID before moving to maintain focus
-alt + cmd - 0x21 : win=$(yabai -m query --windows --window | jq -r '.id'); \
+alt + shift - 0x21 : win=$(yabai -m query --windows --window | jq -r '.id'); \
                    yabai -m window --display prev; \
                    yabai -m display --focus prev; \
-                   yabai -m window --focus "$win"  # alt+cmd+[
+                   yabai -m window --focus "$win"  # alt+shift+[
 
-alt + cmd - 0x1E : win=$(yabai -m query --windows --window | jq -r '.id'); \
+alt + shift - 0x1E : win=$(yabai -m query --windows --window | jq -r '.id'); \
                    yabai -m window --display next; \
                    yabai -m display --focus next; \
-                   yabai -m window --focus "$win"  # alt+cmd+]
+                   yabai -m window --focus "$win"  # alt+shift+]
 
-alt + cmd - left : win=$(yabai -m query --windows --window | jq -r '.id'); \
-                   yabai -m window --display 1; \
-                   yabai -m display --focus 1; \
-                   yabai -m window --focus "$win"  # alt+cmd+left
-
-alt + cmd - right : win=$(yabai -m query --windows --window | jq -r '.id'); \
-                    yabai -m window --display 2; \
-                    yabai -m display --focus 2; \
-                    yabai -m window --focus "$win"  # alt+cmd+right
-
-# -- Projects: space shortcuts in active project (alt+shift) --
-:: space_slot_mode @ : ~/.config/skhd/notify.sh "Space Shortcut" "Press 1-9 for Alt+Shift slot"
-alt + shift - 0x18 ; space_slot_mode  # alt+shift+=
-space_slot_mode < 1 : ~/.config/yabai/projects set-space-slot 1; skhd -k "escape"
-space_slot_mode < 2 : ~/.config/yabai/projects set-space-slot 2; skhd -k "escape"
-space_slot_mode < 3 : ~/.config/yabai/projects set-space-slot 3; skhd -k "escape"
-space_slot_mode < 4 : ~/.config/yabai/projects set-space-slot 4; skhd -k "escape"
-space_slot_mode < 5 : ~/.config/yabai/projects set-space-slot 5; skhd -k "escape"
-space_slot_mode < 6 : ~/.config/yabai/projects set-space-slot 6; skhd -k "escape"
-space_slot_mode < 7 : ~/.config/yabai/projects set-space-slot 7; skhd -k "escape"
-space_slot_mode < 8 : ~/.config/yabai/projects set-space-slot 8; skhd -k "escape"
-space_slot_mode < 9 : ~/.config/yabai/projects set-space-slot 9; skhd -k "escape"
-space_slot_mode < escape ; default
-
-:: clear_space_slot_mode @ : ~/.config/skhd/notify.sh "Clear Space Shortcut" "Press 1-9 to clear"
-alt + shift - 0x1B ; clear_space_slot_mode  # alt+shift+-
-clear_space_slot_mode < 1 : ~/.config/yabai/projects clear-space-slot 1; skhd -k "escape"
-clear_space_slot_mode < 2 : ~/.config/yabai/projects clear-space-slot 2; skhd -k "escape"
-clear_space_slot_mode < 3 : ~/.config/yabai/projects clear-space-slot 3; skhd -k "escape"
-clear_space_slot_mode < 4 : ~/.config/yabai/projects clear-space-slot 4; skhd -k "escape"
-clear_space_slot_mode < 5 : ~/.config/yabai/projects clear-space-slot 5; skhd -k "escape"
-clear_space_slot_mode < 6 : ~/.config/yabai/projects clear-space-slot 6; skhd -k "escape"
-clear_space_slot_mode < 7 : ~/.config/yabai/projects clear-space-slot 7; skhd -k "escape"
-clear_space_slot_mode < 8 : ~/.config/yabai/projects clear-space-slot 8; skhd -k "escape"
-clear_space_slot_mode < 9 : ~/.config/yabai/projects clear-space-slot 9; skhd -k "escape"
-clear_space_slot_mode < escape ; default
-
-alt + shift - h : ~/.config/yabai/projects cycle prev
-alt + shift - k : ~/.config/yabai/projects cycle next
-
-alt + shift - 1 : ~/.config/yabai/projects focus-space 1
-alt + shift - 2 : ~/.config/yabai/projects focus-space 2
-alt + shift - 3 : ~/.config/yabai/projects focus-space 3
-alt + shift - 4 : ~/.config/yabai/projects focus-space 4
-alt + shift - 5 : ~/.config/yabai/projects focus-space 5
-alt + shift - 6 : ~/.config/yabai/projects focus-space 6
-alt + shift - 7 : ~/.config/yabai/projects focus-space 7
-alt + shift - 8 : ~/.config/yabai/projects focus-space 8
-alt + shift - 9 : ~/.config/yabai/projects focus-space 9
-
-alt + shift - 0x2C : ~/.config/yabai/projects show  # alt+shift+/
-
-# -- Projects: hyper layer (ctrl+alt+cmd, caps hold) --
-ctrl + alt + cmd - 1 : ~/.config/yabai/projects focus-project 1
-ctrl + alt + cmd - 2 : ~/.config/yabai/projects focus-project 2
-ctrl + alt + cmd - 3 : ~/.config/yabai/projects focus-project 3
-ctrl + alt + cmd - 4 : ~/.config/yabai/projects focus-project 4
-ctrl + alt + cmd - 5 : ~/.config/yabai/projects focus-project 5
-
-ctrl + alt + cmd + shift - 1 : ~/.config/yabai/projects adopt --project-slot 1
-ctrl + alt + cmd + shift - 2 : ~/.config/yabai/projects adopt --project-slot 2
-ctrl + alt + cmd + shift - 3 : ~/.config/yabai/projects adopt --project-slot 3
-ctrl + alt + cmd + shift - 4 : ~/.config/yabai/projects adopt --project-slot 4
-ctrl + alt + cmd + shift - 5 : ~/.config/yabai/projects adopt --project-slot 5
-
-ctrl + alt + cmd - a : ~/.config/yabai/projects adopt
-ctrl + alt + cmd - 0x21 : ~/.config/yabai/projects cycle prev  # hyper+[
-ctrl + alt + cmd - 0x1E : ~/.config/yabai/projects cycle next  # hyper+]
-ctrl + alt + cmd - e : ~/.config/yabai/projects pick
-ctrl + alt + cmd - p : ~/.config/yabai/projects pick
-ctrl + alt + cmd - n : ~/.config/yabai/projects new
-ctrl + alt + cmd + shift - 0x33 : ~/.config/yabai/projects detach  # hyper+shift+backspace
+# ProjectDeck and system-wide project-context shortcuts are intentionally
+# dormant. The projects CLI and manual ProjectDeck build remain available.
 
 # -- Move window to new desktop --
 ctrl + alt - n : ~/.config/yabai/create-space move-window
@@ -171,10 +101,10 @@ alt - k : ~/.config/yabai/close_empty_spaces.sh
 
 alt - 0x32 : ~/.config/skhd/focus_app.sh "Ghostty"  # alt + backtick
 alt - 1 : ~/bin/hotkeys app-focus 1 "@browser"
-alt - 2 : ~/bin/hotkeys app-focus 2 "Codex"
-alt - 3 : ~/bin/hotkeys app-focus 3 "@editor"
-alt - 4 : ~/bin/hotkeys app-focus 4 "Microsoft Teams"
-alt - 5 : ~/bin/hotkeys app-focus 5 "Slack"
+# alt - 2 : ~/bin/hotkeys app-focus 2 "Codex"
+alt - 3 : ~/bin/hotkeys app-focus 2 "@editor"
+alt - 4 : ~/bin/hotkeys app-focus 3 "Microsoft Teams"
+alt - 5 : ~/bin/hotkeys app-focus 4 "Slack"
 
 fn - 0x2B : ~/bin/scratchpads open codex  # fn + comma
 fn - 1 : ~/bin/scratchpads open projects  # fn + 1
@@ -183,13 +113,34 @@ alt + shift - 0x2A : ~/bin/hotkeys zen toggle  # alt+shift+backslash
 
 alt + shift - 0x32 : ~/bin/hotkeys terminal new  # alt + shift + backtick
 
-# ============================================================
-# Screenshots (fn) - delegate to macOS' default screenshot shortcuts.
-# ============================================================
+# -- Ghostty management (right Command) --
+# Keep left Command application-local. These right-Command chords only emit
+# synthetic function keys while Ghostty is focused; every other app receives
+# the original chord unchanged.
+rcmd - d [
+    "Ghostty" : skhd -k "f16"  # Duplicate current tmux window
+    * ~
+]
 
-fn - 2 : skhd -k "ctrl + cmd + shift - 3"
-fn - 3 : skhd -k "cmd + shift - 4"
-fn - 4 : skhd -k "ctrl + cmd + shift - 4"
+rcmd - r [
+    "Ghostty" : skhd -k "f17"  # Rename current tmux window
+    * ~
+]
+
+rcmd - s [
+    "Ghostty" : skhd -k "f18"  # Open tmux session picker
+    * ~
+]
+
+rcmd - space [
+    "Ghostty" : skhd -k "f19"  # Open tmux command center
+    * ~
+]
+
+# ============================================================
+# Fn is reserved for transient scratchpads. Use native Cmd+Shift+3/4 for
+# screenshots rather than duplicating them on this layer.
+# ============================================================
 
 # ============================================================
 # Window close / minimize

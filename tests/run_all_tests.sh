@@ -19,7 +19,9 @@ FAILED_SUITES=()
 TEST_SUITES=(
     "test_colorscheme.sh"
     "test_configs.sh"
+    "test_scratchpads.sh"
     "test_projects.sh"
+    "test_todo.sh"
     "test_tmux_session_template.sh"
     "test_tmux_workspace.sh"
     "test_tmux_which_key.sh"

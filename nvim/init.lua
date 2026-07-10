@@ -261,28 +261,6 @@ do
     callback = function() vim.hl.on_yank() end,
   })
 
-  local karabiner_nvim_variable = 'nvim_caps_lock_control'
-  local function set_karabiner_nvim_mode(enabled)
-    if vim.fn.executable 'karabiner_cli' ~= 1 then return end
-
-    vim.fn.jobstart({
-      'karabiner_cli',
-      '--set-variables',
-      vim.json.encode { [karabiner_nvim_variable] = enabled },
-    }, { detach = true })
-  end
-
-  local karabiner_nvim_group = vim.api.nvim_create_augroup('karabiner-nvim-caps-lock', { clear = true })
-  vim.api.nvim_create_autocmd({ 'VimEnter', 'FocusGained' }, {
-    desc = 'Use Caps Lock hold as Control while Neovim is focused',
-    group = karabiner_nvim_group,
-    callback = function() set_karabiner_nvim_mode(true) end,
-  })
-  vim.api.nvim_create_autocmd({ 'FocusLost', 'VimLeavePre' }, {
-    desc = 'Restore Caps Lock hold as Hyper outside Neovim',
-    group = karabiner_nvim_group,
-    callback = function() set_karabiner_nvim_mode(false) end,
-  })
 end
 
 -- ============================================================

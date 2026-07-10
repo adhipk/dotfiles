@@ -4,45 +4,9 @@
       "complex_modifications": {
         "rules": [
           {
-            "description": "Caps Lock: Hyper on hold, Escape on tap; Control on hold while Neovim is focused",
+            "description": "Caps Lock: Hyper on hold, Escape on tap",
             "manipulators": [
               {
-                "conditions": [
-                  {
-                    "name": "nvim_caps_lock_control",
-                    "type": "variable_if",
-                    "value": true
-                  }
-                ],
-                "from": {
-                  "key_code": "caps_lock",
-                  "modifiers": {
-                    "optional": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "left_control",
-                    "lazy": true
-                  }
-                ],
-                "to_if_alone": [
-                  {
-                    "key_code": "escape"
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "nvim_caps_lock_control",
-                    "type": "variable_unless",
-                    "value": true
-                  }
-                ],
                 "from": {
                   "key_code": "caps_lock",
                   "modifiers": {

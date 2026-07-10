@@ -2,24 +2,15 @@
 # man-me: name=tmux-session-picker
 # man-me: category=Terminal and Sessions
 # man-me: usage=tmux-session-picker
-# man-me: description=Switch to an existing tmux session with sesh and fzf.
-# man-me: tags=tmux terminal session sessions sesh fzf
-# Quick picker to switch between existing tmux sessions only.
+# man-me: description=Switch to an existing tmux session with sesh's built-in picker.
+# man-me: tags=tmux terminal session sessions sesh picker
+# Built-in sesh picker for existing tmux sessions only.
+
+set -euo pipefail
 
 if ! command -v sesh >/dev/null 2>&1; then
   echo "sesh is not installed. Install it with: brew install sesh" >&2
   exit 1
 fi
 
-if ! command -v fzf >/dev/null 2>&1; then
-  echo "fzf is required for interactive session picker" >&2
-  exit 1
-fi
-
-selected=$(sesh list -t 2>/dev/null | fzf --height 40% --reverse --border --prompt="Switch to session: ")
-
-if [[ -z "$selected" ]]; then
-    exit 0
-fi
-
-exec sesh connect "$selected"
+exec sesh picker --icons --hide-duplicates --separator-aware --tmux

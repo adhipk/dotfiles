@@ -1,0 +1,12 @@
+#:schema https://github.com/joshmedeski/sesh/raw/main/sesh.schema.json
+
+# Sesh is the single picker for tmux sessions and zoxide-ranked project
+# directories. Declarative window layouts remain owned by tmux-workspace so
+# opening the picker can never mutate the session it was launched from.
+blacklist = ["^daemon-"]
+strict_mode = true
+
+[tui]
+prompt = "sesh> "
+placeholder = "Sessions and projects..."
+show_icons = true
