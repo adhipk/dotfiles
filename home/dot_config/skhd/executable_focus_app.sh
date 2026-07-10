@@ -74,6 +74,10 @@ case "$ARG" in
         ;;
 esac
 
+if [ "$APP" = "Ghostty" ]; then
+    LAUNCH_CMD="$HOME/bin/hotkeys terminal new"
+fi
+
 if [ -z "$APP" ]; then
     if [ -n "$LAUNCH_CMD" ]; then
         eval "$LAUNCH_CMD"

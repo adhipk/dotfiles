@@ -152,10 +152,14 @@ an application name, application path, or bundle ID.
 - tap `caps lock`: Escape
 - hold `caps lock`: Hyper (`ctrl + opt + cmd`)
 - hold `caps lock` in Neovim: Control
-- `alt + n`: create a space and focus it
-- `alt + backtick`: focus Ghostty, skipping task windows titled like `nvim`, `vim`, `codex`, `claude`, or Codex's `Action Required` status
+- `alt + n`: create and focus a space, moving the focused non-scratchpad window there only when the current space has another non-scratchpad window
+- `alt + backtick`: focus non-scratchpad Ghostty windows, skipping task windows titled like `nvim`, `vim`, `codex`, `claude`, or Codex's `Action Required` status
 - `alt + 1..5`: focus browser, Codex, editor, Teams, or Slack
-- `alt + comma`: open a Codex scratchpad in `~/dotfiles`, then toggle visibility without closing it
+- normal Ghostty windows use a transparent background; scratchpad Ghostty windows force opaque black
+- `alt + comma`: open the black terminal scratchpad and switch to the `dotfiles` tmux session with `terminal`, `codex`, and `nvim` windows
+- `alt + l`: open the same black terminal scratchpad and switch to the `projects` tmux session with `terminal`, `codex`, and `nvim` windows
+- `cmd + backtick` in Ghostty: switch to tmux window `0` (`terminal`)
+- `cmd + 1` / `cmd + 2` in Ghostty: switch to tmux window `1` (`codex`) or `2` (`nvim`)
 - `alt + shift + backtick`: create a new Ghostty window on the focused space
 - `alt + r`: restart yabai and skhd
 - `alt + /`: show the keybinding cheat sheet

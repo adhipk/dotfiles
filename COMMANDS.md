@@ -190,8 +190,8 @@ Installed below `~/.config/skhd/`:
 
 | Helper | Purpose |
 | --- | --- |
-| [`app-mru.sh`](home/dot_config/skhd/executable_app-mru.sh) | Track and cycle application windows in most-recently-used order. Updated on `window_focused` via yabai. |
-| [`focus_app.sh APP`](home/dot_config/skhd/executable_focus_app.sh) | Focus, MRU-cycle, or launch an application. `@browser` resolves the macOS HTTPS handler and `@editor` uses `EDITOR_APP` (defaults to `VSCodium`). |
+| [`app-mru.sh`](home/dot_config/skhd/executable_app-mru.sh) | Track and cycle non-scratchpad application windows in most-recently-used order. Updated on `window_focused` via yabai. |
+| [`focus_app.sh APP`](home/dot_config/skhd/executable_focus_app.sh) | Focus, MRU-cycle, or launch an application. `@browser` resolves the macOS HTTPS handler, `@editor` uses `EDITOR_APP` (defaults to `VSCodium`), and Ghostty fallback creates a normal terminal instead of activating a scratchpad. |
 | [`hotkeys`](home/bin/executable_hotkeys) | Miscellaneous skhd actions. `hotkeys zen toggle` flips zen mode, where `Alt+1`, `Alt+2`, and terminal focus keep working but `Alt+3..5` do nothing. New terminal windows are pinned back to the originating yabai display and space. |
 | [`media_key.sh ACTION`](home/dot_config/skhd/executable_media_key.sh) | Send a macOS media key event. Supported actions are `brightness_down`, `brightness_up`, `mission_control`, `launchpad`, `dictation`, `do_not_disturb`, `previous`, `play_pause`, `next`, `mute`, `volume_down`, and `volume_up`. |
 | [`open_terminal_window.sh`](home/dot_config/skhd/executable_open_terminal_window.sh) | Open a terminal window on the current yabai space. `TERMINAL_APP` defaults to `Ghostty`. The active binding uses `hotkeys terminal new`. |
@@ -199,7 +199,7 @@ Installed below `~/.config/skhd/`:
 | [`notify.sh TITLE MESSAGE`](home/dot_config/skhd/executable_notify.sh) | Show a macOS notification from skhd or yabai helpers. Uses `terminal-notifier` when available. |
 | [`snap_window.sh left\|right`](home/dot_config/skhd/executable_snap_window.sh) | Warp the current window and resize it to half the display width. |
 | [`toggle_ghostty_quick_terminal.sh`](home/dot_config/skhd/executable_toggle_ghostty_quick_terminal.sh) | Create or toggle a bottom-third Ghostty scratchpad named `quick_terminal`. |
-| [`scratchpads`](home/bin/executable_scratchpads) | Manage Ghostty scratchpads. `scratchpads open codex` opens a Codex window in `~/dotfiles`; `scratchpads open projects` opens a `~/projects` tmux scratchpad with `codex` and `nvim` windows. Both toggle visibility without closing. |
+| [`scratchpads`](home/bin/executable_scratchpads) | Manage one floating Ghostty terminal scratchpad while switching between separate tmux sessions. Scratchpad Ghostty windows force opaque black, while normal Ghostty windows keep the global transparent background. `scratchpads open codex` targets `dotfiles`; `scratchpads open projects` targets `projects`. Both tmux sessions keep `terminal` at window `0`, `codex` at `1`, and `nvim` at `2`. |
 | [`whichkey`](home/dot_config/skhd/executable_whichkey) | Compiled arm64 SwiftUI keybinding overlay launched by `show_keys.sh`. |
 
 ### yabai Helpers
@@ -246,11 +246,12 @@ operations to these shortcuts:
 | `Alt+Shift+h` / `Alt+Shift+k` | Cycle prev/next within the project context. |
 | `Alt+Shift+/` | Show project notification summary (`projects show`). |
 | `Ctrl+Alt+n` | Move the current window to a new labeled space. |
-| `Alt+n` | Create and focus a new space. |
+| `Alt+n` | Create and focus a new space, moving the focused non-scratchpad window there only when another non-scratchpad window remains on the current space. |
 | `Alt+k` | Close empty spaces. |
-| `Alt+Backtick`, `Alt+1..5` | Focus Ghostty, the default browser, Codex, VSCodium (`EDITOR_APP`), Teams, or Slack. Repeat to MRU-cycle that app's windows only. |
-| `Alt+Comma` | Open the Codex scratchpad in `~/dotfiles`, then toggle visibility without closing it. |
-| `Alt+l` | Open the projects scratchpad, attaching to a `~/projects` tmux session with `codex` and `nvim` windows. |
+| `Alt+Backtick`, `Alt+1..5` | Focus Ghostty, the default browser, Codex, VSCodium (`EDITOR_APP`), Teams, or Slack. Repeat to MRU-cycle that app's non-scratchpad windows only. |
+| `Alt+Comma` | Open the opaque black terminal scratchpad and switch its tmux client to `dotfiles`, with `terminal`, `codex`, and `nvim` windows. |
+| `Alt+l` | Open the same opaque black terminal scratchpad and switch its tmux client to `projects`, with `terminal`, `codex`, and `nvim` windows. |
+| `Cmd+Backtick`, `Cmd+1`, `Cmd+2` in Ghostty | Send tmux prefix plus `0`, `1`, or `2`, switching to `terminal`, `codex`, or `nvim` without depending on terminal `Ctrl+number` encoding. |
 | `Alt+Shift+Backtick` | Create a new terminal window on the focused space. |
 | `Alt+Shift+Backslash` | Toggle zen mode. In zen mode, terminal focus plus `Alt+1` browser and `Alt+2` Codex focus still work; `Alt+3..5` are disabled. |
 | `Ctrl+Alt+w`, `Ctrl+Alt+z` | Close or minimize the current window. |

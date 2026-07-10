@@ -9,8 +9,13 @@ set -euo pipefail
 
 SCRATCHPAD_LOG_FILE="${SCRATCHPAD_LOG_FILE:-/tmp/scratchpads_${USER:-unknown}.log}"
 TMUX_SESSIONIZER="${TMUX_SESSIONIZER_CMD:-$HOME/bin/tmux-sessionizer-zoxide}"
+SCRATCHPAD_TERMINAL_LABEL="${SCRATCHPAD_TERMINAL_LABEL:-terminal}"
+SCRATCHPAD_DOTFILES_DIR="${SCRATCHPAD_DOTFILES_DIR:-$HOME/dotfiles}"
 SCRATCHPAD_PROJECTS_DIR="${SCRATCHPAD_PROJECTS_DIR:-$HOME/projects}"
+SCRATCHPAD_DOTFILES_TMUX_SESSION="${SCRATCHPAD_DOTFILES_TMUX_SESSION:-dotfiles}"
 SCRATCHPAD_PROJECTS_TMUX_SESSION="${SCRATCHPAD_PROJECTS_TMUX_SESSION:-projects}"
+SCRATCHPAD_TMUX_CLIENT_OPTION="@scratchpads_terminal_client"
+SCRATCHPAD_TMUX_TARGET_OPTION="@scratchpads_terminal_target"
 
 usage() {
   cat <<'EOF'
@@ -18,7 +23,9 @@ Usage:
   scratchpads open quick
   scratchpads open codex
   scratchpads open projects
+  scratchpads tmux dotfiles
   scratchpads tmux projects
+  scratchpads tmux nvim
   scratchpads close
   scratchpads debug
   scratchpads rules
@@ -153,6 +160,13 @@ focused_scratchpad_is_label() {
   focused_label=$(printf '%s\n' "$focused_json" | jq -r '(.scratchpad // "")')
 
   [ "$focused_label" = "$label" ]
+}
+
+focused_scratchpad_label() {
+  local focused_json
+
+  focused_json=$(query_focused_window_json) || return 1
+  printf '%s\n' "$focused_json" | jq -r '(.scratchpad // "")'
 }
 
 visible_non_scratchpad_window_id() {
@@ -344,6 +358,48 @@ close_scratchpads_for_label() {
   close_window_ids "$label" "$ids" "$restore_id"
 }
 
+close_scratchpads_except_label() {
+  local keep_label="$1"
+  local ids
+  local restore_id
+
+  if ! ids=$(query_windows_json 2>/dev/null | jq -r --arg keep_label "$keep_label" '
+    .[]
+    | select((.scratchpad // "") | length > 0)
+    | select((.scratchpad // "") != $keep_label)
+    | .id'); then
+    log "close_scratchpads_except_label keep_label=$keep_label could not query yabai"
+    return 0
+  fi
+
+  if [ -z "$ids" ]; then
+    log "close_scratchpads_except_label keep_label=$keep_label nothing to close"
+    return 0
+  fi
+
+  restore_id=$(focused_non_scratchpad_window_id 2>/dev/null || true)
+  close_window_ids "" "$ids" "$restore_id"
+}
+
+close_duplicate_scratchpads_for_label() {
+  local label="$1"
+  local ids
+  local duplicate_ids
+
+  ids=$(scratchpad_ids "$label" 2>/dev/null || true)
+  if [ -z "$ids" ]; then
+    return 0
+  fi
+
+  duplicate_ids=$(printf '%s\n' "$ids" | tail -n +2)
+  if [ -z "$duplicate_ids" ]; then
+    return 0
+  fi
+
+  log "closing duplicate scratchpads for label=$label"
+  close_window_ids "$label" "$duplicate_ids" ""
+}
+
 hide_scratchpad_label() {
   local label="$1"
   local visible_ids
@@ -408,6 +464,9 @@ scratchpad_window_title() {
 
 scratchpad_profile_for_label() {
   case "$1" in
+    "$SCRATCHPAD_TERMINAL_LABEL")
+      printf '%s\n' "codex"
+      ;;
     codex_dotfiles)
       printf '%s\n' "codex"
       ;;
@@ -442,7 +501,13 @@ launch_ghostty() {
   local initial_command="${2:-}"
   local profile="${3:-}"
   local cwd="${4:-$HOME}"
-  local ghostty_args=(--working-directory="$cwd" --title="$title")
+  local ghostty_args=(
+    --working-directory="$cwd"
+    --title="$title"
+    --background=#000000
+    --background-opacity=1
+    --background-blur=false
+  )
   local -a clean_ghostty_env=(env -u ZDOTDIR)
 
   if [ -n "$initial_command" ]; then
@@ -524,8 +589,9 @@ print_rule_for_label() {
 }
 
 print_static_rules() {
-  print_rule_for_label "codex_dotfiles"
-  print_rule_for_label "projects_tmux"
+  printf 'yabai -m rule --remove "scratchpad_codex_dotfiles" >/dev/null 2>&1 || true\n'
+  printf 'yabai -m rule --remove "scratchpad_projects_tmux" >/dev/null 2>&1 || true\n'
+  print_rule_for_label "$SCRATCHPAD_TERMINAL_LABEL"
   print_rule_for_label "quick_terminal"
 }
 
@@ -768,12 +834,7 @@ open_or_focus_scratchpad_with_profile() {
 }
 
 open_codex_dotfiles_scratchpad() {
-  open_or_focus_scratchpad_with_profile \
-    "codex_dotfiles" \
-    "codex" \
-    "$HOME/dotfiles" \
-    "codex" \
-    "direct:/bin/zsh"
+  open_terminal_tmux_scratchpad "dotfiles"
 }
 
 tmux_window_exists() {
@@ -784,6 +845,39 @@ tmux_window_exists() {
     | grep -Fqx -- "$window"
 }
 
+tmux_window_index() {
+  local session="$1"
+  local window="$2"
+
+  tmux list-windows -t "=$session" -F '#{window_index} #{window_name}' 2>/dev/null \
+    | awk -v window="$window" '$2 == window { print $1; exit }'
+}
+
+tmux_window_index_exists() {
+  local session="$1"
+  local index="$2"
+
+  tmux list-windows -t "=$session" -F '#{window_index}' 2>/dev/null \
+    | grep -Fqx -- "$index"
+}
+
+ensure_tmux_window_index() {
+  local session="$1"
+  local window="$2"
+  local index="$3"
+  local current_index
+
+  current_index=$(tmux_window_index "$session" "$window")
+  [ -n "$current_index" ] || return 1
+  [ "$current_index" = "$index" ] && return 0
+
+  if tmux_window_index_exists "$session" "$index"; then
+    tmux swap-window -d -s "=${session}:${current_index}" -t "=${session}:${index}" >/dev/null
+  else
+    tmux move-window -d -s "=${session}:${current_index}" -t "=${session}:${index}" >/dev/null
+  fi
+}
+
 create_tmux_window_with_command() {
   local session="$1"
   local window="$2"
@@ -791,10 +885,54 @@ create_tmux_window_with_command() {
   local command_text="$4"
 
   tmux new-window -t "=${session}:" -c "$cwd" -n "$window" >/dev/null
-  tmux send-keys -t "=${session}:${window}" "$command_text" C-m
+  if [ -n "$command_text" ]; then
+    tmux send-keys -t "=${session}:${window}" "$command_text" C-m
+  fi
+}
+
+ensure_standard_scratchpad_tmux_windows() {
+  local session="$1"
+  local cwd="$2"
+
+  if ! tmux_window_exists "$session" "terminal"; then
+    create_tmux_window_with_command "$session" "terminal" "$cwd" ""
+  fi
+  if ! tmux_window_exists "$session" "codex"; then
+    create_tmux_window_with_command "$session" "codex" "$cwd" "codex"
+  fi
+  if ! tmux_window_exists "$session" "nvim"; then
+    create_tmux_window_with_command "$session" "nvim" "$cwd" "nvim"
+  fi
+
+  ensure_tmux_window_index "$session" "terminal" "0"
+  ensure_tmux_window_index "$session" "codex" "1"
+  ensure_tmux_window_index "$session" "nvim" "2"
+}
+
+ensure_dotfiles_tmux_session() {
+  local session="$SCRATCHPAD_DOTFILES_TMUX_SESSION"
+  local dotfiles_dir="$SCRATCHPAD_DOTFILES_DIR"
+
+  if [ ! -d "$dotfiles_dir" ]; then
+    printf 'scratchpads: dotfiles directory not found: %s\n' "$dotfiles_dir" >&2
+    return 1
+  fi
+
+  if ! command -v tmux >/dev/null 2>&1; then
+    printf 'scratchpads: tmux is required for the dotfiles scratchpad.\n' >&2
+    return 1
+  fi
+
+  if ! tmux has-session -t "=$session" 2>/dev/null; then
+    tmux new-session -d -s "$session" -c "$dotfiles_dir" -n terminal
+  fi
+  ensure_standard_scratchpad_tmux_windows "$session" "$dotfiles_dir"
+
+  tmux select-window -t "=${session}:codex" >/dev/null 2>&1 || true
 }
 
 ensure_projects_tmux_session() {
+  local target="${1:-codex}"
   local session="$SCRATCHPAD_PROJECTS_TMUX_SESSION"
   local project_dir="$SCRATCHPAD_PROJECTS_DIR"
 
@@ -809,19 +947,123 @@ ensure_projects_tmux_session() {
   fi
 
   if ! tmux has-session -t "=$session" 2>/dev/null; then
-    tmux new-session -d -s "$session" -c "$project_dir" -n codex
-    tmux send-keys -t "=${session}:codex" "codex" C-m
-    create_tmux_window_with_command "$session" "nvim" "$project_dir" "nvim"
-  else
-    if ! tmux_window_exists "$session" "codex"; then
-      create_tmux_window_with_command "$session" "codex" "$project_dir" "codex"
-    fi
-    if ! tmux_window_exists "$session" "nvim"; then
-      create_tmux_window_with_command "$session" "nvim" "$project_dir" "nvim"
-    fi
+    tmux new-session -d -s "$session" -c "$project_dir" -n terminal
+  fi
+  ensure_standard_scratchpad_tmux_windows "$session" "$project_dir"
+
+  tmux select-window -t "=${session}:${target}" >/dev/null 2>&1 \
+    || tmux select-window -t "=${session}:codex" >/dev/null 2>&1 \
+    || true
+}
+
+tmux_target_session_for() {
+  case "$1" in
+    codex|dotfiles)
+      printf '%s\n' "$SCRATCHPAD_DOTFILES_TMUX_SESSION"
+      ;;
+    projects|nvim)
+      printf '%s\n' "$SCRATCHPAD_PROJECTS_TMUX_SESSION"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+tmux_target_window_for() {
+  case "$1" in
+    codex|dotfiles|projects)
+      printf '%s\n' "codex"
+      ;;
+    nvim)
+      printf '%s\n' "nvim"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+ensure_tmux_target() {
+  case "$1" in
+    codex|dotfiles)
+      ensure_dotfiles_tmux_session
+      ;;
+    projects|nvim)
+      ensure_projects_tmux_session "$(tmux_target_window_for "$1")"
+      ;;
+    *)
+      printf 'scratchpads: unknown tmux target: %s\n' "$1" >&2
+      return 1
+      ;;
+  esac
+}
+
+set_terminal_scratchpad_target() {
+  local target="$1"
+  tmux set-option -gq "$SCRATCHPAD_TMUX_TARGET_OPTION" "$target" 2>/dev/null || true
+}
+
+current_terminal_scratchpad_target() {
+  tmux show-option -gqv "$SCRATCHPAD_TMUX_TARGET_OPTION" 2>/dev/null || true
+}
+
+record_terminal_scratchpad_client() {
+  local tty_name
+
+  tty_name=$(tty 2>/dev/null || true)
+  [ -n "$tty_name" ] || return 0
+  tmux set-option -gq "$SCRATCHPAD_TMUX_CLIENT_OPTION" "$tty_name" 2>/dev/null || true
+}
+
+infer_terminal_scratchpad_client() {
+  tmux list-clients -F '#{client_name} #{client_session}' 2>/dev/null \
+    | awk -v dotfiles="$SCRATCHPAD_DOTFILES_TMUX_SESSION" \
+          -v projects="$SCRATCHPAD_PROJECTS_TMUX_SESSION" \
+          '$2 == dotfiles || $2 == projects { print $1; exit }'
+}
+
+terminal_scratchpad_client() {
+  local client
+
+  client=$(tmux show-option -gqv "$SCRATCHPAD_TMUX_CLIENT_OPTION" 2>/dev/null || true)
+  if [ -n "$client" ] && tmux list-clients -F '#{client_name}' 2>/dev/null | grep -Fx -- "$client" >/dev/null; then
+    printf '%s\n' "$client"
+    return 0
   fi
 
-  tmux select-window -t "=${session}:codex" >/dev/null 2>&1 || true
+  client=$(infer_terminal_scratchpad_client)
+  [ -n "$client" ] || return 1
+  tmux set-option -gq "$SCRATCHPAD_TMUX_CLIENT_OPTION" "$client" 2>/dev/null || true
+  printf '%s\n' "$client"
+}
+
+switch_terminal_scratchpad_client() {
+  local target="$1"
+  local session
+  local window
+  local client
+
+  ensure_tmux_target "$target"
+  session=$(tmux_target_session_for "$target")
+  window=$(tmux_target_window_for "$target")
+  tmux select-window -t "=${session}:${window}" >/dev/null 2>&1 || true
+
+  if client=$(terminal_scratchpad_client); then
+    tmux switch-client -c "$client" -t "=$session" >/dev/null 2>&1 || return 1
+    set_terminal_scratchpad_target "$target"
+    return 0
+  fi
+
+  return 1
+}
+
+attach_tmux_session() {
+  local session="$1"
+  local target="${2:-$session}"
+
+  record_terminal_scratchpad_client
+  set_terminal_scratchpad_target "$target"
 
   if [ -n "${TMUX:-}" ]; then
     exec tmux switch-client -t "=$session"
@@ -830,19 +1072,83 @@ ensure_projects_tmux_session() {
   exec tmux attach -t "=$session"
 }
 
+attach_dotfiles_tmux_session() {
+  ensure_dotfiles_tmux_session
+  attach_tmux_session "$SCRATCHPAD_DOTFILES_TMUX_SESSION" "dotfiles"
+}
+
+attach_projects_tmux_session() {
+  local target="${1:-codex}"
+  ensure_projects_tmux_session "$(tmux_target_window_for "$target")"
+  attach_tmux_session "$SCRATCHPAD_PROJECTS_TMUX_SESSION" "$target"
+}
+
 open_projects_tmux_scratchpad() {
+  open_terminal_tmux_scratchpad "projects"
+}
+
+open_terminal_tmux_scratchpad() {
+  local target="$1"
+  local label="$SCRATCHPAD_TERMINAL_LABEL"
+  local profile="codex"
+  local origin_display
+  local origin_space
+  local focused_label
+  local current_target
+  local win_id
+
+  ensure_tmux_target "$target"
+
+  origin_display=$(focused_display_index 2>/dev/null || true)
+  origin_space=$(focused_space_index 2>/dev/null || true)
+  focused_label=$(focused_scratchpad_label 2>/dev/null || true)
+  current_target=$(current_terminal_scratchpad_target)
+
+  if [ "$focused_label" = "$label" ]; then
+    if [ "$current_target" = "$target" ]; then
+      hide_scratchpad_and_restore_focus "$label" || true
+      return 0
+    fi
+
+    switch_terminal_scratchpad_client "$target" || true
+    return 0
+  fi
+
+  close_scratchpads_except_label "$label"
+  close_duplicate_scratchpads_for_label "$label"
+  switch_terminal_scratchpad_client "$target" || true
+
+  if win_id=$(scratchpad_ids "$label" 2>/dev/null | head -1); then
+    if [ -n "$win_id" ]; then
+      log "focusing existing terminal scratchpad label=$label win_id=$win_id target=$target"
+      restore_origin_focus "$origin_display" "$origin_space"
+      if [ -n "$origin_space" ]; then
+        yabai -m window "$win_id" --space "$origin_space" >/dev/null 2>&1 || true
+      fi
+      if ! scratchpad_visible_ids "$label" 2>/dev/null | grep -qx "$win_id"; then
+        yabai -m window --toggle "$label" >/dev/null 2>&1 || true
+        sleep 0.1
+      fi
+      yabai -m window "$win_id" --grid "$(scratchpad_grid_for_profile "$profile")" >/dev/null 2>&1 || true
+      yabai -m window --focus "$win_id" >/dev/null 2>&1 || true
+      return 0
+    fi
+  fi
+
   open_or_focus_scratchpad_with_profile \
-    "projects_tmux" \
-    "codex" \
-    "$SCRATCHPAD_PROJECTS_DIR" \
-    "$HOME/bin/scratchpads tmux projects" \
-    "direct:/bin/zsh"
+    "$label" \
+    "$profile" \
+    "$SCRATCHPAD_DOTFILES_DIR" \
+    "" \
+    "$HOME/bin/scratchpads tmux $target"
 }
 
 debug_state() {
   {
     printf 'log_file=%s\n' "$SCRATCHPAD_LOG_FILE"
     printf 'tmux_sessionizer=%s\n' "$TMUX_SESSIONIZER"
+    printf 'dotfiles_dir=%s\n' "$SCRATCHPAD_DOTFILES_DIR"
+    printf 'dotfiles_tmux_session=%s\n' "$SCRATCHPAD_DOTFILES_TMUX_SESSION"
     printf 'projects_dir=%s\n' "$SCRATCHPAD_PROJECTS_DIR"
     printf 'projects_tmux_session=%s\n' "$SCRATCHPAD_PROJECTS_TMUX_SESSION"
     printf '\nfocused_window:\n'
@@ -879,7 +1185,13 @@ main() {
       open_projects_tmux_scratchpad
       ;;
     tmux:projects)
-      ensure_projects_tmux_session
+      attach_projects_tmux_session "projects"
+      ;;
+    tmux:codex|tmux:dotfiles)
+      attach_dotfiles_tmux_session
+      ;;
+    tmux:nvim)
+      attach_projects_tmux_session "nvim"
       ;;
     close:)
       close_all_scratchpads

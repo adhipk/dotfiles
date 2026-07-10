@@ -14,7 +14,10 @@ scratchpad_win=$(yabai -m query --windows | \
 if [[ -n "$scratchpad_win" ]]; then
   yabai -m window --scratchpad "$scratchpad_label" --toggle "$scratchpad_label"
 else
-  env -u ZDOTDIR open -n -a Ghostty
+  env -u ZDOTDIR open -n -a Ghostty --args \
+    --background=#000000 \
+    --background-opacity=1 \
+    --background-blur=false
 
   sleep 0.4
 

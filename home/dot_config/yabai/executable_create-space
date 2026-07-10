@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # man-me: name=create-space
 # man-me: category=Window and Display
-# man-me: usage=~/.config/yabai/create-space [focus|move-window]
-# man-me: description=Create a yabai space on the focused display and focus it.
+# man-me: usage=~/.config/yabai/create-space [auto|focus|move-window]
+# man-me: description=Create a yabai space on the focused display, optionally moving the focused non-scratchpad window.
 # man-me: tags=hotkeys hotkey keyboard shortcut skhd yabai spaces display
 
 set -euo pipefail
 
-mode="${1:-focus}"
+mode="${1:-auto}"
 
 case "$mode" in
-  focus|move-window) ;;
+  auto|focus|move-window) ;;
   *)
-    echo "usage: create-space [focus|move-window]" >&2
+    echo "usage: create-space [auto|focus|move-window]" >&2
     exit 2
     ;;
 esac
@@ -27,14 +27,49 @@ command -v jq >/dev/null 2>&1 || {
   exit 1
 }
 
+move_focused_window=false
+window_json=""
+window_id=""
+window_app=""
+
+capture_focused_window_for_move() {
+  local movable_windows require_sibling scratchpad_label space_windows_json
+
+  require_sibling="${1:-false}"
+
+  window_json="$(yabai -m query --windows --window 2>/dev/null || true)"
+  [ -n "$window_json" ] && [ "$window_json" != "null" ] || return 1
+
+  scratchpad_label="$(printf '%s' "$window_json" | jq -r '.scratchpad // ""')"
+  [ -z "$scratchpad_label" ] || return 1
+
+  if [ "$require_sibling" = true ]; then
+    space_windows_json="$(yabai -m query --windows --space 2>/dev/null || true)"
+    movable_windows="$(printf '%s' "$space_windows_json" | jq '[.[] | select((.scratchpad // "") == "")] | length')"
+    [ "${movable_windows:-0}" -gt 1 ] || return 1
+  fi
+
+  window_id="$(printf '%s' "$window_json" | jq -r '.id // empty')"
+  [ -n "$window_id" ] || return 1
+
+  window_app="$(printf '%s' "$window_json" | jq -r '.app // ""')"
+  move_focused_window=true
+}
+
 display="$(yabai -m query --displays --display | jq -r '.index')"
 before_uuids="$(yabai -m query --spaces | jq -r '.[].uuid')"
 
-if [ "$mode" = "move-window" ]; then
-  window_json="$(yabai -m query --windows --window)"
-  window_id="$(printf '%s' "$window_json" | jq -r '.id')"
-  window_app="$(printf '%s' "$window_json" | jq -r '.app // ""')"
-fi
+case "$mode" in
+  auto)
+    capture_focused_window_for_move true || true
+    ;;
+  move-window)
+    if ! capture_focused_window_for_move false; then
+      echo "create-space: no focused non-scratchpad window to move" >&2
+      exit 1
+    fi
+    ;;
+esac
 
 yabai -m space --create
 
@@ -61,13 +96,13 @@ fi
 
 yabai -m display --focus "$display" >/dev/null 2>&1 || true
 
-if [ "$mode" = "move-window" ]; then
+if [ "$move_focused_window" = true ]; then
   yabai -m window "$window_id" --space "$new_index"
 fi
 
 yabai -m space --focus "$new_index"
 
-if [ "$mode" = "move-window" ]; then
+if [ "$move_focused_window" = true ]; then
   yabai -m window --focus "$window_id" >/dev/null 2>&1 || true
   [ -n "$window_app" ] && yabai -m space --label "$window_app" >/dev/null 2>&1 || true
   "$HOME/.config/yabai/close_empty_spaces.sh"

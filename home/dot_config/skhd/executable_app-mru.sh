@@ -59,6 +59,18 @@ app_mru_write_stack() {
   printf '%s\n' "${ids[@]}" >"$state_file"
 }
 
+app_mru_id_in_list() {
+  local candidate="$1"
+  shift
+  local id
+
+  for id in "$@"; do
+    [[ "$id" == "$candidate" ]] && return 0
+  done
+
+  return 1
+}
+
 app_mru_read_stack() {
   local app="$1"
   local state_file windows_json
@@ -84,7 +96,7 @@ app_mru_read_stack() {
   fi
 
   for id in "${stack[@]}"; do
-    if jq -e --argjson id "$id" '.[] | select(.id == $id)' >/dev/null <<<"$windows_json"; then
+    if app_mru_id_in_list "$id" "${live[@]}"; then
       valid+=("$id")
     fi
   done

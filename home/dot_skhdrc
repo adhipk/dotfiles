@@ -159,8 +159,8 @@ ctrl + alt + cmd + shift - 0x33 : ~/.config/yabai/projects detach  # hyper+shift
 # -- Move window to new desktop --
 ctrl + alt - n : ~/.config/yabai/create-space move-window
 
-# -- Create new desktop and focus it --
-alt - n : ~/.config/yabai/create-space focus
+# -- Create new desktop, moving the focused non-scratchpad window if present --
+alt - n : ~/.config/yabai/create-space auto
 
 # -- Close all empty desktops --
 alt - k : ~/.config/yabai/close_empty_spaces.sh
@@ -171,10 +171,10 @@ alt - k : ~/.config/yabai/close_empty_spaces.sh
 
 alt - 0x32 : ~/.config/skhd/focus_app.sh "Ghostty"  # alt + backtick
 alt - 1 : ~/bin/hotkeys app-focus 1 "@browser"
-alt - 2 : ~/bin/hotkeys app-focus 2 "Codex"
-alt - 3 : ~/bin/hotkeys app-focus 3 "@editor"
-alt - 4 : ~/bin/hotkeys app-focus 4 "Microsoft Teams"
-alt - 5 : ~/bin/hotkeys app-focus 5 "Slack"
+alt - 2 : ~/bin/hotkeys app-focus 3 "@editor"
+alt - 3 : ~/bin/hotkeys app-focus 4 "Microsoft Teams"
+alt - 4 : ~/bin/hotkeys app-focus 5 "Slack"
+
 alt - 0x2B : ~/bin/scratchpads open codex  # alt + comma
 alt - l : ~/bin/scratchpads open projects  # alt + l
 alt - 0x2A : ~/bin/hotkeys presentation toggle  # alt + backslash

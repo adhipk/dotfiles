@@ -181,10 +181,17 @@ assert_contains "$SKHDRC" "ctrl + alt + cmd - 1.*projects focus-project 1" "Hype
 assert_contains "$SKHDRC" "ctrl + alt + cmd + shift - 1.*projects adopt --project-slot 1" "Hyper+Shift+1 adopts into project slot 1"
 assert_contains "$SKHDRC" "ctrl + alt + cmd + shift - 0x33.*projects detach" "Hyper+Shift+Backspace detaches current space"
 assert_not_contains "$SKHDRC" "ctrl + alt + shift - 1.*window --space 1" "Mission Control index moves removed"
-assert_contains "$SKHDRC" "alt - n.*create-space focus" "Alt+n creates and focuses a new space"
+assert_contains "$SKHDRC" "alt - n.*create-space auto" "Alt+n creates a new space and conditionally moves a focused non-scratchpad window"
 assert_contains "$SKHDRC" "ctrl + alt - n.*create-space move-window" "Ctrl+Alt+n moves the focused window to a new space"
 assert_contains "$DOTFILES_DIR/home/dot_config/yabai/executable_create-space" "before_uuids" "create-space snapshots spaces before creation"
 assert_contains "$DOTFILES_DIR/home/dot_config/yabai/executable_create-space" "space --focus.*new_index" "create-space focuses the newly created space"
+assert_contains "$DOTFILES_DIR/home/dot_config/yabai/executable_create-space" "scratchpad_label" "create-space ignores focused scratchpad windows in auto mode"
+assert_contains "$DOTFILES_DIR/home/dot_config/yabai/executable_create-space" "movable_windows.*-gt 1" "create-space auto mode keeps the only normal window on its current space"
+assert_contains "$DOTFILES_DIR/home/dot_config/yabai/executable_create-space" "capture_focused_window_for_move true" "create-space auto mode requires another normal window before moving"
+assert_contains "$DOTFILES_DIR/home/dot_config/yabai/executable_create-space" "capture_focused_window_for_move false" "create-space move-window mode can still force a focused window move"
+assert_contains "$DOTFILES_DIR/home/dot_config/yabai/executable_create-space" "move_focused_window=true" "create-space can mark a focused regular window for moving"
+assert_not_contains "$DOTFILES_DIR/home/dot_config/yabai/executable_create-space" "YABAI_SPACE_WALLPAPER" "create-space has no wallpaper assignment controls"
+assert_not_contains "$DOTFILES_DIR/home/dot_config/yabai/executable_create-space" "set picture of current desktop" "create-space does not apply wallpapers"
 assert_contains "$SKHDRC" "alt - 1.*hotkeys app-focus 1.*@browser" "Alt+1 browser focus goes through hotkeys"
 assert_contains "$SKHDRC" "alt - 2.*hotkeys app-focus 2.*Codex" "Alt+2 Codex focus goes through hotkeys"
 assert_contains "$SKHDRC" "alt - 3.*hotkeys app-focus 3.*@editor" "Alt+3 editor focus goes through zen gate"
@@ -205,15 +212,77 @@ assert_contains "$HOTKEYS" "before_json=.*query --windows" "terminal opener snap
 assert_contains "$HOTKEYS" "stale_lock_after_s=10" "terminal opener clears stale launch locks"
 assert_contains "$HOTKEYS" "display --focus.*current_display" "terminal opener restores the originating display before focus"
 assert_contains "$HOTKEYS" "window.*--space.*current_space" "terminal opener moves new windows to the originating space"
+assert_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_focus_app.sh" 'hotkeys terminal new' "Ghostty app focus creates a normal terminal when no eligible window exists"
+assert_contains "$DOTFILES_DIR/home/dot_config/skhd/executable_toggle_ghostty_quick_terminal.sh" "background-opacity=1" "quick terminal scratchpad keeps Ghostty opaque"
 assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "open:codex" "scratchpads supports Codex dotfiles scratchpad"
-assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "codex_dotfiles" "scratchpads labels the Codex dotfiles window"
 assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "open:projects" "scratchpads supports projects tmux scratchpad"
-assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "projects_tmux" "scratchpads labels the projects tmux window"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "SCRATCHPAD_TERMINAL_LABEL" "scratchpads uses one terminal scratchpad window"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "SCRATCHPAD_DOTFILES_TMUX_SESSION" "scratchpads declares the dotfiles tmux session"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "SCRATCHPAD_PROJECTS_TMUX_SESSION" "scratchpads declares the projects tmux session"
+assert_not_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "SCRATCHPAD_TMUX_SESSION=" "scratchpads does not use one shared tmux session"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "scratchpad_codex_dotfiles" "scratchpads removes the stale Codex scratchpad rule"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "scratchpad_projects_tmux" "scratchpads removes the stale projects scratchpad rule"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "open_terminal_tmux_scratchpad.*dotfiles" "Codex hotkey opens the terminal scratchpad on dotfiles"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "open_terminal_tmux_scratchpad.*projects" "Projects hotkey opens the terminal scratchpad on projects"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "switch_terminal_scratchpad_client" "scratchpads switches the existing tmux client"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "SCRATCHPAD_TMUX_CLIENT_OPTION" "scratchpads records the terminal tmux client"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "infer_terminal_scratchpad_client" "scratchpads recovers a stale terminal tmux client"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "client_session" "scratchpads infers the terminal client from scratchpad sessions"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "attach_dotfiles_tmux_session" "Codex scratchpad attaches to the dotfiles tmux session"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "attach_projects_tmux_session.*nvim" "Projects scratchpad can attach to the nvim tmux window"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "close_scratchpads_except_label" "scratchpads closes other scratchpad windows before opening"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "close_duplicate_scratchpads_for_label" "scratchpads closes duplicate scratchpad windows"
 assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "SCRATCHPAD_PROJECTS_DIR" "scratchpads roots the projects tmux session in ~/projects"
-assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "send-keys.*codex" "scratchpads starts Codex in the projects tmux session"
-assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "create_tmux_window_with_command.*nvim" "scratchpads starts Neovim in the projects tmux session"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "background=#000000" "scratchpads use a black Ghostty background"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "background-opacity=1" "scratchpads keep Ghostty opaque"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "background-blur=false" "scratchpads disable Ghostty blur"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "new-session -d -s.*-n terminal" "scratchpads starts with a raw terminal tmux window"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "create_tmux_window_with_command.*codex.*codex" "scratchpads starts Codex in the dotfiles/projects tmux sessions"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "ensure_standard_scratchpad_tmux_windows" "scratchpads keeps standard windows in each tmux session"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "ensure_tmux_window_index.*terminal.*0" "scratchpads keeps terminal at tmux window 0"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "ensure_tmux_window_index.*codex.*1" "scratchpads keeps Codex at tmux window 1"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "ensure_tmux_window_index.*nvim.*2" "scratchpads keeps nvim at tmux window 2"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "create_tmux_window_with_command.*nvim.*nvim" "scratchpads starts Neovim in each tmux session"
+assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "create_tmux_window_with_command.*terminal.*\"\"" "scratchpads starts a raw terminal window in each tmux session"
 assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "hide_scratchpad_and_restore_focus" "scratchpads toggles Codex visibility without closing"
 assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads" "restore_origin_focus" "scratchpads restore the originating display and space"
+
+echo ""
+echo "Testing app MRU behavior..."
+APP_MRU_TEST_DIR="$(mktemp -d "${TMPDIR:-/tmp}/app-mru-test.XXXXXX")"
+APP_MRU_FAKE_BIN="$APP_MRU_TEST_DIR/bin"
+mkdir -p "$APP_MRU_FAKE_BIN" "$APP_MRU_TEST_DIR/state"
+cat > "$APP_MRU_FAKE_BIN/yabai" <<'FAKE_YABAI'
+#!/usr/bin/env bash
+if [ "$1" = "-m" ] && [ "$2" = "query" ] && [ "$3" = "--windows" ]; then
+  cat <<'JSON'
+[
+  {"id":100,"app":"Ghostty","is-minimized":false,"is-hidden":false,"scratchpad":"","title":"normal-a"},
+  {"id":200,"app":"Ghostty","is-minimized":false,"is-hidden":false,"scratchpad":"terminal","title":"scratchpad:terminal"},
+  {"id":300,"app":"Ghostty","is-minimized":false,"is-hidden":false,"scratchpad":null,"title":"normal-b"}
+]
+JSON
+  exit 0
+fi
+exit 1
+FAKE_YABAI
+chmod +x "$APP_MRU_FAKE_BIN/yabai"
+printf '200\n100\n999\n' > "$APP_MRU_TEST_DIR/state/Ghostty.ids"
+APP_MRU_OUTPUT=$(
+    APP_MRU_DIR="$APP_MRU_TEST_DIR/state" \
+    PATH="$APP_MRU_FAKE_BIN:$PATH" \
+    bash -c 'source "$1"; app_mru_list Ghostty' _ "$DOTFILES_DIR/home/dot_config/skhd/executable_app-mru.sh"
+)
+rm -rf "$APP_MRU_TEST_DIR"
+if [ "$APP_MRU_OUTPUT" = $'100\n300' ]; then
+    echo "  ✓ App MRU prunes scratchpad windows from saved stacks"
+    ((PASSED++))
+else
+    echo "  ✗ App MRU prunes scratchpad windows from saved stacks"
+    echo "    Expected: 100, 300"
+    echo "    Actual: $APP_MRU_OUTPUT"
+    ((FAILED++))
+fi
 
 # Test reload shortcut
 assert_contains "$SKHDRC" "alt - r.*restart-service" "Reload shortcut exists"

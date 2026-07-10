@@ -48,6 +48,16 @@ if (( $+widgets[history-substring-search-up] )); then
     HISTORY_SUBSTRING_SEARCH_ENSURE_UNIQUE=1
 fi
 
+# Word movement. Ghostty/macOS may emit either Meta-b/f or CSI sequences.
+bindkey '\eb' backward-word
+bindkey '\ef' forward-word
+bindkey '\e[1;3D' backward-word
+bindkey '\e[1;3C' forward-word
+bindkey '\e[1;9D' backward-word
+bindkey '\e[1;9C' forward-word
+bindkey '\e[3D' backward-word
+bindkey '\e[3C' forward-word
+
 # Docker completions
 fpath=("$HOME/.docker/completions" $fpath)
 autoload -Uz compinit
@@ -106,7 +116,6 @@ path=("$PNPM_HOME" $path)
 
 # sesh/tmux session manager integration
 
-bindkey -s '\ef' "tmux-sessionizer-zoxide\n"  # Alt+f (tmux sessions + zoxide via sesh)
 bindkey -s '\ee' "tmux-session-picker\n"      # Alt+e (existing tmux sessions via sesh)
 bindkey -s '\eh' "tmux-sessionizer -s 0\n"    # Alt+h (sesh slot 0)
 bindkey -s '\et' "tmux-sessionizer -s 1\n"    # Alt+t (sesh slot 1)

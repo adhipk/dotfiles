@@ -13,11 +13,13 @@ Your job is to maintain my dotfile configurations, this includes keyboard shortc
 - Built automatically on `make install` (not chezmoi-managed).
 
 ## Key Bindings (skhd)
-- `alt + n` creates a new space and focuses it.
-- `alt + backtick` focuses Ghostty.
+- `alt + n` creates a new space and focuses it; when the current space has more than one non-scratchpad window, it moves the focused non-scratchpad window there.
+- `alt + backtick` focuses normal Ghostty windows; scratchpads are excluded from the app MRU list.
 - `alt + 1..5` focuses browser, Codex, editor, Teams, or Slack.
-- `alt + comma` opens a Codex scratchpad in `~/dotfiles`, then toggles visibility without closing it.
-- `alt + l` opens a projects scratchpad with a `~/projects` tmux session containing `codex` and `nvim` windows.
+- normal Ghostty windows are transparent; scratchpad Ghostty windows force opaque black.
+- `alt + comma` opens the black terminal scratchpad and switches to a `~/dotfiles` tmux session containing `terminal`, `codex`, and `nvim` windows.
+- `alt + l` opens the same black terminal scratchpad and switches to a separate `~/projects` tmux session containing `terminal`, `codex`, and `nvim` windows.
+- In Ghostty, `cmd + backtick` switches to tmux window `0` (`terminal`), `cmd + 1` switches to window `1` (`codex`), and `cmd + 2` switches to window `2` (`nvim`).
 - `alt + shift + backtick` creates a new terminal window on the focused space.
 
 ## Projects CLI
