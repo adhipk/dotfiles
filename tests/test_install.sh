@@ -62,6 +62,24 @@ assert_directory() {
     fi
 }
 
+assert_symlink_target() {
+    local link="$1"
+    local expected="$2"
+    local test_name="$3"
+    local actual
+
+    actual=$(readlink "$link" 2>/dev/null || true)
+    if [[ -L "$link" && "$actual" == "$expected" ]]; then
+        echo "  ✓ $test_name"
+        ((PASSED++))
+    else
+        echo "  ✗ $test_name"
+        echo "    Expected symlink: $link -> $expected"
+        echo "    Actual: $actual"
+        ((FAILED++))
+    fi
+}
+
 echo "================================"
 echo "Installer Tests"
 echo "================================"
@@ -103,7 +121,11 @@ assert_contains "$ARGS_FILE" "^-S $DOTFILES_DIR apply --dry-run$" "install.sh pa
 
 echo ""
 echo "Testing bootstrap wrapper..."
-mkdir -p "$TEMP_HOME/.tmux/plugins/tpm/bin"
+mkdir -p \
+    "$TEMP_HOME/.tmux/plugins/tpm/bin" \
+    "$TEMP_HOME/.tmux/plugins/tmux-which-key" \
+    "$TEMP_HOME/.config/tmux"
+cp "$DOTFILES_DIR/home/dot_config/tmux/which-key.yaml" "$TEMP_HOME/.config/tmux/which-key.yaml"
 cat > "$TEMP_HOME/.tmux/plugins/tpm/bin/install_plugins" <<'EOF'
 #!/usr/bin/env bash
 printf '%s|%s\n' "$HOME" "$TMUX_PLUGIN_MANAGER_PATH" >> "$TMUX_PLUGIN_ARGS_FILE"
@@ -126,6 +148,10 @@ fi
 assert_contains "$ARGS_FILE" "^-S $DOTFILES_DIR apply$" "bootstrap applies the chezmoi source state"
 assert_contains "$TMUX_ARGS_FILE" "^source-file $TEMP_HOME/.tmux.conf$" "bootstrap reloads a running tmux server"
 assert_contains "$TMUX_PLUGIN_ARGS_FILE" "^$TEMP_HOME|$TEMP_HOME/.tmux/plugins/$" "bootstrap installs tmux plugins into the destination home"
+assert_symlink_target \
+    "$TEMP_HOME/.tmux/plugins/tmux-which-key/config.yaml" \
+    "$TEMP_HOME/.config/tmux/which-key.yaml" \
+    "bootstrap links the repo-owned tmux command center"
 assert_contains "$SERVICE_ARGS_FILE" "^yabai --start-service$" "bootstrap starts yabai on a clean client"
 assert_contains "$SERVICE_ARGS_FILE" "^skhd --start-service$" "bootstrap starts skhd on a clean client"
 assert_directory "$TEMP_HOME/projects" "bootstrap creates the projects scratchpad root"
@@ -148,12 +174,24 @@ else
     ((FAILED++))
 fi
 assert_executable "$COLD_HOME/bin/tmux-session-template" "clean apply installs the tmux session helper"
+assert_executable "$COLD_HOME/bin/tmux-workspace" "clean apply installs the declarative tmux workspace helper"
 assert_executable "$COLD_HOME/bin/tmux-border-accent" "clean apply installs the tmux border helper"
 assert_executable "$COLD_HOME/bin/tmux-yazi-pane" "clean apply installs the tmux Yazi helper"
 assert_executable "$COLD_HOME/bin/setup-yabai-sa" "clean apply installs the yabai scripting-addition setup helper"
 assert_contains "$COLD_HOME/.tmux.conf" "tmux-session-template cycle" "clean apply installs typed tmux bindings"
+assert_contains "$COLD_HOME/.tmux.conf" "tmux-plugins/tmux-resurrect" "clean apply installs tmux persistence config"
+assert_contains "$COLD_HOME/.config/tmux/layouts/project.tmux.tsx" "<Session root=\"\$PROJECT_ROOT\">" "clean apply installs the React-like project layout"
+assert_contains "$COLD_HOME/.config/tmux/which-key.yaml" "tmux-workspace pick" "clean apply installs the tmux command-center layout action"
 assert_contains "$COLD_HOME/.skhdrc" "scratchpads open projects" "clean apply installs project scratchpad bindings"
 assert_contains "$COLD_HOME/Library/Application Support/com.mitchellh.ghostty/config" "cmd+b=text" "clean apply installs Ghostty tmux bindings"
+
+if HOME="$COLD_HOME" "$COLD_HOME/bin/tmux-workspace" list | grep -qx project; then
+    echo "  ✓ cold-home workspace CLI discovers its managed layout"
+    ((PASSED++))
+else
+    echo "  ✗ cold-home workspace CLI could not discover its managed layout"
+    ((FAILED++))
+fi
 
 echo ""
 echo "================================"

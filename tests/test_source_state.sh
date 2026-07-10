@@ -123,6 +123,7 @@ assert_file_exists "$DOTFILES_DIR/nvim/init.lua" "Neovim config is stored in the
 assert_contains "$DOTFILES_DIR/Brewfile" 'brew "clipboard"' "Clipboard CLI is declared in Brewfile"
 assert_contains "$DOTFILES_DIR/Brewfile" 'tap "FelixKratz/formulae"' "JankyBorders Homebrew tap is declared"
 assert_contains "$DOTFILES_DIR/Brewfile" 'brew "borders"' "JankyBorders is declared in Brewfile"
+assert_contains "$DOTFILES_DIR/Brewfile" 'brew "bun"' "Bun is declared for React-like tmux layouts"
 assert_contains "$DOTFILES_DIR/Brewfile" 'cask "codex"' "Codex CLI is declared in Brewfile"
 assert_contains "$DOTFILES_DIR/Brewfile" 'cask "codex-app"' "Codex desktop app is declared in Brewfile"
 assert_contains "$DOTFILES_DIR/Brewfile" 'cask "google-chrome"' "Chrome is declared for the managed browser extension"
@@ -130,6 +131,7 @@ assert_contains "$DOTFILES_DIR/Brewfile" 'brew "gh"' "GitHub CLI is declared in 
 assert_contains "$DOTFILES_DIR/Brewfile" 'brew "marksman"' "Marksman Markdown LSP is declared in Brewfile"
 assert_contains "$DOTFILES_DIR/Brewfile" 'brew "node"' "Node and npm are declared for external project setup"
 assert_contains "$DOTFILES_DIR/Brewfile" 'brew "pnpm"' "pnpm is declared for Chrome extension builds"
+assert_contains "$DOTFILES_DIR/Brewfile" 'brew "python"' "Python is declared for tmux-which-key menu generation"
 assert_contains "$DOTFILES_DIR/Brewfile" 'brew "tree-sitter"' "Tree-sitter CLI is declared in Brewfile"
 assert_contains "$DOTFILES_DIR/Brewfile" 'brew "uv"' "uv is declared for the kit text-to-speech command"
 assert_contains "$DOTFILES_DIR/Brewfile" 'brew "yazi"' "Yazi is declared in Brewfile"
@@ -145,6 +147,9 @@ assert_contains "$DOTFILES_DIR/home/dot_config/zsh/zshrc.commands" "svg-png()" "
 assert_contains "$DOTFILES_DIR/home/.chezmoiexternal.toml.tmpl" 'tmux/plugins/tpm' "TPM is declared as a chezmoi external"
 assert_contains "$DOTFILES_DIR/install.sh" 'install_tmux_plugins' "installer provisions TPM-managed tmux plugins"
 assert_contains "$DOTFILES_DIR/install.sh" 'TMUX_PLUGIN_MANAGER_PATH' "installer uses the destination tmux plugin path"
+assert_contains "$DOTFILES_DIR/install.sh" 'install_tmux_command_center' "installer links the managed tmux command center"
+assert_contains "$DOTFILES_DIR/install.sh" 'expected_revision="85fb9756447b989f3b94e515d1e6ee7fec76cba2"' "installer pins the tested tmux-which-key revision"
+assert_contains "$DOTFILES_DIR/install.sh" 'ln -sfn.*managed_config.*plugin_dir/config.yaml' "installer avoids tmux-which-key's GNU-only XDG path"
 assert_contains "$DOTFILES_DIR/install.sh" 'mkdir -p.*projects' "installer creates the projects scratchpad root"
 assert_contains "$DOTFILES_DIR/bootstrap.sh" 'start_desktop_service yabai' "bootstrap starts the yabai launch service"
 assert_contains "$DOTFILES_DIR/bootstrap.sh" 'start_desktop_service skhd' "bootstrap starts the skhd launch service"
@@ -221,6 +226,7 @@ for file in \
     executable_scratchpads \
     executable_tmux-border-accent \
     executable_tmux-session-template \
+    executable_tmux-workspace \
     executable_tmux-yazi-pane \
     symlink_default-apps.tmpl \
     executable_projects \
@@ -231,6 +237,10 @@ for file in \
     executable_unescape-string; do
     assert_file_exists "$DOTFILES_DIR/home/bin/$file" "$file is declared"
 done
+assert_file_exists "$DOTFILES_DIR/home/dot_config/tmux/which-key.yaml" "tmux command-center YAML is declared"
+assert_file_exists "$DOTFILES_DIR/home/dot_config/tmux/layouts/project.tmux.tsx" "React-like tmux project layout is declared"
+assert_file_exists "$DOTFILES_DIR/home/dot_config/tmux/layouts/globals.d.ts" "tmux layout editor globals are declared"
+assert_file_exists "$DOTFILES_DIR/home/dot_config/tmux/layouts/tsconfig.json" "tmux layout editor config is declared"
 assert_contains "$DOTFILES_DIR/home/bin/executable_man-me" "parse_metadata_file" "man-me parses source metadata comments"
 assert_contains "$DOTFILES_DIR/home/bin/executable_man-me" "SEARCH_QUERY" "man-me supports free-text query matching"
 assert_contains "$DOTFILES_DIR/home/bin/executable_man-me" "rg -iq" "man-me uses ripgrep for matching when available"

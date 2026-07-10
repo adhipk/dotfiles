@@ -1,0 +1,298 @@
+# yaml-language-server: $schema=../../.tmux/plugins/tmux-which-key/config.schema.yaml
+command_alias_start_index: 200
+keybindings:
+  prefix_table: Space
+title:
+  style: align=centre,bold
+  prefix: '#S · #W'
+  prefix_style: fg=green,align=centre,bold
+position:
+  x: R
+  y: P
+custom_variables:
+  - name: log_info
+    value: '#[fg=green,italics] [info]#[default]#[italics]'
+macros:
+  - name: reload-config
+    commands:
+      - display "#{log_info} Reloading tmux"
+      - source-file $HOME/.tmux.conf
+  - name: save-all
+    commands:
+      - run-shell $HOME/.tmux/plugins/tmux-resurrect/scripts/save.sh
+      - display "#{log_info} Session state saved"
+  - name: restore-all
+    commands:
+      - run-shell $HOME/.tmux/plugins/tmux-resurrect/scripts/restore.sh
+      - display "#{log_info} Session state restored"
+items:
+  - name: Run command
+    key: space
+    command: command-prompt
+  - name: Last window
+    key: tab
+    command: last-window
+  - separator: true
+  - name: +Sessions
+    key: s
+    menu:
+      - name: Choose
+        key: s
+        command: choose-tree -Zs
+      - name: Last
+        key: tab
+        command: switch-client -l
+      - name: Previous
+        key: h
+        command: switch-client -p
+      - name: Next
+        key: l
+        command: switch-client -n
+      - separator: true
+      - name: New named session
+        key: n
+        command: >-
+          command-prompt -p "New session:"
+          { new-session -A -s "%%" -c "#{pane_current_path}" }
+      - name: Rename
+        key: r
+        command: >-
+          command-prompt -p "Rename session:" -I "#S"
+          { rename-session -- "%%" }
+      - name: Close
+        key: x
+        command: 'confirm-before -p "Close session #S? (y/n)" "kill-session -t #{session_id}"'
+      - separator: true
+      - name: Save all state
+        key: S
+        macro: save-all
+      - name: Restore all state
+        key: R
+        macro: restore-all
+      - name: Close detached layouts
+        key: X
+        command: >-
+          confirm-before -p "Close every detached managed layout? (y/n)"
+          { run-shell "$HOME/bin/tmux-workspace clean --yes" }
+  - name: +Windows
+    key: w
+    menu:
+      - name: Choose
+        key: w
+        command: choose-tree -Zw
+      - name: Last
+        key: tab
+        command: last-window
+      - name: Previous
+        key: h
+        command: previous-window
+      - name: Next
+        key: l
+        command: next-window
+      - separator: true
+      - name: Cycle terminal
+        key: '0'
+        command: 'run-shell "$HOME/bin/tmux-session-template cycle #{session_id} terminal #{window_id}"'
+      - name: Cycle Codex
+        key: '1'
+        command: 'run-shell "$HOME/bin/tmux-session-template cycle #{session_id} codex #{window_id}"'
+      - name: Cycle Neovim
+        key: '2'
+        command: 'run-shell "$HOME/bin/tmux-session-template cycle #{session_id} nvim #{window_id}"'
+      - name: +New
+        key: n
+        menu:
+          - name: Terminal
+            key: '0'
+            command: 'run-shell "$HOME/bin/tmux-session-template new #{session_id} terminal #{pane_id}"'
+          - name: Codex
+            key: '1'
+            command: 'run-shell "$HOME/bin/tmux-session-template new #{session_id} codex #{pane_id}"'
+          - name: Neovim
+            key: '2'
+            command: 'run-shell "$HOME/bin/tmux-session-template new #{session_id} nvim #{pane_id}"'
+          - name: Shell
+            key: s
+            command: 'new-window -c "#{pane_current_path}"'
+          - name: Yazi
+            key: y
+            command: 'new-window -S -n yazi -c "#{pane_current_path}" yazi'
+      - name: Move left
+        key: H
+        command: swap-window -d -t :-1
+        transient: true
+      - name: Move right
+        key: L
+        command: swap-window -d -t :+1
+        transient: true
+      - separator: true
+      - name: +Layout
+        key: e
+        menu:
+          - name: Next
+            key: e
+            command: next-layout
+            transient: true
+          - name: Tiled
+            key: t
+            command: select-layout tiled
+          - name: Even columns
+            key: c
+            command: select-layout even-horizontal
+          - name: Even rows
+            key: r
+            command: select-layout even-vertical
+          - name: Main left
+            key: h
+            command: select-layout main-vertical
+          - name: Main top
+            key: j
+            command: select-layout main-horizontal
+      - name: Rename
+        key: r
+        command: >-
+          command-prompt -p "Rename window:"
+          -I "#{?#{||:#{==:#{@dotfiles_window_type},codex},#{==:#W,codex}},#T,#W}"
+          { rename-window -- "%%" }
+      - name: Close
+        key: x
+        command: 'confirm-before -p "Close window #W? (y/n)" kill-window'
+  - name: +Panes
+    key: p
+    menu:
+      - name: Choose
+        key: p
+        command: display-panes -d 0
+      - name: Last
+        key: tab
+        command: last-pane
+      - separator: true
+      - name: Left
+        key: h
+        command: select-pane -L
+      - name: Down
+        key: j
+        command: select-pane -D
+      - name: Up
+        key: k
+        command: select-pane -U
+      - name: Right
+        key: l
+        command: select-pane -R
+      - name: Split right
+        key: '/'
+        command: 'split-window -h -c "#{pane_current_path}"'
+      - name: Split down
+        key: '-'
+        command: 'split-window -v -c "#{pane_current_path}"'
+      - name: Zoom
+        key: z
+        command: resize-pane -Z
+      - name: +Resize
+        key: r
+        menu:
+          - name: Left
+            key: h
+            command: resize-pane -L
+            transient: true
+          - name: Down
+            key: j
+            command: resize-pane -D
+            transient: true
+          - name: Up
+            key: k
+            command: resize-pane -U
+            transient: true
+          - name: Right
+            key: l
+            command: resize-pane -R
+            transient: true
+          - name: Left more
+            key: H
+            command: resize-pane -L 10
+            transient: true
+          - name: Down more
+            key: J
+            command: resize-pane -D 10
+            transient: true
+          - name: Up more
+            key: K
+            command: resize-pane -U 10
+            transient: true
+          - name: Right more
+            key: L
+            command: resize-pane -R 10
+            transient: true
+      - name: Swap left
+        key: H
+        command: 'swap-pane -t "{left-of}"'
+      - name: Swap down
+        key: J
+        command: 'swap-pane -t "{down-of}"'
+      - name: Swap up
+        key: K
+        command: 'swap-pane -t "{up-of}"'
+      - name: Swap right
+        key: L
+        command: 'swap-pane -t "{right-of}"'
+      - name: Break into window
+        key: b
+        command: break-pane
+      - name: Yazi side pane
+        key: y
+        command: 'run-shell "$HOME/bin/tmux-yazi-pane toggle #{pane_id}"'
+      - name: Close
+        key: x
+        command: 'confirm-before -p "Close pane #P? (y/n)" kill-pane'
+  - name: +Layouts
+    key: l
+    menu:
+      - name: Open layout
+        key: o
+        command: 'display-popup -EE -w 70% -h 60% "$HOME/bin/tmux-workspace pick --pane #{pane_id}"'
+      - name: Open and adopt layout
+        key: O
+        command: 'display-popup -EE -w 70% -h 60% "$HOME/bin/tmux-workspace pick --pane #{pane_id} --adopt"'
+      - name: Apply current
+        key: a
+        command: 'run-shell "$HOME/bin/tmux-workspace apply --session-id #{q:session_id}"'
+      - name: Repair current
+        key: r
+        command: >-
+          confirm-before -p "Rebuild drifted managed windows? (y/n)"
+          { run-shell "$HOME/bin/tmux-workspace repair --session-id #{q:session_id} --yes" }
+  - name: +Copy
+    key: c
+    menu:
+      - name: Copy / search mode
+        key: c
+        command: copy-mode
+      - name: Search forward
+        key: '/'
+        command: >-
+          copy-mode ; command-prompt -p "Search forward:"
+          { send-keys -X search-forward "%%" }
+      - name: Search backward
+        key: '?'
+        command: >-
+          copy-mode ; command-prompt -p "Search backward:"
+          { send-keys -X search-backward "%%" }
+      - name: Choose buffer
+        key: b
+        command: choose-buffer -Z
+      - name: Paste buffer
+        key: p
+        command: paste-buffer
+  - separator: true
+  - name: Detach
+    key: d
+    command: detach-client
+  - name: Reload config
+    key: r
+    macro: reload-config
+  - name: Show messages
+    key: m
+    command: show-messages
+  - name: Show bindings
+    key: '?'
+    command: list-keys -N

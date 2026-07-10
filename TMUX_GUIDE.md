@@ -45,11 +45,70 @@ index-targeted commands must use
 `tmux new-session -e DOTFILES_TMUX_TEMPLATE=skip ...`; `hs-*` sessions opt out
 automatically.
 
+## Command Center
+
+Press `Ctrl+A Space`. The repo-owned menu groups the complete lifecycle:
+
+- `s` — switch, create, rename, close, save/restore all state, or close detached managed layouts
+- `w` — choose, create typed windows, reorder, rename, or close windows
+- `p` — navigate, split, resize, swap, break, or close panes
+- `l` — open, reapply, or repair a declarative workspace layout
+
+The active session name remains visible beside the current folder in the
+bottom bar. Resurrect and Continuum save structure, directories, pane contents,
+and an allowlist of interactive processes in the background. Neovim, Codex, and
+Yazi are restored; arbitrary development commands are deliberately not
+restarted automatically. A workspace sidecar restores the custom layout IDs
+that Resurrect itself does not retain.
+
+## React-like layouts
+
+Layouts live in `~/.config/tmux/layouts/*.tmux.tsx`. They use a small JSX
+runtime built into `tmux-workspace`; React and `node_modules` are not involved.
+
+```tsx
+const Core = () => <><Terminal /><Codex /><Nvim focus /></>
+
+export default (
+  <Session root="$PROJECT_ROOT">
+    <Core />
+    <Window id="runtime" name="runtime">
+      <Cols sizes="2fr 1fr">
+        <Pane id="server" run="bun run dev" />
+        <Rows>
+          <Pane id="tests" run="bun test --watch" />
+          <Pane id="shell" />
+        </Rows>
+      </Cols>
+    </Window>
+  </Session>
+)
+```
+
+```bash
+tmux-workspace list
+tmux-workspace plan project --root "$PWD"
+tmux-workspace open project --root "$PWD"
+tmux-workspace apply project --root "$PWD"
+tmux-workspace repair project --root "$PWD" --yes
+```
+
+`apply` creates missing windows without restarting healthy panes. If the pane
+tree has drifted, it reports the affected window; `repair --yes` replaces only
+those managed windows. Layout-created sessions opt out of the automatic
+three-window hook and retain typed terminal/Codex/Neovim metadata. A layout
+will not take over a same-named unmanaged session unless `--adopt` is supplied.
+
+Layouts are trusted local configuration: component functions execute while
+`validate` or `plan` loads the file, while each pane's `run` command is deferred
+until that pane is first created.
+
 ## Key Bindings
 
 ### Panes (most common)
 - `Ctrl+A \|` - Split pane horizontally (keep current directory)
 - `Ctrl+A -` - Split pane vertically (keep current directory)
+- `Ctrl+A h/j/k/l` - Move between panes
 - `Cmd+B` in Ghostty - Toggle one Yazi 40%-wide full-height right pane
 - `Ctrl+A z` - Toggle zoom for the current pane
 
@@ -71,11 +130,12 @@ automatically.
 - `Ctrl+A [` - Enter copy mode
 - `v` - Start selection
 - `y` - Copy to clipboard
+- `/` / `?` - Search forward or backward
 - `Ctrl+A ]` - Paste
 
 ### Misc
-- `Ctrl+A r` - Reload config
-- `Ctrl+A ?` - List all key bindings
+- `Ctrl+A Space r` - Reload config
+- `Ctrl+A Space ?` - List all key bindings
 
 ## Recommended Workflow
 

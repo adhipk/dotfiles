@@ -2,8 +2,8 @@
 # man-me: name=install.sh
 # man-me: category=Repository Setup
 # man-me: usage=./install.sh [chezmoi apply args...]
-# man-me: description=Apply this source state, install tmux plugins, reload tmux, and build the native ProjectDeck and shortcut-guide apps on macOS.
-# man-me: tags=install setup apply chezmoi dotfiles tmux plugins tpm projectdeck whichkey shortcut guide bootstrap
+# man-me: description=Apply this source state, install tmux plugins and the managed command center, reload tmux, and build the native ProjectDeck and shortcut-guide apps on macOS.
+# man-me: tags=install setup apply chezmoi dotfiles tmux plugins tpm command center projectdeck whichkey shortcut guide bootstrap
 set -euo pipefail
 
 DOTFILES_DIR="${DOTFILES_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
@@ -89,6 +89,28 @@ install_tmux_plugins() {
         "$installer"
 }
 
+install_tmux_command_center() {
+    local plugin_dir="$CHEZMOI_DESTINATION/.tmux/plugins/tmux-which-key"
+    local managed_config="$CHEZMOI_DESTINATION/.config/tmux/which-key.yaml"
+    local expected_revision="85fb9756447b989f3b94e515d1e6ee7fec76cba2"
+
+    if [[ ! -d "$plugin_dir" ]]; then
+        echo "[dotfiles] tmux-which-key is missing after TPM installation: $plugin_dir" >&2
+        return 1
+    fi
+    if [[ ! -f "$managed_config" ]]; then
+        echo "[dotfiles] managed tmux command-center config is missing: $managed_config" >&2
+        return 1
+    fi
+
+    if [[ -d "$plugin_dir/.git" ]]; then
+        echo "[dotfiles] pinning tmux-which-key to $expected_revision..."
+        git -C "$plugin_dir" checkout --quiet --detach "$expected_revision"
+    fi
+    echo "[dotfiles] linking tmux command-center configuration..."
+    ln -sfn "$managed_config" "$plugin_dir/config.yaml"
+}
+
 reload_tmux_config() {
     command -v tmux >/dev/null 2>&1 || return 0
     tmux list-sessions >/dev/null 2>&1 || return 0
@@ -117,6 +139,7 @@ if [[ "$is_dry_run" == true ]]; then
 else
     ensure_workspace_directories
     install_tmux_plugins
+    install_tmux_command_center
     reload_tmux_config
     build_projectdeck
     build_whichkey

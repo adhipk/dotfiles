@@ -3,7 +3,7 @@
 # man-me: usage=make test; make install; make diff; make watch; make reload
 # man-me: description=Convenience wrappers for tests, source-state and tmux-plugin installation, diff, watch, reload, and native HUD builds.
 # man-me: tags=make setup test install apply diff watch reload tmux tpm projectdeck whichkey shortcuts
-.PHONY: test test-colorscheme test-configs test-projects test-tmux-session-template test-tmux-border-accent test-tmux-yazi-pane test-source-state test-install test-integration test-whichkey install apply apply-debug compile sync diff watch reload clean help build-projectdeck build-whichkey
+.PHONY: test test-colorscheme test-configs test-projects test-tmux-session-template test-tmux-workspace test-tmux-which-key test-tmux-persistence test-tmux-border-accent test-tmux-yazi-pane test-source-state test-install test-integration test-whichkey install apply apply-debug compile sync diff watch reload clean help build-projectdeck build-whichkey
 
 # Default target
 help:
@@ -14,6 +14,9 @@ help:
 	@echo "  make test-colorscheme  - Run colorscheme tests only"
 	@echo "  make test-configs      - Run config file tests only"
 	@echo "  make test-tmux-session-template - Run tmux template tests only"
+	@echo "  make test-tmux-workspace - Run declarative tmux layout tests only"
+	@echo "  make test-tmux-which-key - Run tmux command-center tests only"
+	@echo "  make test-tmux-persistence - Run the isolated Resurrect round-trip"
 	@echo "  make test-tmux-border-accent - Run tmux/JankyBorders accent tests only"
 	@echo "  make test-tmux-yazi-pane - Run tmux Yazi side-pane tests only"
 	@echo "  make test-source-state - Run chezmoi source-state tests only"
@@ -47,6 +50,15 @@ test-projects:
 
 test-tmux-session-template:
 	@./tests/test_tmux_session_template.sh
+
+test-tmux-workspace:
+	@./tests/test_tmux_workspace.sh
+
+test-tmux-which-key:
+	@./tests/test_tmux_which_key.sh
+
+test-tmux-persistence:
+	@./tests/test_tmux_persistence.sh
 
 test-tmux-border-accent:
 	@./tests/test_tmux_border_accent.sh

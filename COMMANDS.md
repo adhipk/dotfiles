@@ -25,6 +25,7 @@ These commands are installed into `~/bin`, which `home/dot_zshrc` adds to
 | `setup-yabai-sa` | Authorize the currently installed yabai binary with a checksum-scoped sudoers rule, load its scripting addition, and restart the service after the required SIP setup. | [`home/bin/executable_setup-yabai-sa`](home/bin/executable_setup-yabai-sa) |
 | `tmux-session-picker` | Select and switch to an existing tmux session with `sesh` + `fzf`. | [`home/bin/executable_tmux-session-picker`](home/bin/executable_tmux-session-picker) |
 | `tmux-session-template` | Apply and navigate the standard `terminal:0`, `codex:1`, `nvim:2` tmux window types. The new-session hook calls guarded `auto`, scratchpads call `ensure`, and the type shortcuts call `cycle` or `new`. | [`home/bin/executable_tmux-session-template`](home/bin/executable_tmux-session-template) |
+| `tmux-workspace` | Validate, plan, open, apply, or explicitly repair import-free React-like `.tmux.tsx` session layouts while preserving healthy running panes. | [`home/bin/executable_tmux-workspace`](home/bin/executable_tmux-workspace) |
 | `tmux-sessionizer-zoxide` | Pick from existing tmux sessions or zoxide-ranked directories and connect via `sesh`. | [`home/bin/executable_tmux-sessionizer-zoxide`](home/bin/executable_tmux-sessionizer-zoxide) |
 | `tmux-sessionizer` | Compatibility wrapper for `-s <index>` and interactive selection, backed by `sesh`. | [`home/bin/executable_tmux-sessionizer`](home/bin/executable_tmux-sessionizer) |
 | `unescape-buffer` | Read escaped text from stdin and write unescaped newlines, tabs, carriage returns, quotes, and backslashes to stdout. Implemented in Node.js. | [`home/bin/executable_unescape-buffer`](home/bin/executable_unescape-buffer) |
@@ -152,12 +153,22 @@ is preserved as-is. Compound/orchestrated creators that add their own windows
 or queue index-targeted tmux commands must opt out on their `new-session` call
 with `-e DOTFILES_TMUX_TEMPLATE=skip`; `hs-*` sessions are also excluded.
 
+`tmux-workspace open project --root DIR` builds the managed project layout from
+`~/.config/tmux/layouts/project.tmux.tsx`. The custom Bun JSX runtime supports
+local reusable components plus `Session`, `Window`, `Terminal`, `Codex`,
+`Nvim`, `Cols`, `Rows`, and `Pane` without React or a package install. Repeated
+`apply` is non-destructive; structural drift requires `repair --yes`, and a
+same-named unmanaged session requires explicit `--adopt`. Layout files are
+trusted local code: component definitions run during load, while pane `run`
+commands start only when their pane is created.
+
 ## Repository Commands
 
 Run `./bootstrap.sh` on a new Mac. It installs Homebrew when needed, installs
-the `Brewfile` (including the Codex CLI/app), delegates the chezmoi apply to
-`./install.sh`, installs the TPM-managed tmux plugins, creates `~/projects`,
-builds the native HUDs, and starts the yabai and skhd launch services.
+the `Brewfile` (including Bun, Python, and the Codex CLI/app), delegates the
+chezmoi apply to `./install.sh`, installs the TPM-managed tmux plugins and
+repo-owned command center, creates `~/projects`, builds the native HUDs, and
+starts the yabai and skhd launch services.
 
 Run `./install.sh [CHEZMOI APPLY ARG ...]` to apply this checkout. Arguments are
 passed through to `chezmoi apply`. A real apply also installs declared tmux
@@ -178,6 +189,9 @@ DOTFILES_DEBUG=1 ./install.sh
 | `make test-colorscheme` | Run colorscheme tests. |
 | `make test-configs` | Run skhd and yabai configuration tests. |
 | `make test-tmux-session-template` | Run the isolated tmux template lifecycle tests. |
+| `make test-tmux-workspace` | Run the React-like layout lifecycle tests. |
+| `make test-tmux-which-key` | Build and exercise the repo-owned tmux command center. |
+| `make test-tmux-persistence` | Run an isolated Resurrect save/kill/restore round-trip. |
 | `make test-whichkey` | Build and exercise the shortcut-guide parser and search model. |
 | `make test-source-state` | Run chezmoi source-state tests. |
 | `make test-install` | Run disposable installer tests. |
@@ -192,7 +206,7 @@ DOTFILES_DEBUG=1 ./install.sh
 
 The test runner is [`tests/run_all_tests.sh`](tests/run_all_tests.sh). Its
 individual suites are `test_colorscheme.sh`, `test_configs.sh`,
-`test_projects.sh`, `test_tmux_session_template.sh`, `test_tmux_border_accent.sh`, `test_tmux_yazi_pane.sh`,
+`test_projects.sh`, `test_tmux_session_template.sh`, `test_tmux_workspace.sh`, `test_tmux_which_key.sh`, `test_tmux_persistence.sh`, `test_tmux_border_accent.sh`, `test_tmux_yazi_pane.sh`,
 `test_whichkey.sh`, `test_source_state.sh`,
 `test_default_apps.sh`, `test_install.sh`, and `test_integration.sh`.
 
@@ -218,6 +232,7 @@ Installed below `~/.config/skhd/`:
 | [`toggle_ghostty_quick_terminal.sh`](home/dot_config/skhd/executable_toggle_ghostty_quick_terminal.sh) | Create or toggle a bottom-third Ghostty scratchpad named `quick_terminal`. |
 | [`scratchpads`](home/bin/executable_scratchpads) | Manage one floating Ghostty terminal scratchpad while switching between separate tmux sessions. Scratchpad Ghostty windows force opaque black, while normal Ghostty windows keep the global transparent background. `scratchpads open codex` targets `dotfiles`; `scratchpads open projects` targets `projects`. Both tmux sessions keep `terminal` at window `0`, `codex` at `1`, and `nvim` at `2`. |
 | [`tmux-border-accent`](home/bin/executable_tmux-border-accent) | Start JankyBorders with the tiled-layout geometry and keep the focused Ghostty border synchronized with its tmux session accent. |
+| [`tmux-workspace`](home/bin/executable_tmux-workspace) | Reconcile stable session/window/pane IDs from managed `.tmux.tsx` layouts. New sessions skip the automatic template; healthy panes and their commands survive repeated applies. |
 | [`tmux-yazi-pane`](home/bin/executable_tmux-yazi-pane) | Toggle one marked full-height Yazi side pane per tmux window. |
 | [`whichkey`](scripts/whichkey/WhichKey.swift) | Source-owned SwiftUI shortcut browser. It parses the live `~/.skhdrc`, searches by captured key chord or text, provides categories and mouse/keyboard selection, and keeps raw commands in a separate detail pane. Built locally to `~/.config/skhd/whichkey`. |
 
@@ -276,6 +291,7 @@ operations to these shortcuts:
 | `Ctrl+0/1/2` in tmux | Cycle windows tagged as `terminal`, `codex`, or `nvim`, including manually renamed duplicates. |
 | `Ctrl+Shift+0/1/2` in tmux | Create a `terminal`, `codex`, or `nvim` window in the current pane's directory and switch to it. |
 | `Ctrl+3..9` in tmux | Select the exact tmux window index. |
+| `Ctrl+A Space` in tmux | Open the repo-owned command center for sessions, windows, panes, persistence, copy mode, and declarative layouts. |
 | `Alt+Shift+Backtick` | Create a new terminal window on the focused space. |
 | `Alt+Shift+Backslash` | Toggle zen mode. In zen mode, terminal focus plus `Alt+1` browser and `Alt+2` Codex focus still work; `Alt+3..5` are disabled. |
 | `Ctrl+Alt+w`, `Ctrl+Alt+z` | Close or minimize the current window. |

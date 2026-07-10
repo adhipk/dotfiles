@@ -1,0 +1,1395 @@
+#!/usr/bin/env bun
+// man-me: name=tmux-workspace
+// man-me: category=Terminal and Sessions
+// man-me: usage=tmux-workspace open project [--root DIR]; tmux-workspace apply [LAYOUT]; tmux-workspace repair [LAYOUT] --yes
+// man-me: description=Build and repair tmux sessions from compact React-like .tmux.tsx layouts.
+// man-me: tags=tmux workspace session layout jsx tsx terminal codex nvim panes
+
+import { createHash } from "node:crypto"
+import { spawnSync } from "node:child_process"
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs"
+import {
+  basename,
+  isAbsolute,
+  join,
+  resolve,
+} from "node:path"
+
+const home = process.env.HOME
+if (!home) {
+  throw new Error("tmux-workspace: HOME is not set")
+}
+
+const configRoot = process.env.TMUX_WORKSPACE_CONFIG_HOME
+  ?? join(home, ".config", "tmux")
+const layoutDirectory = process.env.TMUX_WORKSPACE_LAYOUT_DIR
+  ?? join(configRoot, "layouts")
+const tmuxSocket = process.env.TMUX_WORKSPACE_TMUX_SOCKET ?? ""
+const stateRoot = process.env.TMUX_WORKSPACE_STATE_HOME
+  ?? join(process.env.XDG_STATE_HOME ?? join(home, ".local", "state"), "tmux-workspace")
+const persistenceFile = join(stateRoot, "resurrect.json")
+
+const SESSION_LAYOUT_OPTION = "@dotfiles_workspace"
+const SESSION_LAYOUT_PATH_OPTION = "@dotfiles_workspace_path"
+const SESSION_ROOT_OPTION = "@dotfiles_workspace_root"
+const WINDOW_ID_OPTION = "@dotfiles_workspace_window_id"
+const WINDOW_TYPE_OPTION = "@dotfiles_window_type"
+const SPEC_HASH_OPTION = "@dotfiles_workspace_spec_hash"
+const PANE_ID_OPTION = "@dotfiles_workspace_pane_id"
+
+const Fragment = Symbol("tmux-workspace-fragment")
+
+function flatten(values, result = []) {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      flatten(value, result)
+    } else if (value !== null && value !== undefined && value !== false) {
+      result.push(value)
+    }
+  }
+  return result
+}
+
+function element(kind, props = {}) {
+  const { children = [], ...attributes } = props
+  return {
+    __tmuxWorkspaceElement: true,
+    kind,
+    props: attributes,
+    children: flatten(Array.isArray(children) ? children : [children]),
+  }
+}
+
+function h(type, props, ...children) {
+  const nextProps = { ...(props ?? {}), children: flatten(children) }
+  if (type === Fragment) {
+    return nextProps.children
+  }
+  if (typeof type === "function") {
+    return type(nextProps)
+  }
+  if (typeof type === "string") {
+    return element(type, nextProps)
+  }
+  throw new Error("tmux-workspace: invalid JSX element")
+}
+
+const component = (kind) => (props) => element(kind, props)
+const Session = component("Session")
+const Window = component("Window")
+const Pane = component("Pane")
+const Rows = component("Rows")
+const Cols = component("Cols")
+
+function Terminal(props = {}) {
+  return Window({
+    id: "terminal",
+    name: "terminal",
+    type: "terminal",
+    index: 0,
+    ...props,
+  })
+}
+
+function Codex(props = {}) {
+  return Window({
+    id: "codex",
+    name: "codex",
+    type: "codex",
+    index: 1,
+    run: "codex",
+    ...props,
+  })
+}
+
+function Nvim(props = {}) {
+  return Window({
+    id: "nvim",
+    name: "nvim",
+    type: "nvim",
+    index: 2,
+    run: "nvim",
+    ...props,
+  })
+}
+
+globalThis.__tmuxWorkspaceJsx = {
+  h,
+  Fragment,
+  Session,
+  Window,
+  Pane,
+  Rows,
+  Cols,
+  Terminal,
+  Codex,
+  Nvim,
+}
+
+function usage(stream = process.stdout) {
+  stream.write(`Usage:
+  tmux-workspace list
+  tmux-workspace validate LAYOUT [--root DIR]
+  tmux-workspace plan LAYOUT [--root DIR] [--session NAME] [--json]
+  tmux-workspace open LAYOUT [--root DIR] [--session NAME] [--detached]
+  tmux-workspace apply [LAYOUT] [--root DIR] [--session NAME] [--adopt]
+  tmux-workspace repair [LAYOUT] [--root DIR] [--session NAME] --yes [--prune]
+  tmux-workspace pick [--root DIR]
+  tmux-workspace clean [--yes]
+
+LAYOUT is a name from ${layoutDirectory} or a path to a .tmux.tsx file.
+`)
+}
+
+function fail(message) {
+  throw new Error(`tmux-workspace: ${message}`)
+}
+
+function parseArguments(argv) {
+  const command = argv.shift() ?? "help"
+  const options = {
+    root: "",
+    session: "",
+    sessionId: "",
+    pane: "",
+    json: false,
+    detached: false,
+    yes: false,
+    prune: false,
+    adopt: false,
+  }
+  const positional = []
+
+  while (argv.length > 0) {
+    const argument = argv.shift()
+    switch (argument) {
+      case "--root":
+        options.root = argv.shift() ?? fail("--root requires a directory")
+        break
+      case "--session":
+        options.session = argv.shift() ?? fail("--session requires a name")
+        break
+      case "--session-id":
+        options.sessionId = argv.shift() ?? fail("--session-id requires a tmux session id")
+        break
+      case "--pane":
+        options.pane = argv.shift() ?? fail("--pane requires a tmux pane id")
+        break
+      case "--json":
+        options.json = true
+        break
+      case "--detached":
+        options.detached = true
+        break
+      case "--yes":
+        options.yes = true
+        break
+      case "--prune":
+        options.prune = true
+        break
+      case "--adopt":
+        options.adopt = true
+        break
+      case "-h":
+      case "--help":
+        return { command: "help", options, positional: [] }
+      default:
+        if (argument.startsWith("-")) {
+          fail(`unknown option: ${argument}`)
+        }
+        positional.push(argument)
+    }
+  }
+
+  return { command, options, positional }
+}
+
+function layoutNames() {
+  if (!existsSync(layoutDirectory)) {
+    return []
+  }
+  return readdirSync(layoutDirectory)
+    .filter((name) => name.endsWith(".tmux.tsx"))
+    .map((name) => name.slice(0, -".tmux.tsx".length))
+    .sort()
+}
+
+function resolveLayoutPath(layout) {
+  if (!layout) {
+    fail("a layout name or path is required")
+  }
+
+  const candidates = []
+  if (layout.includes("/") || layout.endsWith(".tsx")) {
+    candidates.push(resolve(layout))
+  } else {
+    candidates.push(join(layoutDirectory, `${layout}.tmux.tsx`))
+    candidates.push(join(layoutDirectory, layout))
+  }
+
+  const match = candidates.find((candidate) => existsSync(candidate))
+  if (!match) {
+    fail(`layout not found: ${layout}`)
+  }
+  return realpathSync(match)
+}
+
+function layoutNameFromPath(path) {
+  return basename(path).replace(/\.tmux\.tsx$/, "")
+}
+
+async function loadLayout(path) {
+  const source = readFileSync(path, "utf8")
+  const scan = new Bun.Transpiler({ loader: "tsx" }).scan(source)
+  if (scan.imports.length > 0) {
+    fail(`${path}: imports are not supported; declare reusable components in the layout file`)
+  }
+
+  const prelude = `const { h, Fragment, Session, Window, Pane, Rows, Cols, Terminal, Codex, Nvim } = globalThis.__tmuxWorkspaceJsx;\n`
+  const transpiler = new Bun.Transpiler({
+    loader: "tsx",
+    tsconfig: {
+      compilerOptions: {
+        jsx: "react",
+        jsxFactory: "h",
+        jsxFragmentFactory: "Fragment",
+      },
+    },
+  })
+
+  let output
+  try {
+    output = transpiler.transformSync(`${prelude}${source}`)
+  } catch (error) {
+    fail(`${path}: ${error.message}`)
+  }
+
+  const sourceUrl = path.replaceAll("\\", "/").replaceAll(" ", "%20")
+  const encoded = Buffer.from(`${output}\n//# sourceURL=${sourceUrl}`).toString("base64")
+  let module
+  try {
+    module = await import(`data:text/javascript;base64,${encoded}`)
+  } catch (error) {
+    fail(`${path}: ${error.message}`)
+  }
+
+  if (!("default" in module)) {
+    fail(`${path}: layout must export one default <Session> element`)
+  }
+  return module.default
+}
+
+function assertElement(value, location) {
+  if (!value || value.__tmuxWorkspaceElement !== true) {
+    fail(`${location}: expected a tmux JSX element`)
+  }
+}
+
+function assertKnownProps(node, allowed, location) {
+  const unknown = Object.keys(node.props).filter((key) => !allowed.includes(key))
+  if (unknown.length > 0) {
+    fail(`${location}: unsupported ${node.kind} prop${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}`)
+  }
+}
+
+function optionalString(value, name, location) {
+  if (value === undefined) {
+    return ""
+  }
+  if (typeof value !== "string") {
+    fail(`${location}: ${name} must be a string`)
+  }
+  return value
+}
+
+function optionalBoolean(value, name, location) {
+  if (value === undefined) {
+    return false
+  }
+  if (typeof value !== "boolean") {
+    fail(`${location}: ${name} must be a boolean`)
+  }
+  return value
+}
+
+function parseIndex(value, fallback, location) {
+  if (value === undefined) {
+    return fallback
+  }
+  if (!Number.isInteger(value) || value < 0) {
+    fail(`${location}: index must be a non-negative integer`)
+  }
+  return value
+}
+
+function parseWeights(value, childCount, location) {
+  if (value === undefined) {
+    return Array(childCount).fill(1)
+  }
+
+  const tokens = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.trim().split(/\s+/)
+      : []
+  if (tokens.length !== childCount) {
+    fail(`${location}: sizes must contain one value for each child`)
+  }
+
+  return tokens.map((token) => {
+    if (typeof token === "number" && token > 0) {
+      return token
+    }
+    const match = String(token).match(/^(\d+(?:\.\d+)?)(?:fr|%)?$/)
+    if (!match || Number(match[1]) <= 0) {
+      fail(`${location}: invalid size: ${token}`)
+    }
+    return Number(match[1])
+  })
+}
+
+function parsePaneTree(node, location, fallbackId, paneIds) {
+  assertElement(node, location)
+  if (node.kind === "Pane") {
+    assertKnownProps(node, ["id", "root", "run", "focus", "title"], location)
+    if (node.children.length > 0) {
+      fail(`${location}: Pane cannot contain child elements`)
+    }
+    const id = optionalString(node.props.id, "id", location) || fallbackId
+    if (paneIds.has(id)) {
+      fail(`${location}: duplicate pane id: ${id}`)
+    }
+    paneIds.add(id)
+    return {
+      kind: "pane",
+      id,
+      root: optionalString(node.props.root, "root", location),
+      run: optionalString(node.props.run, "run", location),
+      title: optionalString(node.props.title, "title", location),
+      focus: optionalBoolean(node.props.focus, "focus", location),
+    }
+  }
+
+  if (node.kind !== "Rows" && node.kind !== "Cols") {
+    fail(`${location}: expected Pane, Rows, or Cols; received ${node.kind}`)
+  }
+  assertKnownProps(node, ["sizes"], location)
+  if (node.children.length < 2) {
+    fail(`${location}: ${node.kind} requires at least two children`)
+  }
+
+  const children = node.children.map((child, index) =>
+    parsePaneTree(child, `${location}/${node.kind}[${index}]`, `${fallbackId}-${index + 1}`, paneIds))
+  return {
+    kind: node.kind === "Rows" ? "rows" : "cols",
+    weights: parseWeights(node.props.sizes, children.length, location),
+    children,
+  }
+}
+
+function parseSession(elementValue, path) {
+  const roots = flatten(Array.isArray(elementValue) ? elementValue : [elementValue])
+  if (roots.length !== 1) {
+    fail(`${path}: layout must export exactly one <Session>`)
+  }
+
+  const session = roots[0]
+  assertElement(session, path)
+  if (session.kind !== "Session") {
+    fail(`${path}: layout root must be <Session>; received ${session.kind}`)
+  }
+  assertKnownProps(session, ["name", "root"], `${path}:Session`)
+  if (session.children.length === 0) {
+    fail(`${path}: Session must contain at least one window`)
+  }
+
+  const windowIds = new Set()
+  const windowIndices = new Set()
+  const windows = session.children.map((windowNode, position) => {
+    const location = `${path}:Session/Window[${position}]`
+    assertElement(windowNode, location)
+    if (windowNode.kind !== "Window") {
+      fail(`${location}: Session children must be windows; received ${windowNode.kind}`)
+    }
+    assertKnownProps(windowNode, ["id", "name", "type", "index", "root", "run", "focus"], location)
+
+    const type = optionalString(windowNode.props.type, "type", location)
+    const name = optionalString(windowNode.props.name, "name", location) || type || `window-${position + 1}`
+    const id = optionalString(windowNode.props.id, "id", location) || name
+    const index = parseIndex(windowNode.props.index, position, location)
+    if (windowIds.has(id)) {
+      fail(`${location}: duplicate window id: ${id}`)
+    }
+    if (windowIndices.has(index)) {
+      fail(`${location}: duplicate window index: ${index}`)
+    }
+    windowIds.add(id)
+    windowIndices.add(index)
+
+    const paneIds = new Set()
+    let tree
+    if (windowNode.children.length === 0) {
+      tree = {
+        kind: "pane",
+        id: "main",
+        root: "",
+        run: optionalString(windowNode.props.run, "run", location),
+        title: "",
+        focus: false,
+      }
+    } else {
+      if (windowNode.props.run !== undefined) {
+        fail(`${location}: use Pane run=... when Window has a pane layout`)
+      }
+      if (windowNode.children.length !== 1) {
+        fail(`${location}: Window must contain exactly one Pane, Rows, or Cols root`)
+      }
+      tree = parsePaneTree(windowNode.children[0], `${location}/layout`, "main", paneIds)
+    }
+
+    return {
+      id,
+      name,
+      type,
+      index,
+      root: optionalString(windowNode.props.root, "root", location),
+      focus: optionalBoolean(windowNode.props.focus, "focus", location),
+      tree,
+    }
+  })
+
+  const focusedWindows = windows.filter((window) => window.focus)
+  if (focusedWindows.length > 1) {
+    fail(`${path}: only one window may have focus`)
+  }
+
+  const paneFocuses = []
+  for (const window of windows) {
+    walkPanes(window.tree, (pane) => {
+      if (pane.focus) {
+        paneFocuses.push({ window, pane })
+      }
+    })
+  }
+  if (paneFocuses.length > 1) {
+    fail(`${path}: only one pane may have focus`)
+  }
+  if (focusedWindows.length === 1 && paneFocuses.length === 1
+      && focusedWindows[0].id !== paneFocuses[0].window.id) {
+    fail(`${path}: focused window and pane must belong to the same window`)
+  }
+
+  return {
+    name: optionalString(session.props.name, "name", `${path}:Session`),
+    root: optionalString(session.props.root, "root", `${path}:Session`) || "$PROJECT_ROOT",
+    windows,
+  }
+}
+
+function walkPanes(tree, callback) {
+  if (tree.kind === "pane") {
+    callback(tree)
+    return
+  }
+  for (const child of tree.children) {
+    walkPanes(child, callback)
+  }
+}
+
+function expandPath(value, projectRoot, baseRoot) {
+  let expanded = value || baseRoot
+  expanded = expanded.replace(/\$\{PROJECT_ROOT\}|\$PROJECT_ROOT/g, projectRoot)
+  if (expanded === "~" || expanded.startsWith("~/")) {
+    expanded = join(home, expanded.slice(2))
+  }
+  expanded = expanded.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g, (_, braced, bare) => {
+    const name = braced || bare
+    if (name === "PROJECT_ROOT") {
+      return projectRoot
+    }
+    if (!(name in process.env)) {
+      fail(`undefined environment variable in layout path: ${name}`)
+    }
+    return process.env[name]
+  })
+  const absolute = isAbsolute(expanded) ? expanded : resolve(baseRoot, expanded)
+  if (!existsSync(absolute)) {
+    fail(`layout directory does not exist: ${absolute}`)
+  }
+  return realpathSync(absolute)
+}
+
+function sanitizeDerivedSessionName(name) {
+  const sanitized = name.trim().replace(/[.:]/g, "-").replace(/\s+/g, "-")
+  return sanitized || "workspace"
+}
+
+function resolveSpec(rawSpec, path, options) {
+  const projectRootCandidate = resolve(options.root || (options.pane ? panePath(options.pane) : process.cwd()))
+  if (!existsSync(projectRootCandidate)) {
+    fail(`project root does not exist: ${projectRootCandidate}`)
+  }
+  const projectRoot = realpathSync(projectRootCandidate)
+  const sessionRoot = expandPath(rawSpec.root, projectRoot, projectRoot)
+  const explicitName = options.session || rawSpec.name
+  const sessionName = explicitName || sanitizeDerivedSessionName(basename(sessionRoot))
+  if (sessionName.includes(":") || sessionName.includes(".")) {
+    fail(`session names cannot contain ':' or '.': ${sessionName}`)
+  }
+
+  const windows = rawSpec.windows.map((window) => {
+    const windowRoot = expandPath(window.root, projectRoot, sessionRoot)
+    const resolveTree = (tree) => {
+      if (tree.kind === "pane") {
+        return {
+          ...tree,
+          root: expandPath(tree.root, projectRoot, windowRoot),
+        }
+      }
+      return { ...tree, children: tree.children.map(resolveTree) }
+    }
+    const resolved = { ...window, root: windowRoot, tree: resolveTree(window.tree) }
+    resolved.hash = hashSpec({ root: resolved.root, tree: resolved.tree })
+    return resolved
+  })
+
+  return {
+    layout: layoutNameFromPath(path),
+    path,
+    name: sessionName,
+    root: sessionRoot,
+    windows,
+  }
+}
+
+function hashSpec(value) {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 16)
+}
+
+function tmuxArguments(args) {
+  return tmuxSocket ? ["-L", tmuxSocket, ...args] : args
+}
+
+function tmux(args, { allowFailure = false, inherit = false } = {}) {
+  const result = spawnSync("tmux", tmuxArguments(args), {
+    encoding: "utf8",
+    env: process.env,
+    stdio: inherit ? "inherit" : ["ignore", "pipe", "pipe"],
+  })
+  if (result.error) {
+    fail(`could not run tmux: ${result.error.message}`)
+  }
+  if (result.status !== 0 && !allowFailure) {
+    const detail = (result.stderr || result.stdout || "tmux command failed").trim()
+    fail(`${args[0]}: ${detail}`)
+  }
+  return {
+    ok: result.status === 0,
+    stdout: inherit ? "" : (result.stdout ?? "").trimEnd(),
+    stderr: inherit ? "" : (result.stderr ?? "").trimEnd(),
+  }
+}
+
+function requireTmux() {
+  const version = spawnSync("tmux", ["-V"], { encoding: "utf8" })
+  if (version.error || version.status !== 0) {
+    fail("tmux is required")
+  }
+}
+
+function sessionRows() {
+  const result = tmux(["list-sessions", "-F", "#{session_id}\t#{session_name}\t#{session_attached}"], { allowFailure: true })
+  if (!result.ok) {
+    return []
+  }
+  return result.stdout.split("\n").filter(Boolean).map((line) => {
+    const [id, name, attached] = line.split("\t")
+    return { id, name, attached: Number(attached) }
+  })
+}
+
+function findSessionByName(name) {
+  return sessionRows().find((session) => session.name === name)
+}
+
+function findSessionById(id) {
+  return sessionRows().find((session) => session.id === id)
+}
+
+function panePath(paneId) {
+  requireTmux()
+  const path = tmux(["display-message", "-p", "-t", paneId, "#{pane_current_path}"]).stdout
+  if (!path) {
+    fail(`could not resolve pane directory: ${paneId}`)
+  }
+  return path
+}
+
+function createOrFindSession(spec) {
+  let session = findSessionByName(spec.name)
+  let created = false
+  if (!session) {
+    tmux([
+      "new-session",
+      "-d",
+      "-e",
+      "DOTFILES_TMUX_TEMPLATE=skip",
+      "-s",
+      spec.name,
+      "-c",
+      spec.root,
+      "-n",
+      "__workspace__",
+    ])
+    session = findSessionByName(spec.name)
+    if (!session) {
+      fail(`tmux did not create session: ${spec.name}`)
+    }
+    created = true
+  }
+  return { session, created }
+}
+
+function setSessionMetadata(sessionId, spec) {
+  tmux(["set-option", "-q", "-t", sessionId, SESSION_LAYOUT_OPTION, spec.layout])
+  tmux(["set-option", "-q", "-t", sessionId, SESSION_LAYOUT_PATH_OPTION, spec.path])
+  tmux(["set-option", "-q", "-t", sessionId, SESSION_ROOT_OPTION, spec.root])
+  tmux(["set-option", "-q", "-t", sessionId, "@dotfiles_tmux_template", "workspace"])
+  tmux(["set-option", "-q", "-t", sessionId, "base-index", "0"])
+}
+
+function getSessionOption(sessionId, option) {
+  return tmux(["show-options", "-qv", "-t", sessionId, option], { allowFailure: true }).stdout
+}
+
+function assertSessionCompatible(session, created, spec, options) {
+  if (created) {
+    return
+  }
+  const currentPath = getSessionOption(session.id, SESSION_LAYOUT_PATH_OPTION)
+  const currentRoot = getSessionOption(session.id, SESSION_ROOT_OPTION)
+  if (!currentPath) {
+    if (!options.adopt) {
+      fail(`session ${session.name} already exists and is unmanaged; rerun with --adopt to merge it explicitly`)
+    }
+    return
+  }
+  if ((currentPath !== spec.path || currentRoot !== spec.root) && !options.adopt) {
+    fail(`session ${session.name} belongs to another layout or root; rerun with --adopt to replace its workspace ownership`)
+  }
+}
+
+function windowRows(sessionId) {
+  const output = tmux([
+    "list-windows",
+    "-t",
+    sessionId,
+    "-F",
+    `#{window_id}\t#{window_index}\t#{window_name}\t#{${WINDOW_ID_OPTION}}\t#{${WINDOW_TYPE_OPTION}}\t#{${SPEC_HASH_OPTION}}\t#{window_active}`,
+  ]).stdout
+  return output.split("\n").filter(Boolean).map((line) => {
+    const [id, index, name, workspaceId, type, hash, active] = line.split("\t")
+    return { id, index: Number(index), name, workspaceId, type, hash, active: active === "1" }
+  })
+}
+
+function paneRows(windowId) {
+  const output = tmux([
+    "list-panes",
+    "-t",
+    windowId,
+    "-F",
+    `#{pane_id}\t#{pane_index}\t#{${PANE_ID_OPTION}}\t#{pane_current_path}\t#{pane_active}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}`,
+  ]).stdout
+  return output.split("\n").filter(Boolean).map((line) => {
+    const [id, index, workspaceId, root, active, left, top, width, height] = line.split("\t")
+    return {
+      id,
+      index: Number(index),
+      workspaceId,
+      root,
+      active: active === "1",
+      left: Number(left),
+      top: Number(top),
+      width: Number(width),
+      height: Number(height),
+    }
+  })
+}
+
+function expectedPaneIds(tree) {
+  const ids = []
+  walkPanes(tree, (pane) => ids.push(pane.id))
+  return ids.sort()
+}
+
+function paneTreeMatches(tree, panes) {
+  const paneByWorkspaceId = new Map(panes.map((pane) => [pane.workspaceId, pane]))
+
+  const inspect = (node) => {
+    if (node.kind === "pane") {
+      const pane = paneByWorkspaceId.get(node.id)
+      if (!pane) {
+        return null
+      }
+      return {
+        left: pane.left,
+        top: pane.top,
+        right: pane.left + pane.width - 1,
+        bottom: pane.top + pane.height - 1,
+        width: pane.width,
+        height: pane.height,
+      }
+    }
+
+    const bounds = node.children.map(inspect)
+    if (bounds.some((bound) => bound === null)) {
+      return null
+    }
+    const parent = {
+      left: Math.min(...bounds.map((bound) => bound.left)),
+      top: Math.min(...bounds.map((bound) => bound.top)),
+      right: Math.max(...bounds.map((bound) => bound.right)),
+      bottom: Math.max(...bounds.map((bound) => bound.bottom)),
+    }
+    parent.width = parent.right - parent.left + 1
+    parent.height = parent.bottom - parent.top + 1
+
+    for (let index = 0; index < bounds.length; index += 1) {
+      const bound = bounds[index]
+      if (node.kind === "cols") {
+        if (Math.abs(bound.top - parent.top) > 1 || Math.abs(bound.bottom - parent.bottom) > 1) {
+          return null
+        }
+        if (index > 0 && bound.left <= bounds[index - 1].right) {
+          return null
+        }
+      } else {
+        if (Math.abs(bound.left - parent.left) > 1 || Math.abs(bound.right - parent.right) > 1) {
+          return null
+        }
+        if (index > 0 && bound.top <= bounds[index - 1].bottom) {
+          return null
+        }
+      }
+    }
+
+    const spans = bounds.map((bound) => node.kind === "cols" ? bound.width : bound.height)
+    const actualTotal = spans.reduce((sum, span) => sum + span, 0)
+    const expectedTotal = node.weights.reduce((sum, weight) => sum + weight, 0)
+    const tolerance = Math.max(0.08, 2 / actualTotal)
+    for (let index = 0; index < spans.length; index += 1) {
+      const actualRatio = spans[index] / actualTotal
+      const expectedRatio = node.weights[index] / expectedTotal
+      if (Math.abs(actualRatio - expectedRatio) > tolerance) {
+        return null
+      }
+    }
+    return parent
+  }
+
+  return inspect(tree) !== null
+}
+
+function windowIsHealthy(row, spec) {
+  if (row.hash !== spec.hash) {
+    return false
+  }
+  const actualPanes = paneRows(row.id)
+  const actualIds = actualPanes.map((pane) => pane.workspaceId).sort()
+  const expectedIds = expectedPaneIds(spec.tree)
+  return actualPanes.length === expectedIds.length
+    && JSON.stringify(actualIds) === JSON.stringify(expectedIds)
+    && paneTreeMatches(spec.tree, actualPanes)
+}
+
+function markWindow(windowId, spec) {
+  tmux(["rename-window", "-t", windowId, spec.name])
+  tmux(["set-option", "-wq", "-t", windowId, WINDOW_ID_OPTION, spec.id])
+  tmux(["set-option", "-wq", "-t", windowId, SPEC_HASH_OPTION, spec.hash])
+  if (spec.type) {
+    tmux(["set-option", "-wq", "-t", windowId, WINDOW_TYPE_OPTION, spec.type])
+  } else {
+    tmux(["set-option", "-wu", "-t", windowId, WINDOW_TYPE_OPTION], { allowFailure: true })
+  }
+}
+
+function splitTree(tree, paneId, windowRoot, leaves) {
+  if (tree.kind === "pane") {
+    leaves.push({ paneId, spec: tree })
+    return
+  }
+
+  const [first, ...rest] = tree.children
+  const firstWeight = tree.weights[0]
+  const remainingWeight = tree.weights.slice(1).reduce((sum, weight) => sum + weight, 0)
+  const percentage = Math.max(1, Math.min(99,
+    Math.round((remainingWeight / (firstWeight + remainingWeight)) * 100)))
+  const direction = tree.kind === "cols" ? "-h" : "-v"
+  const newPaneId = tmux([
+    "split-window",
+    "-d",
+    "-P",
+    "-F",
+    "#{pane_id}",
+    direction,
+    "-p",
+    String(percentage),
+    "-c",
+    windowRoot,
+    "-t",
+    paneId,
+  ]).stdout
+
+  splitTree(first, paneId, windowRoot, leaves)
+  if (rest.length === 1) {
+    splitTree(rest[0], newPaneId, windowRoot, leaves)
+  } else {
+    splitTree({
+      kind: tree.kind,
+      weights: tree.weights.slice(1),
+      children: rest,
+    }, newPaneId, windowRoot, leaves)
+  }
+}
+
+function materializeWindow(windowId, spec) {
+  const panes = paneRows(windowId)
+  if (panes.length !== 1) {
+    fail(`new window ${spec.name} did not start with exactly one pane`)
+  }
+
+  const leaves = []
+  splitTree(spec.tree, panes[0].id, spec.root, leaves)
+  for (const leaf of leaves) {
+    const args = ["respawn-pane", "-k", "-c", leaf.spec.root, "-t", leaf.paneId]
+    if (leaf.spec.run) {
+      args.push(leaf.spec.run)
+    }
+    tmux(args)
+    tmux(["set-option", "-pq", "-t", leaf.paneId, PANE_ID_OPTION, leaf.spec.id])
+    if (leaf.spec.title) {
+      tmux(["select-pane", "-t", leaf.paneId, "-T", leaf.spec.title])
+    }
+  }
+  markWindow(windowId, spec)
+}
+
+function createFreshWindow(sessionId, spec) {
+  const windowId = tmux([
+    "new-window",
+    "-d",
+    "-P",
+    "-F",
+    "#{window_id}",
+    "-t",
+    `${sessionId}:`,
+    "-c",
+    spec.root,
+    "-n",
+    spec.name,
+  ]).stdout
+  try {
+    materializeWindow(windowId, spec)
+  } catch (error) {
+    tmux(["kill-window", "-t", windowId], { allowFailure: true })
+    throw error
+  }
+  return windowId
+}
+
+function adoptSinglePaneWindow(row, spec) {
+  const panes = paneRows(row.id)
+  if (panes.length !== 1 || spec.tree.kind !== "pane" || panes[0].root !== spec.tree.root) {
+    return false
+  }
+  tmux(["set-option", "-pq", "-t", panes[0].id, PANE_ID_OPTION, spec.tree.id])
+  if (spec.tree.title) {
+    tmux(["select-pane", "-t", panes[0].id, "-T", spec.tree.title])
+  }
+  markWindow(row.id, spec)
+  return true
+}
+
+function ensureWindowIndex(sessionId, windowId, targetIndex) {
+  const rows = windowRows(sessionId)
+  const current = rows.find((row) => row.id === windowId)
+  if (!current || current.index === targetIndex) {
+    return
+  }
+  const occupant = rows.find((row) => row.index === targetIndex)
+  if (occupant) {
+    tmux(["swap-window", "-d", "-s", windowId, "-t", occupant.id])
+  } else {
+    tmux(["move-window", "-d", "-s", windowId, "-t", `${sessionId}:${targetIndex}`])
+  }
+}
+
+function findAdoptableWindow(rows, spec, claimed) {
+  const candidates = rows.filter((row) => !claimed.has(row.id) && !row.workspaceId)
+  if (spec.type) {
+    return candidates.find((row) => row.type === spec.type)
+  }
+  return undefined
+}
+
+function repairWindow(sessionId, oldRow, spec) {
+  const replacementId = createFreshWindow(sessionId, spec)
+  let swapped = false
+  let oldRemoved = false
+  try {
+    tmux(["swap-window", "-d", "-s", replacementId, "-t", oldRow.id])
+    swapped = true
+    tmux(["kill-window", "-t", oldRow.id])
+    oldRemoved = true
+    ensureWindowIndex(sessionId, replacementId, spec.index)
+    return replacementId
+  } catch (error) {
+    if (!oldRemoved && swapped) {
+      tmux(["swap-window", "-d", "-s", replacementId, "-t", oldRow.id], { allowFailure: true })
+    }
+    if (!oldRemoved) {
+      tmux(["kill-window", "-t", replacementId], { allowFailure: true })
+    }
+    throw error
+  }
+}
+
+function focusLayout(sessionId, spec, windowIds) {
+  let targetWindow = spec.windows.find((window) => window.focus)
+  let targetPane = null
+  for (const window of spec.windows) {
+    walkPanes(window.tree, (pane) => {
+      if (pane.focus) {
+        targetWindow = window
+        targetPane = pane
+      }
+    })
+  }
+  targetWindow ??= spec.windows[0]
+  const windowId = windowIds.get(targetWindow.id)
+  if (!windowId) {
+    return
+  }
+  tmux(["select-window", "-t", windowId])
+  if (targetPane) {
+    const pane = paneRows(windowId).find((row) => row.workspaceId === targetPane.id)
+    if (pane) {
+      tmux(["select-pane", "-t", pane.id])
+    }
+  }
+}
+
+function acquireLock(sessionId) {
+  const channel = `dotfiles-workspace-${sessionId.replace(/^\$/, "")}`
+  tmux(["wait-for", "-L", channel])
+  return () => tmux(["wait-for", "-U", channel], { allowFailure: true })
+}
+
+function reconcile(spec, mode, options) {
+  requireTmux()
+  if ((mode === "repair" || options.prune) && !options.yes) {
+    fail("repair and prune require --yes")
+  }
+
+  const { session, created } = createOrFindSession(spec)
+  const release = acquireLock(session.id)
+  const drift = []
+  const windowIds = new Map()
+  try {
+    assertSessionCompatible(session, created, spec, options)
+    setSessionMetadata(session.id, spec)
+    let rows = windowRows(session.id)
+    const claimed = new Set()
+    let bootstrap = created ? rows.find((row) => row.name === "__workspace__") : null
+
+    for (const windowSpec of spec.windows) {
+      rows = windowRows(session.id)
+      let row = rows.find((candidate) => candidate.workspaceId === windowSpec.id)
+      let fresh = false
+
+      if (!row && bootstrap && !claimed.has(bootstrap.id)) {
+        row = bootstrap
+        fresh = true
+        bootstrap = null
+      }
+      if (!row) {
+        row = findAdoptableWindow(rows, windowSpec, claimed)
+      }
+      if (!row) {
+        const id = createFreshWindow(session.id, windowSpec)
+        row = windowRows(session.id).find((candidate) => candidate.id === id)
+        fresh = false
+      } else if (fresh) {
+        tmux(["respawn-window", "-k", "-c", windowSpec.root, "-t", row.id])
+        materializeWindow(row.id, windowSpec)
+      } else if (!row.workspaceId) {
+        if (!adoptSinglePaneWindow(row, windowSpec)) {
+          if (mode === "repair") {
+            const id = repairWindow(session.id, row, windowSpec)
+            row = windowRows(session.id).find((candidate) => candidate.id === id)
+          } else {
+            drift.push(windowSpec.id)
+          }
+        }
+      } else if (!windowIsHealthy(row, windowSpec)) {
+        if (mode === "repair") {
+          const id = repairWindow(session.id, row, windowSpec)
+          row = windowRows(session.id).find((candidate) => candidate.id === id)
+        } else {
+          drift.push(windowSpec.id)
+        }
+      } else {
+        markWindow(row.id, windowSpec)
+      }
+
+      if (row) {
+        claimed.add(row.id)
+        windowIds.set(windowSpec.id, row.id)
+      }
+    }
+
+    if (options.prune) {
+      const desired = new Set(spec.windows.map((window) => window.id))
+      for (const row of windowRows(session.id)) {
+        if (row.workspaceId && !desired.has(row.workspaceId)) {
+          tmux(["kill-window", "-t", row.id])
+        }
+      }
+    }
+
+    for (const windowSpec of [...spec.windows].sort((left, right) => left.index - right.index)) {
+      const windowId = windowIds.get(windowSpec.id)
+      if (windowId) {
+        ensureWindowIndex(session.id, windowId, windowSpec.index)
+      }
+    }
+    focusLayout(session.id, spec, windowIds)
+  } finally {
+    release()
+  }
+
+  if (drift.length > 0) {
+    fail(`layout drift in ${drift.join(", ")}; run tmux-workspace repair ${spec.layout} --session ${spec.name} --yes`)
+  }
+  return session
+}
+
+function treeForOutput(tree) {
+  if (tree.kind === "pane") {
+    return {
+      kind: "pane",
+      id: tree.id,
+      root: tree.root,
+      run: tree.run || undefined,
+      title: tree.title || undefined,
+      focus: tree.focus || undefined,
+    }
+  }
+  return {
+    kind: tree.kind,
+    sizes: tree.weights,
+    children: tree.children.map(treeForOutput),
+  }
+}
+
+function outputPlan(spec, json) {
+  const output = {
+    layout: spec.layout,
+    session: spec.name,
+    root: spec.root,
+    windows: spec.windows.map((window) => ({
+      id: window.id,
+      name: window.name,
+      type: window.type || undefined,
+      index: window.index,
+      root: window.root,
+      focus: window.focus || undefined,
+      panes: treeForOutput(window.tree),
+    })),
+  }
+  if (json) {
+    console.log(JSON.stringify(output, null, 2))
+    return
+  }
+
+  console.log(`${output.session}  ${output.root}`)
+  for (const window of output.windows) {
+    const type = window.type ? ` [${window.type}]` : ""
+    const focus = window.focus ? " *" : ""
+    console.log(`  ${window.index}: ${window.name}${type}${focus}`)
+    printTree(window.panes, "    ")
+  }
+}
+
+function printTree(tree, indent) {
+  if (tree.kind === "pane") {
+    const command = tree.run ? `  ${tree.run}` : ""
+    const focus = tree.focus ? " *" : ""
+    console.log(`${indent}${tree.id}${focus}${command}`)
+    return
+  }
+  console.log(`${indent}${tree.kind} ${tree.sizes.join(":")}`)
+  for (const child of tree.children) {
+    printTree(child, `${indent}  `)
+  }
+}
+
+function currentSession() {
+  const result = tmux(["display-message", "-p", "#{session_id}\t#{session_name}"], { allowFailure: true })
+  if (!result.ok || !result.stdout) {
+    fail("could not determine the current tmux session; pass --session")
+  }
+  const [id, ...name] = result.stdout.split("\t")
+  return { id, name: name.join("\t") }
+}
+
+function savePersistenceMetadata() {
+  requireTmux()
+  const sessions = []
+  for (const session of sessionRows()) {
+    const path = getSessionOption(session.id, SESSION_LAYOUT_PATH_OPTION)
+    if (!path) {
+      continue
+    }
+    sessions.push({
+      name: session.name,
+      layout: getSessionOption(session.id, SESSION_LAYOUT_OPTION),
+      path,
+      root: getSessionOption(session.id, SESSION_ROOT_OPTION),
+      windows: windowRows(session.id)
+        .filter((window) => window.workspaceId)
+        .map((window) => ({
+          index: window.index,
+          name: window.name,
+          id: window.workspaceId,
+          type: window.type,
+          hash: window.hash,
+          panes: paneRows(window.id)
+            .filter((pane) => pane.workspaceId)
+            .map((pane) => ({ index: pane.index, id: pane.workspaceId })),
+        })),
+    })
+  }
+
+  mkdirSync(stateRoot, { recursive: true, mode: 0o700 })
+  const temporary = `${persistenceFile}.${process.pid}.tmp`
+  writeFileSync(temporary, `${JSON.stringify({ version: 1, sessions }, null, 2)}\n`, { mode: 0o600 })
+  renameSync(temporary, persistenceFile)
+  console.log(`saved metadata for ${sessions.length} managed session${sessions.length === 1 ? "" : "s"}`)
+}
+
+function restorePersistenceMetadata() {
+  requireTmux()
+  if (!existsSync(persistenceFile)) {
+    console.log("no tmux-workspace metadata snapshot found")
+    return
+  }
+
+  let snapshot
+  try {
+    snapshot = JSON.parse(readFileSync(persistenceFile, "utf8"))
+  } catch (error) {
+    fail(`could not read persistence metadata: ${error.message}`)
+  }
+  if (snapshot.version !== 1 || !Array.isArray(snapshot.sessions)) {
+    fail("unsupported persistence metadata format")
+  }
+
+  let restored = 0
+  for (const savedSession of snapshot.sessions) {
+    const session = findSessionByName(savedSession.name)
+    if (!session) {
+      continue
+    }
+    tmux(["set-option", "-q", "-t", session.id, SESSION_LAYOUT_OPTION, savedSession.layout])
+    tmux(["set-option", "-q", "-t", session.id, SESSION_LAYOUT_PATH_OPTION, savedSession.path])
+    tmux(["set-option", "-q", "-t", session.id, SESSION_ROOT_OPTION, savedSession.root])
+    tmux(["set-option", "-q", "-t", session.id, "@dotfiles_tmux_template", "workspace"])
+    tmux(["set-environment", "-t", session.id, "DOTFILES_TMUX_TEMPLATE", "skip"])
+
+    const currentWindows = windowRows(session.id)
+    for (const savedWindow of savedSession.windows ?? []) {
+      const window = currentWindows.find((candidate) => candidate.index === savedWindow.index)
+        ?? currentWindows.find((candidate) => candidate.name === savedWindow.name)
+      if (!window) {
+        continue
+      }
+      tmux(["set-option", "-wq", "-t", window.id, WINDOW_ID_OPTION, savedWindow.id])
+      tmux(["set-option", "-wq", "-t", window.id, SPEC_HASH_OPTION, savedWindow.hash])
+      if (savedWindow.type) {
+        tmux(["set-option", "-wq", "-t", window.id, WINDOW_TYPE_OPTION, savedWindow.type])
+      }
+      const currentPanes = paneRows(window.id)
+      for (const savedPane of savedWindow.panes ?? []) {
+        const pane = currentPanes.find((candidate) => candidate.index === savedPane.index)
+        if (pane) {
+          tmux(["set-option", "-pq", "-t", pane.id, PANE_ID_OPTION, savedPane.id])
+        }
+      }
+    }
+    restored += 1
+  }
+  console.log(`restored metadata for ${restored} managed session${restored === 1 ? "" : "s"}`)
+}
+
+function cleanDetachedManagedSessions(confirmed) {
+  requireTmux()
+  const detached = sessionRows().filter((session) =>
+    session.attached === 0 && Boolean(getSessionOption(session.id, SESSION_LAYOUT_PATH_OPTION)))
+  if (detached.length === 0) {
+    console.log("no detached managed layouts")
+    return
+  }
+  if (!confirmed) {
+    console.log(detached.map((session) => session.name).join("\n"))
+    return
+  }
+  for (const session of detached) {
+    tmux(["kill-session", "-t", session.id])
+  }
+  console.log(`closed ${detached.length} detached managed session${detached.length === 1 ? "" : "s"}`)
+}
+
+function savedLayout(options) {
+  requireTmux()
+  const session = options.sessionId
+    ? findSessionById(options.sessionId)
+    : options.session
+      ? findSessionByName(options.session)
+      : currentSession()
+  if (!session) {
+    fail(`session not found: ${options.sessionId || options.session}`)
+  }
+  const path = getSessionOption(session.id, SESSION_LAYOUT_PATH_OPTION)
+  if (!path || !existsSync(path)) {
+    fail(`session ${session.name} is not managed by tmux-workspace`)
+  }
+  const root = options.root || getSessionOption(session.id, SESSION_ROOT_OPTION)
+  return { path, root, session: session.name }
+}
+
+async function readSpec(layoutArgument, options, allowSaved = false) {
+  let path
+  let resolvedOptions = { ...options }
+  if (!layoutArgument && allowSaved) {
+    const saved = savedLayout(options)
+    path = saved.path
+    resolvedOptions = { ...options, root: saved.root, session: saved.session }
+  } else {
+    path = resolveLayoutPath(layoutArgument)
+  }
+  const rawElement = await loadLayout(path)
+  return resolveSpec(parseSession(rawElement, path), path, resolvedOptions)
+}
+
+function attachOrSwitch(session, detached) {
+  if (detached) {
+    return
+  }
+  if (process.env.TMUX) {
+    tmux(["switch-client", "-t", session.id])
+  } else {
+    tmux(["attach-session", "-t", session.id], { inherit: true })
+  }
+}
+
+function selectLayoutWithFzf() {
+  const names = layoutNames()
+  if (names.length === 0) {
+    fail(`no layouts found in ${layoutDirectory}`)
+  }
+  const result = spawnSync("fzf", ["--height", "100%", "--reverse", "--border", "--prompt", "Layout: "], {
+    input: `${names.join("\n")}\n`,
+    encoding: "utf8",
+    env: process.env,
+  })
+  if (result.error?.code === "ENOENT") {
+    fail("fzf is required for tmux-workspace pick")
+  }
+  if (result.status !== 0) {
+    return ""
+  }
+  return result.stdout.trim()
+}
+
+async function main() {
+  const { command, options, positional } = parseArguments(process.argv.slice(2))
+  switch (command) {
+    case "help":
+      usage()
+      return
+    case "list":
+      console.log(layoutNames().join("\n"))
+      return
+    case "validate": {
+      const spec = await readSpec(positional[0], options)
+      console.log(`valid: ${spec.layout}`)
+      return
+    }
+    case "plan":
+    case "preview": {
+      const spec = await readSpec(positional[0], options)
+      outputPlan(spec, options.json)
+      return
+    }
+    case "apply": {
+      const spec = await readSpec(positional[0], options, true)
+      const session = reconcile(spec, "apply", options)
+      console.log(`applied ${spec.layout} to ${session.name}`)
+      return
+    }
+    case "repair": {
+      const spec = await readSpec(positional[0], options, true)
+      const session = reconcile(spec, "repair", options)
+      console.log(`repaired ${spec.layout} in ${session.name}`)
+      return
+    }
+    case "open": {
+      const spec = await readSpec(positional[0], options)
+      const session = reconcile(spec, "apply", options)
+      attachOrSwitch(session, options.detached)
+      return
+    }
+    case "pick": {
+      const selected = selectLayoutWithFzf()
+      if (!selected) {
+        return
+      }
+      const spec = await readSpec(selected, options)
+      const session = reconcile(spec, "apply", options)
+      attachOrSwitch(session, options.detached)
+      return
+    }
+    case "clean":
+      cleanDetachedManagedSessions(options.yes)
+      return
+    case "snapshot":
+      if (positional[0] === "save") {
+        savePersistenceMetadata()
+        return
+      }
+      if (positional[0] === "restore") {
+        restorePersistenceMetadata()
+        return
+      }
+      fail("snapshot requires save or restore")
+      return
+    default:
+      usage(process.stderr)
+      fail(`unknown command: ${command}`)
+  }
+}
+
+main().catch((error) => {
+  console.error(error.message)
+  process.exit(1)
+})

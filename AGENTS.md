@@ -35,12 +35,14 @@ Your job is to maintain my dotfile configurations, this includes keyboard shortc
 - `home/dot_config/skhd/executable_open_terminal_window.sh` defaults to Ghostty.
 - Ordinary new tmux sessions use the shared `terminal` `0`, `codex` `1`, `nvim` `2` template. Sessions created with an explicit command, `hs-*` sessions, and sessions with `DOTFILES_TMUX_TEMPLATE=skip` are left alone.
 - In tmux, `Ctrl+0/1/2` cycles windows by `terminal`/`codex`/`nvim` type; `Ctrl+Shift+0/1/2` creates that type in the current pane's directory and switches to it. `Ctrl+3..9` still selects a window by index.
-- The minimal tmux bar stays at the bottom, shows the active folder at left, and centers `~`, `codex`, and `nvim`; each session colors its active-tab capsule and focused Ghostty border, and `Ctrl-a ,` renames a tab and seeds Codex renames from the pane title.
+- `Ctrl-a Space` opens the repo-owned tmux command center for session, window, pane, persistence, and workspace-layout actions.
+- `tmux-workspace open project --root DIR` builds the import-free React-like layout in `~/.config/tmux/layouts/project.tmux.tsx`; repeated apply preserves running panes and explicit repair fixes structural drift.
+- The minimal tmux bar stays at the bottom, shows the session and active folder at left, and centers `~`, `codex`, and `nvim`; each session colors its active-tab capsule and focused Ghostty border, and `Ctrl-a ,` renames a tab and seeds Codex renames from the pane title.
 
 ## Chezmoi
 - `.chezmoiroot` points to `home/`, the desired state for `$HOME`.
 - `install.sh` applies the source state with chezmoi.
-- `bootstrap.sh` installs the Brewfile (including Codex, Yazi, and JankyBorders), provisions TPM plugins, creates `~/projects`, builds the native HUDs, and starts yabai/skhd for a clean client.
+- `bootstrap.sh` installs the Brewfile (including Bun, Python, Codex, Yazi, and JankyBorders), provisions TPM plugins and the repo-owned tmux command center, creates `~/projects`, builds the native HUDs, and starts yabai/skhd for a clean client.
 - Fresh clients still require macOS approvals plus `setup-yabai-sa` after completing yabai's SIP setup.
 - Add helper commands under `home/bin/` with the `executable_` attribute.
 - Add one-time setup scripts under `home/.chezmoiscripts/` with a `run_once_` prefix.

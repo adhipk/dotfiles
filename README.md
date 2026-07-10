@@ -40,10 +40,11 @@ On this checkout:
 ./bootstrap.sh
 ```
 
-`bootstrap.sh` installs Homebrew dependencies from `Brewfile`, including the
-Codex CLI and desktop app, applies this repository with `./install.sh`, installs
-the declared tmux plugins, builds ProjectDeck and the shortcut guide, creates
-`~/projects`, and starts the yabai and skhd launch services.
+`bootstrap.sh` installs Homebrew dependencies from `Brewfile`, including Bun,
+Python, the Codex CLI, and the desktop app; applies this repository with
+`./install.sh`; installs the declared tmux plugins and command center; builds
+ProjectDeck and the shortcut guide; creates `~/projects`; and starts the yabai
+and skhd launch services.
 
 On another Mac, clone to the path used by the scratchpad workflow and run the
 same bootstrap:
@@ -174,7 +175,9 @@ an application name, application path, or bundle ID.
 - normal Ghostty windows use a transparent background; scratchpad Ghostty windows force opaque black
 - ordinary new tmux sessions start with `terminal` at `0`, `codex` at `1`, and `nvim` at `2`; command sessions and managed `hs-*` sessions are left unchanged
 - `ctrl + 0/1/2` in tmux cycles windows by `terminal`/`codex`/`nvim` type; `ctrl + shift + 0/1/2` creates that type in the current pane's directory and switches to it, while `ctrl + 3..9` remains direct index switching
-- the minimal tmux bar stays at the bottom, shows the active folder at left, and centers `~`, `codex`, and `nvim`; a compact active-tab capsule and the focused Ghostty border share each session's accent, while inactive borders stay black; `Ctrl-a ,` renames a tab and starts Codex renames from its pane title
+- `ctrl + a`, then `space`, opens the repo-owned command center for session/window/pane lifecycle, saved state, and React-like workspace layouts
+- `tmux-workspace open project --root DIR` builds the managed `.tmux.tsx` project layout; applying it again preserves running panes, while `repair --yes` rebuilds only drifted managed windows and `--adopt` is required before taking over a same-named unmanaged session
+- the minimal tmux bar stays at the bottom, shows the session plus active folder at left, and centers `~`, `codex`, and `nvim`; a compact active-tab capsule and the focused Ghostty border share each session's accent, while inactive borders stay black; `Ctrl-a ,` renames a tab and starts Codex renames from its pane title
 - `fn + comma`: open the black terminal scratchpad and switch to the `dotfiles` tmux session with `terminal`, `codex`, and `nvim` windows
 - `fn + 1`: open the same black terminal scratchpad and switch to the `projects` tmux session with `terminal`, `codex`, and `nvim` windows
 - `cmd + backtick` in Ghostty: switch to tmux window `0` (`terminal`)
