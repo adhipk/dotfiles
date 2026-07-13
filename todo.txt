@@ -32,6 +32,6 @@ x 2026-07-13 2026-07-13 Make agent-timer reliably submit each tmux steer instead
 x 2026-07-13 2026-07-13 Flush Codex paste-burst state before submitting long agent-timer nudges id:0004db13-8221-4ab2-957a-f90389fe48d1 owner:codex +dotfiles @agent due:2026-07-13
 x 2026-07-13 2026-07-13 Reconcile dependency lock after module extraction +dotfiles @dependencies id:3fcb8044-b55e-41a2-a96c-a68f053a0127 owner:codex
 x 2026-07-13 2026-07-13 Extract reusable utility modules into independent ~/projects repositories and bootstrap them from pinned GitHub sources +dotfiles @distribution id:77f42945-6cf8-4b5b-ac01-f4b461bf520d owner:codex
-(D) 2026-07-13 Curate resume-reloaded with completed showcaseable projects after the modular migration +portfolio @docs id:d3a63dc2-b4be-4db0-8d29-50c85c415405 owner:codex
+x 2026-07-13 2026-07-13 Curate resume-reloaded with completed showcaseable projects after the modular migration +portfolio @docs id:d3a63dc2-b4be-4db0-8d29-50c85c415405 owner:codex
 x 2026-07-13 2026-07-13 Fix Awrit rendering/input compatibility inside tmux using the Ghostty discussion 5924 workaround +dotfiles @tmux id:a77d4180-02a2-4a43-85eb-a26081db7ccf owner:codex
 x 2026-07-13 2026-07-13 Restore Shift+Enter in Codex through the Ghostty and tmux keyboard boundary +dotfiles @tmux id:e440d6a8-453c-43ee-a495-f389108c007b owner:codex
