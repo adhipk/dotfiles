@@ -1,0 +1,7 @@
+{{- if .modules.dependencies.enabled -}}
+#!/bin/sh
+export DOTFILES_DIR={{ .chezmoi.sourceDir | dir | quote }}
+exec /usr/bin/env python3 - "$@" <<'DOTFILES_DEPS_PY'
+{{ includeTemplate "../modules/dependencies/bin/dotfiles-deps" . }}
+DOTFILES_DEPS_PY
+{{- end -}}

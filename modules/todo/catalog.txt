@@ -1,0 +1,6 @@
+# man-me: name=todo
+# man-me: category=Development and Repo
+# man-me: usage=todo [TUXEDO COMMAND ...]; chezmoi todo [TUXEDO COMMAND ...]
+# man-me: description=Manage the current project's todo.txt through Tuxedo with serialized agent writes.
+# man-me: tags=todo tasks todo.txt tuxedo agents tui
+# man-me: source=home/bin/symlink_todo.tmpl

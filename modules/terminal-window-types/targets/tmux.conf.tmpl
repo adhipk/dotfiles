@@ -1,0 +1,30 @@
+# Give ordinary new sessions the same 0/1/2/3/4 typed layout as terminal
+# scratchpads. Command sessions, grouped sessions, hs-* sessions, and explicit
+# DOTFILES_TMUX_TEMPLATE=skip opt-outs stay untouched.
+set-hook -g after-new-session[50] 'run-shell "$HOME/bin/tmux-session-template auto #{q:session_name}"'
+
+bind-key -N "New terminal window" c run-shell "$HOME/bin/tmux-session-template new '#{session_id}' terminal '#{pane_id}'"
+
+# skhd translates Right Command+D/R in Ghostty to F16/F17. Terminal protocols
+# expose those keys as Shift+F4/Shift+F5 to tmux.
+bind-key -n -N "Duplicate current window" S-F4 run-shell "$HOME/bin/tmux-session-template duplicate '#{session_id}' '#{pane_id}'"
+bind-key -n -N "Rename current window" S-F5 command-prompt -p "Rename window:" -I '#{?#{||:#{==:#{@dotfiles_window_type},codex},#{==:#W,codex}},#T,#W}' { rename-window "%%" }
+
+# Control cycles matching window types. Control+Shift creates another instance
+# in the current pane's directory.
+bind-key -n -N "Cycle terminal windows" C-0 run-shell "$HOME/bin/tmux-session-template cycle '#{session_id}' terminal '#{window_id}'"
+bind-key -n -N "Cycle Codex windows" C-1 run-shell "$HOME/bin/tmux-session-template cycle '#{session_id}' codex '#{window_id}'"
+bind-key -n -N "Cycle Neovim windows" C-2 run-shell "$HOME/bin/tmux-session-template cycle '#{session_id}' nvim '#{window_id}'"
+bind-key -n -N "Cycle Tuxedo windows" C-3 run-shell "$HOME/bin/tmux-session-template cycle '#{session_id}' tuxedo '#{window_id}'"
+bind-key -n -N "New terminal window" C-S-0 run-shell "$HOME/bin/tmux-session-template new '#{session_id}' terminal '#{pane_id}'"
+bind-key -n -N "New Codex window" C-S-1 run-shell "$HOME/bin/tmux-session-template new '#{session_id}' codex '#{pane_id}'"
+bind-key -n -N "New Neovim window" C-S-2 run-shell "$HOME/bin/tmux-session-template new '#{session_id}' nvim '#{pane_id}'"
+bind-key -n -N "New Tuxedo window" C-S-3 run-shell "$HOME/bin/tmux-session-template new '#{session_id}' tuxedo '#{pane_id}'"
+
+# Preserve Shift+Enter as Codex multiline input while tmux extended-keys is
+# disabled. This is the explicit-key workaround from Ghostty discussion #5924.
+bind-key -T root S-Enter send-keys Escape "[13;2u"
+
+# Codex windows seed rename prompts from the pane title; other windows keep the
+# current window name as the default.
+bind-key , command-prompt -I '#{?#{||:#{==:#{@dotfiles_window_type},codex},#{==:#W,codex}},#T,#W}' { rename-window "%%" }

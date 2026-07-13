@@ -1,0 +1,39 @@
+#!/bin/zsh
+# man-me: name=reset-yabai
+# man-me: category=Window and Display
+# man-me: usage=reset-yabai
+# man-me: description=Reinstall and pin the Brewfile-owned yabai formula, then refresh checksum-scoped scripting-addition authorization.
+# man-me: tags=yabai reset reinstall pin brewfile scripting addition
+
+set -euo pipefail
+
+DOTFILES_DIR="${DOTFILES_DIR:-$HOME/dotfiles}"
+BREWFILE="${DOTFILES_BREWFILE:-$DOTFILES_DIR/Brewfile}"
+BREW_BIN="${BREW_BIN:-$(command -v brew || true)}"
+YABAI_BIN="${YABAI_BIN:-$(command -v yabai || true)}"
+SETUP_YABAI_SA_BIN="${SETUP_YABAI_SA_BIN:-$HOME/bin/setup-yabai-sa}"
+
+[[ -x "$BREW_BIN" ]] || { print -u2 "reset-yabai: brew is not installed"; exit 1; }
+[[ -r "$BREWFILE" ]] || { print -u2 "reset-yabai: Brewfile not readable: $BREWFILE"; exit 1; }
+
+FORMULA="$(awk -F'"' '$1 ~ /^[[:space:]]*brew[[:space:]]*$/ && $2 ~ /(^|\/)yabai(@[^\/]+)?$/ { print $2; exit }' "$BREWFILE")"
+[[ -n "$FORMULA" ]] || { print -u2 "reset-yabai: Brewfile does not declare a yabai formula"; exit 1; }
+FORMULA_NAME="${FORMULA##*/}"
+
+if [[ -n "$YABAI_BIN" && -x "$YABAI_BIN" ]]; then
+  "$YABAI_BIN" --stop-service >/dev/null 2>&1 || true
+  sudo "$YABAI_BIN" --uninstall-sa >/dev/null 2>&1 || true
+  "$YABAI_BIN" --uninstall-service >/dev/null 2>&1 || true
+fi
+
+"$BREW_BIN" uninstall --ignore-dependencies "$FORMULA_NAME" >/dev/null 2>&1 || true
+"$BREW_BIN" install "$FORMULA"
+"$BREW_BIN" link --overwrite --force "$FORMULA_NAME"
+"$BREW_BIN" pin "$FORMULA_NAME"
+
+YABAI_BIN="${YABAI_BIN_AFTER_INSTALL:-$(command -v yabai || true)}"
+[[ -x "$YABAI_BIN" ]] || { print -u2 "reset-yabai: installed yabai binary was not found"; exit 1; }
+[[ -x "$SETUP_YABAI_SA_BIN" ]] || { print -u2 "reset-yabai: setup helper unavailable: $SETUP_YABAI_SA_BIN"; exit 1; }
+
+"$YABAI_BIN" --install-service >/dev/null 2>&1 || true
+YABAI_BIN="$YABAI_BIN" "$SETUP_YABAI_SA_BIN"

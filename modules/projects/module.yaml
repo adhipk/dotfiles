@@ -1,0 +1,47 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: projects
+version: 1.0.0
+description: Dormant ProjectDeck and yabai project-context manager with an explicit manual build path.
+dataKey: modules.projects
+distribution:
+  standalone: false
+requires:
+  executables:
+    - bash
+    - jq
+    - yabai
+optional:
+  executables:
+    - osascript
+    - swiftc
+state:
+  preserved:
+    - ~/.config/yabai/projects.json
+  ephemeral:
+    - ~/.config/yabai/projectdeck
+commands:
+  - name: projects
+    source: bin/projects
+    target: ~/bin/projects
+  - name: projects-pick
+    source: bin/projects-pick
+    target: ~/bin/projects-pick
+targets:
+  - source: bin/projects
+    destination: ~/bin/projects
+    bridge: home/bin/executable_projects.tmpl
+    ownership: exclusive
+  - source: bin/projects-pick
+    destination: ~/bin/projects-pick
+    bridge: home/bin/executable_projects-pick.tmpl
+    ownership: exclusive
+  - source: bin/projects
+    destination: ~/.config/yabai/projects
+    bridge: home/dot_config/yabai/executable_projects.tmpl
+    ownership: exclusive
+manual:
+  buildProjectDeck: make build-projectdeck
+tests:
+  - tests/test_projects.sh
+  - tests/test_module.sh

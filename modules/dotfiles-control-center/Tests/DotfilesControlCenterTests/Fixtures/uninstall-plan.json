@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "operation": "system-uninstall",
+  "destination": "/tmp/test-home",
+  "source": "/tmp/test-source",
+  "targets": [
+    {
+      "path": "bin/alpha",
+      "type": "leaf",
+      "status": "changed",
+      "actualType": "file"
+    },
+    {
+      "path": "bin",
+      "type": "directory",
+      "status": "empty-only"
+    }
+  ],
+  "changedTargets": ["bin/alpha"],
+  "backupPath": null,
+  "preserved": ["/tmp/test-source", "/tmp/test-home/projects"],
+  "blockers": [],
+  "executable": true,
+  "confirmation": "REMOVE DOTFILES FROM /tmp/test-home"
+}

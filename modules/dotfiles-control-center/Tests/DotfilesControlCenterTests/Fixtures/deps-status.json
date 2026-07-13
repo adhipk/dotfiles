@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "offline": true,
+  "summary": {
+    "total": 2,
+    "missing": 1,
+    "unpinned": 0,
+    "outdated": 1,
+    "drifted": 0,
+    "managerErrors": 0,
+    "missingLockIds": 0,
+    "staleLockIds": 0
+  },
+  "managerErrors": [],
+  "lockDrift": {
+    "missingIds": [],
+    "staleIds": []
+  },
+  "dependencies": [
+    {
+      "declaredVersion": null,
+      "drifted": false,
+      "id": "homebrew:formula:alpha",
+      "installedPath": null,
+      "installedVersion": "1.0.0",
+      "kind": "formula",
+      "lockedVersion": "1.1.0",
+      "manager": "homebrew",
+      "name": "alpha",
+      "outdated": true,
+      "owners": ["root"],
+      "pinStatus": "rolling",
+      "required": true,
+      "resolvedVersion": "1.1.0",
+      "snapshotState": "present",
+      "source": "Brewfile",
+      "sources": ["Brewfile"],
+      "state": "installed",
+      "target": null,
+      "updateStatus": "snapshot-outdated"
+    },
+    {
+      "declaredVersion": "abc123",
+      "drifted": false,
+      "id": "neovim:beta",
+      "installedPath": null,
+      "installedVersion": null,
+      "kind": "plugin",
+      "lockedVersion": "abc123",
+      "manager": "neovim",
+      "name": "beta",
+      "outdated": false,
+      "owners": ["editor"],
+      "pinStatus": "commit",
+      "required": true,
+      "resolvedVersion": "abc123",
+      "snapshotState": "missing",
+      "source": "nvim/nvim-pack-lock.json",
+      "sources": ["nvim/nvim-pack-lock.json"],
+      "state": "missing",
+      "target": null,
+      "updateStatus": "missing"
+    }
+  ]
+}

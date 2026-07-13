@@ -1,0 +1,3 @@
+{{- if .modules.scratchpads.enabled -}}
+{{ includeTemplate "../modules/scratchpads/config/defaults.toml" . }}
+{{- end -}}

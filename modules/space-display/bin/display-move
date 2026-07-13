@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# man-me: name=display-move
+# man-me: category=Window and Display
+# man-me: usage=~/.config/yabai/display-move prev|next
+# man-me: description=Move the focused window to the adjacent display while preserving focus.
+# man-me: tags=yabai display window focus skhd
+
+set -euo pipefail
+
+direction="${1:-}"
+case "$direction" in
+  prev|next) ;;
+  *) printf 'usage: display-move prev|next\n' >&2; exit 2 ;;
+esac
+
+window_id="$(yabai -m query --windows --window | jq -r '.id // empty')"
+[[ -n "$window_id" ]] || { printf 'display-move: no focused window\n' >&2; exit 1; }
+
+yabai -m window --display "$direction"
+yabai -m display --focus "$direction"
+yabai -m window --focus "$window_id"

@@ -1,0 +1,517 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="${DOTFILES_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
+MODULES_DIR="$ROOT/modules"
+DATA_FILE="$ROOT/home/.chezmoidata/10-modules.yaml"
+LOCK_DIR="$ROOT/.dotfiles-module.lock"
+LIB_DIR="$ROOT/home/dot_local/lib/dotfiles"
+
+die() {
+    printf 'dotfiles-module: %s\n' "$*" >&2
+    exit 1
+}
+
+need() {
+    command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+manifest_for() {
+    local id="$1" manifest
+    [[ "$id" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || die "invalid module id: $id"
+    manifest="$MODULES_DIR/$id/module.yaml"
+    [[ -f "$manifest" && ! -L "$manifest" ]] || die "unknown module: $1"
+    printf '%s\n' "$manifest"
+}
+
+safe_relative_path() {
+    local value="${1:-}"
+    [[ -n "$value" && "$value" != /* && "$value" != */ && "$value" != *$'\n'* ]] || return 1
+    case "/$value/" in
+        *'/../'*|*'/./'*|*'//'*) return 1 ;;
+    esac
+}
+
+path_has_no_symlink_components() {
+    local base="$1" relative="$2" part path="$1"
+    local -a parts=()
+    IFS='/' read -r -a parts <<<"$relative"
+    for part in "${parts[@]}"; do
+        path="$path/$part"
+        [[ ! -L "$path" ]] || return 1
+    done
+}
+
+validate_manifest() {
+    local manifest="$1" id directory_id data_key source destination bridge ownership
+    id=$(yq -r '.id' "$manifest")
+    directory_id=$(basename "$(dirname "$manifest")")
+    [[ "$(yq -r '.apiVersion' "$manifest")" == "dotfiles/v1" ]] || die "$id: unsupported apiVersion"
+    [[ "$id" == "$directory_id" ]] || die "$id: manifest id must match directory $directory_id"
+    data_key=$(yq -r '.dataKey' "$manifest")
+    [[ "$data_key" =~ ^modules\.[A-Za-z][A-Za-z0-9]*$ ]] || die "$id: invalid dataKey: $data_key"
+    yq -e ".${data_key}.enabled | type == \"!!bool\"" "$DATA_FILE" >/dev/null ||
+        die "$id: $data_key.enabled must exist and be boolean"
+
+    yq -e '.targets | type == "!!seq" and length > 0' "$manifest" >/dev/null ||
+        die "$id: targets must be an array"
+    yq -e '.state.preserved | type == "!!seq"' "$manifest" >/dev/null ||
+        die "$id: state.preserved must be an array"
+    yq -e '.state.ephemeral | type == "!!seq"' "$manifest" >/dev/null ||
+        die "$id: state.ephemeral must be an array"
+    [[ "$(yq -r '[.state.preserved[], .state.ephemeral[]] | map(select(type != "!!str")) | length' "$manifest")" == "0" ]] ||
+        die "$id: state entries must be strings"
+    [[ "$(yq -r '[.targets[] | select(type != "!!map" or (.source | type != "!!str") or (.destination | type != "!!str") or (.bridge | type != "!!str") or (.ownership | type != "!!str"))] | length' "$manifest")" == "0" ]] ||
+        die "$id: every target field must be a string"
+
+    while IFS=$'\t' read -r source destination bridge ownership; do
+        [[ "$ownership" == "exclusive" || "$ownership" == "contribution" ]] ||
+            die "$id: every target needs ownership: exclusive or contribution"
+        safe_relative_path "$source" || die "$id: unsafe target source: $source"
+        [[ -f "$(dirname "$manifest")/$source" ]] || die "$id: missing target source: $source"
+        path_has_no_symlink_components "$(dirname "$manifest")" "$source" || die "$id: target source traverses a symlink: $source"
+        case "$destination" in
+            '~/'*) safe_relative_path "${destination#\~/}" || die "$id: unsafe target destination: $destination" ;;
+            'chezmoi before-apply lifecycle'|'chezmoi after-apply lifecycle') ;;
+            *) die "$id: unsupported target destination: $destination" ;;
+        esac
+        [[ "$bridge" == home/* ]] || die "$id: unsafe target bridge: $bridge"
+        safe_relative_path "$bridge" || die "$id: unsafe target bridge: $bridge"
+        [[ -f "$ROOT/$bridge" ]] || die "$id: missing target bridge: $bridge"
+        path_has_no_symlink_components "$ROOT" "$bridge" || die "$id: target bridge traverses a symlink: $bridge"
+    done < <(yq -r '.targets[]? | [.source // "", .destination // "", .bridge // "", .ownership // ""] | @tsv' "$manifest")
+
+    while IFS= read -r state_path; do
+        case "$state_path" in
+            '~/'*|'./'*)
+                safe_relative_path "${state_path#??}" || die "$id: unsafe state path: $state_path"
+                ;;
+            tmux-pane-option:?*|tmux-wait-channel:?*)
+                [[ "$state_path" != *$'\n'* ]] || die "$id: unsafe state handle: $state_path"
+                ;;
+            *) die "$id: unsupported state entry: $state_path" ;;
+        esac
+    done < <(yq -r '.state.preserved[], .state.ephemeral[]' "$manifest")
+}
+
+validate_all_manifests() {
+    local manifest keys="" duplicates
+    local -a manifests=("$MODULES_DIR"/*/module.yaml)
+    [[ -e "${manifests[0]}" ]] || die "no module manifests found"
+    for manifest in "${manifests[@]}"; do
+        validate_manifest "$manifest"
+        keys+="$(yq -r '.dataKey' "$manifest")"$'\n'
+    done
+    duplicates=$(printf '%s' "$keys" | sort | uniq -d)
+    [[ -z "$duplicates" ]] || die "duplicate dataKey: $duplicates"
+}
+
+enabled_for() {
+    local manifest="$1" key
+    key=$(yq -r '.dataKey' "$manifest")
+    yq -r ".${key}.enabled // false" "$DATA_FILE"
+}
+
+module_rows() {
+    local manifest id enabled
+    for manifest in "$MODULES_DIR"/*/module.yaml; do
+        id=$(yq -r '.id' "$manifest")
+        enabled=$(enabled_for "$manifest")
+        printf '%s\t%s\t%s\n' "$id" "$enabled" "$(yq -r '.description' "$manifest")"
+    done
+}
+
+status() {
+    validate_all_manifests
+    if [[ "${1:-}" == "--json" ]]; then
+        module_rows | jq -Rsc '
+          split("\n")
+          | map(select(length > 0) | split("\t")
+            | {id: .[0], enabled: (.[1] == "true"), description: .[2]})
+        '
+    else
+        printf 'MODULE\tENABLED\tDESCRIPTION\n'
+        module_rows
+    fi
+}
+
+validate_repository() {
+    local json="${1:-}" manifest count=0
+
+    validate_all_manifests
+    for manifest in "$MODULES_DIR"/*/module.yaml; do
+        [[ -f "$manifest" ]] || continue
+        count=$((count + 1))
+    done
+
+    if [[ "$json" == "--json" ]]; then
+        jq -n --argjson moduleCount "$count" \
+            '{valid:true,apiVersion:"dotfiles/v1",moduleCount:$moduleCount}'
+    else
+        printf 'Valid dotfiles/v1 module repository (%s modules)\n' "$count"
+    fi
+}
+
+plan_module() {
+    local action="$1" id="$2" manifest enabled data_key
+    manifest=$(manifest_for "$id")
+    [[ "$id" != "module-lifecycle" ]] || die "module-lifecycle is removed last by a system uninstall plan"
+    validate_manifest "$manifest"
+    enabled=$(enabled_for "$manifest")
+    data_key=$(yq -r '.dataKey' "$manifest")
+
+    printf 'Plan: %s module %s (currently enabled: %s)\n' "$action" "$id" "$enabled"
+    printf '  1. Run declared pre-disable hooks and stop module-owned runtime work.\n'
+    printf '  2. Set %s.enabled=false and re-render targets through chezmoi.\n' "$data_key"
+    printf '  3. Verify exclusive targets are absent:\n'
+    if [[ "$(yq -r '[.targets[] | select(.ownership == "exclusive")] | length' "$manifest")" == "0" ]]; then
+        printf '     (none)\n'
+    else
+        yq -r '.targets[] | select(.ownership == "exclusive") | "     - " + .destination' "$manifest"
+    fi
+    printf '  4. Re-render shared contributions through chezmoi; never delete these files directly:\n'
+    if [[ "$(yq -r '[.targets[] | select(.ownership == "contribution")] | length' "$manifest")" == "0" ]]; then
+        printf '     (none)\n'
+    else
+        yq -r '.targets[] | select(.ownership == "contribution") | "     - " + .destination' "$manifest" | sort -u
+    fi
+    printf '  5. Preserve declared state:\n'
+    if [[ "$(yq -r '.state.preserved | length' "$manifest")" == "0" ]]; then
+        printf '     (none)\n'
+    else
+        yq -r '.state.preserved[] | "     - " + .' "$manifest"
+    fi
+    [[ "$action" == "disable" ]] || printf '  6. Remove only declared ephemeral filesystem state; retain recognized runtime handles.\n'
+    [[ "$action" != "purge" ]] || printf '  7. After exact confirmation, delete only the preserved paths listed above.\n'
+    printf '\nThis is a read-only plan; no files were changed.\n'
+}
+
+plan_enable() {
+    local id="$1" manifest enabled data_key
+    manifest=$(manifest_for "$id")
+    validate_manifest "$manifest"
+    enabled=$(enabled_for "$manifest")
+    data_key=$(yq -r '.dataKey' "$manifest")
+
+    printf 'Plan: enable module %s (currently enabled: %s)\n' "$id" "$enabled"
+    printf '  1. Set %s.enabled=true and re-render targets through chezmoi.\n' "$data_key"
+    printf '  2. Render exclusive targets:\n'
+    if [[ "$(yq -r '[.targets[] | select(.ownership == "exclusive")] | length' "$manifest")" == "0" ]]; then
+        printf '     (none)\n'
+    else
+        yq -r '.targets[] | select(.ownership == "exclusive") | "     - " + .destination' "$manifest"
+    fi
+    printf '  3. Re-render shared contributions through chezmoi:\n'
+    if [[ "$(yq -r '[.targets[] | select(.ownership == "contribution")] | length' "$manifest")" == "0" ]]; then
+        printf '     (none)\n'
+    else
+        yq -r '.targets[] | select(.ownership == "contribution") | "     - " + .destination' "$manifest" | sort -u
+    fi
+    printf '  4. Preserve all declared module state and source.\n'
+    printf '\nThis is a read-only plan; no files were changed.\n'
+}
+
+plan_module_json() {
+    local action="$1" id="$2" manifest enabled data_key description target_enabled
+    local state_root_required confirmation exclusive_targets contribution_targets preserved_state ephemeral_state
+    manifest=$(manifest_for "$id")
+    [[ "$action" == "enable" || "$id" != "module-lifecycle" ]] ||
+        die "module-lifecycle is removed last by a system uninstall plan"
+    validate_manifest "$manifest"
+    enabled=$(enabled_for "$manifest")
+    data_key=$(yq -r '.dataKey' "$manifest")
+    description=$(yq -r '.description' "$manifest")
+    exclusive_targets=$(yq -o=json -I=0 '.targets | map(select(.ownership == "exclusive") | .destination)' "$manifest")
+    contribution_targets=$(yq -o=json -I=0 '.targets | map(select(.ownership == "contribution") | .destination) | unique' "$manifest")
+    preserved_state=$(yq -o=json -I=0 '.state.preserved' "$manifest")
+    ephemeral_state=$(yq -o=json -I=0 '.state.ephemeral' "$manifest")
+    target_enabled=false
+    confirmation=null
+    state_root_required=false
+    case "$action" in
+        enable)
+            target_enabled=true
+            ;;
+        uninstall)
+            if yq -r '.state.ephemeral[]' "$manifest" | grep -q '^\./'; then
+                state_root_required=true
+            fi
+            ;;
+        purge)
+            confirmation=$(jq -cn --arg id "$id" '$id')
+            if yq -r '.state.ephemeral[], .state.preserved[]' "$manifest" | grep -q '^\./'; then
+                state_root_required=true
+            fi
+            ;;
+    esac
+
+    jq -n \
+        --arg operation "module-$action" \
+        --arg id "$id" \
+        --arg dataKey "$data_key" \
+        --arg description "$description" \
+        --argjson enabled "$enabled" \
+        --argjson targetEnabled "$target_enabled" \
+        --argjson exclusiveTargets "$exclusive_targets" \
+        --argjson contributionTargets "$contribution_targets" \
+        --argjson preservedState "$preserved_state" \
+        --argjson ephemeralState "$ephemeral_state" \
+        --argjson stateRootRequired "$state_root_required" \
+        --argjson confirmation "$confirmation" \
+        '{
+          schemaVersion: 1,
+          operation: $operation,
+          module: {
+            id: $id,
+            enabled: $enabled,
+            targetEnabled: $targetEnabled,
+            description: $description,
+            dataKey: $dataKey
+          },
+          exclusiveTargets: $exclusiveTargets,
+          contributionTargets: $contributionTargets,
+          preservedState: $preservedState,
+          ephemeralState: $ephemeralState,
+          stateRootRequired: $stateRootRequired,
+          confirmation: $confirmation,
+          sourcePreserved: true,
+          executable: true,
+          blockers: []
+        }'
+}
+
+apply_module_bridges() {
+    local manifest="$1" bridge existing duplicate
+    local -a bridges=()
+    while IFS= read -r bridge; do
+        [[ -n "$bridge" ]] || continue
+        duplicate=false
+        if [[ ${#bridges[@]} -gt 0 ]]; then
+            for existing in "${bridges[@]}"; do
+                if [[ "$existing" == "$bridge" ]]; then
+                    duplicate=true
+                    break
+                fi
+            done
+        fi
+        [[ "$duplicate" == true ]] || bridges+=("$bridge")
+    done < <(yq -r '.targets[].bridge' "$manifest")
+    [[ ${#bridges[@]} -gt 0 ]] || die "module has no target bridges"
+    chezmoi -S "$ROOT" apply --force --source-path "${bridges[@]}"
+}
+
+atomic_set_enabled() {
+    local data_key="$1" enabled="$2" temp="$3"
+    cp -p "$DATA_FILE" "$temp"
+    yq -i ".${data_key}.enabled = $enabled" "$temp"
+    mv -f "$temp" "$DATA_FILE"
+}
+
+process_state_group() {
+    local manifest="$1" group="$2" state_root="$3" home_root="$4" mode="$5" output="${6:-text}"
+    local entry pattern match base relative parent
+    local -a matches=()
+    local IFS=
+    while IFS= read -r entry; do
+        case "$entry" in
+            tmux-pane-option:*|tmux-wait-channel:*)
+                [[ "$mode" != "remove" ]] ||
+                    printf 'Retained non-filesystem state (no generic remover): %s\n' "$entry" >&2
+                continue
+                ;;
+            '~/'*) base="$home_root"; relative="${entry#\~/}" ;;
+            './'*)
+                [[ -n "$state_root" ]] || die "$entry requires --state-root ABSOLUTE_DIR"
+                base="$state_root"; relative="${entry#./}"
+                ;;
+        esac
+        [[ "$base" == /* && -d "$base" && ! -L "$base" ]] || die "unsafe state root: $base"
+        pattern="$base/$relative"
+        shopt -s nullglob
+        IFS= matches=( $pattern )
+        shopt -u nullglob
+        for match in "${matches[@]}"; do
+            [[ "$match" == "$base/"* && "$match" != "$base" ]] || die "state path escaped its root: $match"
+            parent="$(dirname "$match")"
+            while [[ "$parent" != "$base" ]]; do
+                [[ ! -L "$parent" ]] || die "refusing state path through symlink: $match"
+                parent="$(dirname "$parent")"
+            done
+            if [[ "$mode" == "remove" ]]; then
+                rm -rf -- "$match"
+                [[ "$output" == "json" ]] || printf 'Removed state: %s\n' "$match"
+            fi
+        done
+    done < <(yq -r ".state.${group}[]" "$manifest")
+}
+
+execute_module() (
+    local action="$1" id="$2" confirmation="$3" state_root="$4" json="$5"
+    local manifest data_key previous target_enabled changed backup temp apply_status rollback_status=0 home_root
+    [[ -r "$LIB_DIR/core.sh" && -r "$LIB_DIR/locks.sh" ]] || die "shared dotfiles lock library is unavailable"
+    # shellcheck source=/dev/null
+    source "$LIB_DIR/core.sh"
+    # shellcheck source=/dev/null
+    source "$LIB_DIR/locks.sh"
+    manifest=$(manifest_for "$id")
+    [[ "$action" == "enable" || "$id" != "module-lifecycle" ]] || die "module-lifecycle cannot remove itself"
+    validate_all_manifests
+    validate_manifest "$manifest"
+    [[ "$action" != "purge" || "$confirmation" == "$id" ]] ||
+        die "purge requires exact confirmation: --confirm $id"
+    if [[ -n "$state_root" ]]; then
+        [[ "$state_root" == /* && -d "$state_root" && ! -L "$state_root" ]] ||
+            die "--state-root must be an existing absolute non-symlink directory"
+        state_root=$(cd "$state_root" && pwd -P)
+    fi
+    [[ "$HOME" == /* && -d "$HOME" && ! -L "$HOME" ]] || die "HOME must be an existing absolute non-symlink directory"
+    home_root=$(cd "$HOME" && pwd -P)
+    if [[ "$action" == "uninstall" || "$action" == "purge" ]]; then
+        process_state_group "$manifest" ephemeral "$state_root" "$home_root" validate
+    fi
+    if [[ "$action" == "purge" ]]; then
+        process_state_group "$manifest" preserved "$state_root" "$home_root" validate
+    fi
+
+    dotfiles_lock_acquire "$LOCK_DIR" 10000 || die "could not acquire repository lifecycle lock"
+    trap 'dotfiles_lock_release "$LOCK_DIR" >/dev/null 2>&1 || true' EXIT
+    manifest=$(manifest_for "$id")
+    validate_manifest "$manifest"
+    data_key=$(yq -r '.dataKey' "$manifest")
+    previous=$(enabled_for "$manifest")
+    if [[ "$action" == "enable" ]]; then target_enabled=true; else target_enabled=false; fi
+    if [[ "$previous" == "$target_enabled" ]]; then changed=false; else changed=true; fi
+    backup=$(mktemp "${DATA_FILE}.backup.XXXXXX")
+    temp=$(mktemp "${DATA_FILE}.tmp.XXXXXX")
+    cp -p "$DATA_FILE" "$backup"
+    if ! atomic_set_enabled "$data_key" "$target_enabled" "$temp"; then
+        rm -f "$temp" "$backup"
+        die "failed to update module configuration"
+    fi
+    apply_status=0
+    apply_module_bridges "$manifest" || apply_status=$?
+    if [[ "$apply_status" -ne 0 ]]; then
+        mv -f "$backup" "$DATA_FILE"
+        apply_module_bridges "$manifest" || rollback_status=$?
+        rm -f "$temp"
+        [[ "$rollback_status" -eq 0 ]] || die "chezmoi apply failed and target rollback also failed"
+        die "chezmoi apply failed; configuration and targets were rolled back"
+    fi
+    rm -f "$backup" "$temp"
+
+    if [[ "$action" == "uninstall" || "$action" == "purge" ]]; then
+        process_state_group "$manifest" ephemeral "$state_root" "$home_root" remove "$json"
+    fi
+    if [[ "$action" == "purge" ]]; then
+        process_state_group "$manifest" preserved "$state_root" "$home_root" remove "$json"
+    fi
+    if [[ "$json" == "json" ]]; then
+        jq -n \
+            --arg operation "module-$action" \
+            --arg id "$id" \
+            --arg dataKey "$data_key" \
+            --argjson enabled "$target_enabled" \
+            --argjson previouslyEnabled "$previous" \
+            --argjson changed "$changed" \
+            '{
+              schemaVersion: 1,
+              operation: $operation,
+              status: "complete",
+              module: {
+                id: $id,
+                dataKey: $dataKey,
+                enabled: $enabled,
+                previouslyEnabled: $previouslyEnabled
+              },
+              changed: $changed,
+              sourcePreserved: true
+            }'
+    else
+        printf '%s: %s (previously enabled: %s); module source preserved\n' "$action" "$id" "$previous"
+    fi
+)
+
+plan_system() {
+    validate_all_manifests
+    printf 'Plan: uninstall the complete dotfiles target state\n'
+    printf '  1. Snapshot chezmoi managed paths and back up every changed target.\n'
+    printf '  2. Quiesce enabled modules; remove the lifecycle controller last.\n'
+    printf '  3. Unlink managed files and symlinks; rmdir empty managed directories deepest-first.\n'
+    printf '  4. Remove declared installer side effects; preserve ~/projects and module state.\n'
+    printf '  5. Keep this source repository and shared Homebrew packages by default.\n'
+    printf '\nNever use chezmoi destroy here: it also deletes source-state entries.\n'
+    printf 'This is a read-only plan; no files were changed.\n'
+}
+
+usage() {
+    cat <<'EOF'
+Usage:
+  dotfiles-module validate [--json]
+  dotfiles-module status [--json]
+  dotfiles-module plan enable|disable|uninstall|purge MODULE [--json]
+  dotfiles-module plan system-uninstall
+  dotfiles-module enable|disable MODULE [--json]
+  dotfiles-module uninstall MODULE [--state-root ABSOLUTE_DIR] [--json]
+  dotfiles-module purge MODULE --confirm MODULE [--state-root ABSOLUTE_DIR] [--json]
+EOF
+}
+
+need yq
+need jq
+need chezmoi
+[[ -d "$MODULES_DIR" && -f "$DATA_FILE" ]] || die "invalid dotfiles source root: $ROOT"
+
+case "${1:-}" in
+    validate)
+        shift
+        [[ $# -le 1 && ( $# -eq 0 || "$1" == "--json" ) ]] || die "validate accepts only --json"
+        validate_repository "$@"
+        ;;
+    status)
+        shift
+        [[ $# -le 1 && ( $# -eq 0 || "$1" == "--json" ) ]] || die "status accepts only --json"
+        status "$@"
+        ;;
+    plan)
+        case "${2:-}" in
+            enable|disable|uninstall|purge)
+                [[ -n "${3:-}" ]] || die "exactly one module id is required"
+                [[ -z "${4:-}" || ( "$4" == "--json" && -z "${5:-}" ) ]] ||
+                    die "plan accepts only one module id and optional --json"
+                if [[ "${4:-}" == "--json" ]]; then
+                    plan_module_json "$2" "$3"
+                elif [[ "$2" == "enable" ]]; then
+                    plan_enable "$3"
+                else
+                    plan_module "$2" "$3"
+                fi
+                ;;
+            system-uninstall)
+                [[ -z "${3:-}" ]] || die "system-uninstall accepts no module id"
+                plan_system
+                ;;
+            *) usage; exit 2 ;;
+        esac
+        ;;
+    enable|disable|uninstall|purge)
+        action="$1"
+        shift
+        [[ -n "${1:-}" ]] || die "exactly one module id is required"
+        module_id="$1"
+        shift
+        confirmation=""
+        state_root=""
+        json="text"
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --confirm) [[ $# -ge 2 ]] || die "--confirm requires a module id"; confirmation="$2"; shift 2 ;;
+                --state-root) [[ $# -ge 2 ]] || die "--state-root requires a path"; state_root="$2"; shift 2 ;;
+                --json) json="json"; shift ;;
+                *) die "unknown option: $1" ;;
+            esac
+        done
+        [[ "$action" == "purge" || -z "$confirmation" ]] || die "--confirm is only valid with purge"
+        execute_module "$action" "$module_id" "$confirmation" "$state_root" "$json"
+        ;;
+    *) usage; exit 2 ;;
+esac

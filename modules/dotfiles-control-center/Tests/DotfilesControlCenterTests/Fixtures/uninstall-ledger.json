@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "operation": "system-uninstall",
+  "destination": "/tmp/test-home",
+  "source": "/tmp/test-source",
+  "backupPath": "/tmp/test-state/runs/20260713T120000Z-42/backup",
+  "id": "20260713T120000Z-42",
+  "status": "complete",
+  "error": null,
+  "restoreStatus": null
+}

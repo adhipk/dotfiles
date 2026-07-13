@@ -1,0 +1,6 @@
+# Draw a square black underlay for inactive windows and a session-colored
+# border around the focused tmux client. The helper starts JankyBorders with
+# the full configuration; later tmux hooks only update its active color.
+if command -v borders >/dev/null 2>&1 && [ -x "$HOME/bin/tmux-border-accent" ]; then
+  "$HOME/bin/tmux-border-accent" start "$BORDER_WIDTH" "$BORDER_COLOR" &
+fi

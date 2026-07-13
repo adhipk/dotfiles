@@ -79,6 +79,8 @@ that Resurrect itself does not retain.
 
 Layouts live in `~/.config/tmux/layouts/*.tmux.tsx`. They use a small JSX
 runtime built into `tmux-workspace`; React and `node_modules` are not involved.
+Their checked-in source, runtime, sesh configuration, and persistence adapters
+are owned together by `modules/tmux-sessions`.
 
 ```tsx
 const Core = () => <><Terminal /><Codex /><Nvim focus /></>

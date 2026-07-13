@@ -1,0 +1,8 @@
+{{- if .modules.shortcutGuide.enabled -}}
+#!/bin/sh
+export DOTFILES_DIR={{ .chezmoi.sourceDir | dir | quote }}
+export SHORTCUT_GUIDE_MODULE_DIR="$DOTFILES_DIR/modules/shortcut-guide"
+exec /usr/bin/env python3 - "$@" <<'SHORTCUT_CATALOG_PY'
+{{ includeTemplate "../modules/shortcut-guide/bin/shortcut-catalog" . }}
+SHORTCUT_CATALOG_PY
+{{- end -}}

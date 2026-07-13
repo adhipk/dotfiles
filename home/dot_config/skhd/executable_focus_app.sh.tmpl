@@ -1,0 +1,3 @@
+{{- if .modules.appFocus.enabled -}}
+{{ includeTemplate "../modules/app-focus/bin/focus_app.sh" . }}
+{{- end -}}

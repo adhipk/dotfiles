@@ -17,17 +17,38 @@ source_state_dir="$dotfiles_dir"
 if [ -f "$dotfiles_dir/.chezmoiroot" ]; then
   source_state_dir="$dotfiles_dir/$(cat "$dotfiles_dir/.chezmoiroot")"
 fi
+modules_dir="$dotfiles_dir/modules"
+module_controller="$modules_dir/module-lifecycle/bin/dotfiles-module"
+
+if [ ! -x "$module_controller" ]; then
+  echo "watch-sync: module lifecycle controller not found: $module_controller" >&2
+  exit 1
+fi
+
+watch_paths=("$source_state_dir")
+if [ -d "$modules_dir" ]; then
+  watch_paths+=("$modules_dir")
+fi
+
+validate_modules() {
+  DOTFILES_DIR="$dotfiles_dir" "$module_controller" validate --json >/dev/null
+}
+
+validate_modules
 
 echo "watch-sync: watching for changes..."
-echo "  - ${source_state_dir}/"
+for watch_path in "${watch_paths[@]}"; do
+  echo "  - ${watch_path}/"
+done
 echo ""
 echo "Will run: chezmoi -S ${dotfiles_dir} apply"
 
 fswatch -o \
-  "$source_state_dir" \
+  "${watch_paths[@]}" \
   | while read -r _; do
       echo ""
       echo "watch-sync: change detected, syncing..."
+      validate_modules
       chezmoi -S "$dotfiles_dir" apply
       echo "watch-sync: done."
     done

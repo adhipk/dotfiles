@@ -1,0 +1,12 @@
+# -- Move window to previous/next display (Option+Shift+[ / ]) --
+alt + shift - 0x21 : ~/.config/yabai/display-move prev  # alt+shift+[
+alt + shift - 0x1E : ~/.config/yabai/display-move next  # alt+shift+]
+
+# -- Move window to new desktop --
+ctrl + alt - n : ~/.config/yabai/create-space move-window
+
+# -- Create new desktop, moving the focused non-scratchpad window if present --
+alt - n : ~/.config/yabai/create-space auto
+
+# -- Close all empty desktops --
+alt - k : ~/.config/yabai/close_empty_spaces.sh

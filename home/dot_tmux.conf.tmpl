@@ -1,0 +1,114 @@
+# List of plugins
+set -g @plugin 'tmux-plugins/tpm'
+set -g @plugin 'tmux-plugins/tmux-sensible'
+
+# Other examples:
+# set -g @plugin 'github_username/plugin_name'
+# set -g @plugin 'github_username/plugin_name#branch'
+# set -g @plugin 'git@github.com:user/plugin'
+# set -g @plugin 'git@bitbucket.com:user/plugin'
+
+# remap prefix from 'C-b' to 'C-a'
+unbind C-b
+set-option -g prefix C-a
+bind-key C-a send-prefix
+
+
+# Non-templated sessions keep tmux's one-based starting index. The typed-window
+# module pins terminal/codex/nvim/tuxedo/awrit to 0/1/2/3/4 when enabled.
+set -g base-index 1
+# don't rename windows automatically
+set-option -g allow-rename off
+
+{{ if .modules.tmuxSessions.enabled }}{{ printf "\n%s" (includeTemplate "../modules/tmux-sessions/targets/tmux.conf.tmpl" .) }}{{ end }}
+{{ if .modules.agentTimer.enabled }}{{ printf "\n%s" (includeTemplate "../modules/agent-timer/targets/tmux.conf.tmpl" .) }}{{ end }}
+{{ if .modules.tmuxYazi.enabled }}{{ printf "\n%s" (includeTemplate "../modules/tmux-yazi/targets/tmux.conf.tmpl" .) }}{{ end }}
+{{ if .modules.terminalWindowTypes.enabled }}{{ printf "\n%s" (includeTemplate "../modules/terminal-window-types/targets/tmux.conf.tmpl" .) }}{{ end }}
+# Keep explicit lifecycle actions in tmux's Control-prefix namespace. Ghostty
+# exposes only a few app-local Command adapters; Hyper stays reserved.
+bind-key -N "Previous window" p previous-window
+bind-key -N "Next window" n next-window
+bind-key -N "Close window" '&' confirm-before -p "Close window #W? (y/n)" kill-window
+bind-key -N "Toggle pane zoom" z resize-pane -Z
+
+# Right Command+Space remains a shared Ghostty-only management adapter. skhd
+# translates it to F19, which terminal protocols expose as Shift+F7.
+bind-key -n -N "Open tmux command center" S-F7 run-shell -C "show-wk-menu-root"
+
+# Higher numbers retain direct index switching.
+bind-key -n C-4 select-window -t :4
+bind-key -n C-5 select-window -t :5
+bind-key -n C-6 select-window -t :6
+bind-key -n C-7 select-window -t :7
+bind-key -n C-8 select-window -t :8
+bind-key -n C-9 select-window -t :9
+# Enable mouse control (clickable windows, panes, resizable panes)
+set -g mouse on
+set -g @plugin 'catppuccin/tmux#v2.3.0' # See https://github.com/catppuccin/tmux/tags for additional tags
+# install.sh links the repo-owned command-center YAML into this plugin checkout.
+set -g @plugin 'alexwforsythe/tmux-which-key'
+{{ if .modules.tmuxSessions.enabled }}{{ printf "\n%s" (includeTemplate "../modules/tmux-sessions/targets/tmux-persistence.conf.tmpl" .) }}
+set -g @resurrect-processes '{{ if .modules.terminalWindowTypes.enabled }}{{ includeTemplate "../modules/terminal-window-types/targets/tmux-resurrect-process.tmpl" . | trim }}{{ end }}{{ if and .modules.terminalWindowTypes.enabled .modules.tmuxYazi.enabled }} {{ end }}{{ if .modules.tmuxYazi.enabled }}{{ includeTemplate "../modules/tmux-yazi/targets/tmux-resurrect-process.tmpl" . | trim }}{{ end }}'
+{{ end }}
+
+# Direct pane controls mirror the command center and preserve the active cwd.
+bind-key '|' split-window -h -c "#{pane_current_path}"
+bind-key '-' split-window -v -c "#{pane_current_path}"
+bind-key -r h select-pane -L
+bind-key -r j select-pane -D
+bind-key -r k select-pane -U
+bind-key -r l select-pane -R
+bind-key -r H resize-pane -L 5
+bind-key -r J resize-pane -D 5
+bind-key -r K resize-pane -U 5
+bind-key -r L resize-pane -R 5
+
+# Vi-style copy mode integrates with the macOS clipboard without another plugin.
+setw -g mode-keys vi
+set -s set-clipboard on
+bind-key -T copy-mode-vi v send-keys -X begin-selection
+bind-key -T copy-mode-vi y send-keys -X copy-pipe-and-cancel "pbcopy"
+
+# Options to make tmux more pleasant
+set -g mouse on
+set -g default-terminal "tmux-256color"
+
+# Keep Catppuccin's colors, but use a quiet status line that blends into Ghostty.
+set -g @catppuccin_flavor "mocha"
+set -g @catppuccin_status_background "none"
+set -g @catppuccin_window_status_style "none"
+
+# Catppuccin loads through TPM at the bottom of this file.
+
+# Give each session a clear accent without restoring the rounded status modules.
+# The two scratchpad sessions keep stable colors; other sessions rotate through
+# the remaining palette by their server-local tmux ID.
+set -g @dotfiles_status_accent '#{?#{==:#{session_name},dotfiles},#{@thm_mauve},#{==:#{session_name},projects},#{@thm_sapphire},#{==:#{e|m:#{s|^[$]||:session_id},8},0},#{@thm_green},#{==:#{e|m:#{s|^[$]||:session_id},8},1},#{@thm_peach},#{==:#{e|m:#{s|^[$]||:session_id},8},2},#{@thm_blue},#{==:#{e|m:#{s|^[$]||:session_id},8},3},#{@thm_teal},#{==:#{e|m:#{s|^[$]||:session_id},8},4},#{@thm_yellow},#{==:#{e|m:#{s|^[$]||:session_id},8},5},#{@thm_pink},#{==:#{e|m:#{s|^[$]||:session_id},8},6},#{@thm_lavender},#{@thm_sky}}'
+
+{{ if .modules.appearancePip.enabled }}{{ includeTemplate "../modules/appearance-pip/targets/tmux.conf.tmpl" . | trim }}{{ end }}
+
+# Minimal bottom bar: session/context at left, stable app labels in the center.
+# The terminal window remains named "terminal" internally so helpers and
+# shortcuts keep working; only its displayed label is shortened to "~". When
+# a generated numeric session has not been renamed, show its folder instead;
+# when a named session already matches its folder, do not repeat it.
+set -g status-position bottom
+set -g status-justify absolute-centre
+set -g status-style default
+set -g status-left-length 50
+set -g status-left '#[fg=#{E:@dotfiles_status_accent},bold]▌ #{?#{m/r:^[0-9]+$,#S},#{b:pane_current_path},#S}#[fg=#{@thm_surface_2},nobold]#{?#{||:#{m/r:^[0-9]+$,#S},#{==:#S,#{b:pane_current_path}}},, · }#[fg=#{@thm_overlay_0}]#{?#{||:#{m/r:^[0-9]+$,#S},#{==:#S,#{b:pane_current_path}}},,#{b:pane_current_path}}'
+set -g status-right-length 0
+set -g status-right ''
+set -g window-status-separator '#[fg=#{@thm_surface_1},nobold]  ·  '
+set -g window-status-style default
+set -g window-status-current-style default
+set -g window-status-activity-style default
+set -g window-status-bell-style default
+{{ if .modules.terminalWindowTypes.enabled }}{{ includeTemplate "../modules/terminal-window-types/targets/tmux-status.conf.tmpl" . }}{{ else }}set -g window-status-format '#[fg=#{@thm_overlay_0},nobold]#W#[default]'
+set -g window-status-current-format '#[fg=#{E:@dotfiles_status_accent},bold]#W#[default]'
+{{ end }}
+
+
+
+# Initialize TMUX plugin manager (keep this line at the very bottom of tmux.conf)
+run '~/.tmux/plugins/tpm/tpm'

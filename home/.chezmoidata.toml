@@ -30,6 +30,77 @@ vscodeExtensions = [
     "shd101wyy.markdown-preview-enhanced",
 ]
 
+# ChezMoi and TPM can clone Git repositories and follow branches/tags, but
+# neither natively locks an arbitrary checkout to an immutable commit. These
+# declarations are consumed by the dependencies module after each manager has
+# installed its repositories. The pin executor refuses dirty tracked files and
+# never fetches implicitly.
+[[gitPins]]
+id = "chezmoi-git:.tmux/plugins/tpm"
+manager = "chezmoi"
+path = ".tmux/plugins/tpm"
+revision = "e261deb1b47614eed3400089ce7197dc68acc4eb"
+
+[[gitPins]]
+id = "chezmoi-git:.local/share/chrome-extensions/gemma-gem"
+manager = "chezmoi"
+path = ".local/share/chrome-extensions/gemma-gem"
+revision = "6d7fde3f6ef811d76837923a6c489b61d8721625"
+
+[[gitPins]]
+id = "chezmoi-git:.local/share/raycast-extensions/raycast-lucide-excalidraw"
+manager = "chezmoi"
+path = ".local/share/raycast-extensions/raycast-lucide-excalidraw"
+revision = "f6704782dd514c5c72e5d03a2c651a31523f167c"
+
+[[gitPins]]
+id = "chezmoi-git:awrit"
+manager = "chezmoi"
+path = "awrit"
+revision = "5136e4987b6b54b2ac7c5220755ecb6ade503c0c"
+
+[[gitPins]]
+id = "chezmoi-git:projects/kittentts-cli"
+manager = "chezmoi"
+path = "projects/kittentts-cli"
+revision = "f6142dcc697e3c8c760855dd4af2a22bfd1161a7"
+
+[[gitPins]]
+id = "chezmoi-git:projects/tuxedo-project-todo"
+manager = "chezmoi"
+path = "projects/tuxedo-project-todo"
+revision = "11928c7c05b2dd9faab57466b2d0ee0739461268"
+
+[[gitPins]]
+id = "chezmoi-git:projects/gh-create-repo"
+manager = "chezmoi"
+path = "projects/gh-create-repo"
+revision = "ad85879fe7d91e10362da14f6d3f69840bce478d"
+
+[[gitPins]]
+id = "chezmoi-git:projects/macos-default-apps"
+manager = "chezmoi"
+path = "projects/macos-default-apps"
+revision = "d74118ca4802f75c17d991fb11128aad3fc39b14"
+
+[[gitPins]]
+id = "chezmoi-git:projects/unescape-cli"
+manager = "chezmoi"
+path = "projects/unescape-cli"
+revision = "c6e028f7fa219a6a506f4e2cca4c62b8a6760e0f"
+
+[[gitPins]]
+id = "tpm:tmux-plugins/tmux-sensible"
+manager = "tpm"
+path = ".tmux/plugins/tmux-sensible"
+revision = "25cb91f42d020f675bb0a2ce3fbd3a5d96119efa"
+
+[[gitPins]]
+id = "tpm:alexwforsythe/tmux-which-key"
+manager = "tpm"
+path = ".tmux/plugins/tmux-which-key"
+revision = "85fb9756447b989f3b94e515d1e6ee7fec76cba2"
+
 [[chromeExtensions]]
 name = "gemma-gem"
 url = "https://github.com/kessler/gemma-gem.git"
@@ -53,3 +124,61 @@ setupCommands = [
     "npm --prefix projects/raycast-extension ci",
     "npm --prefix projects/excalidraw-library run generate",
 ]
+
+[[externalProjects]]
+name = "awrit"
+url = "git@github.com:adhipk/awrit.git"
+refreshPeriod = "168h"
+path = "awrit"
+requiredExecutables = ["curl", "unzip"]
+rerunWhenMissingPaths = [
+    ".bun/bin/bun",
+    "node_modules",
+    "awrit-native-rs/awrit-native-rs.darwin-arm64.node",
+]
+setupCommands = ["./setup.sh"]
+
+[[externalProjects]]
+name = "kittentts-cli"
+url = "git@github.com:adhipk/kittentts-cli.git"
+refreshPeriod = "168h"
+path = "projects/kittentts-cli"
+requiredExecutables = []
+rerunWhenMissingPaths = []
+setupCommands = []
+
+[[externalProjects]]
+name = "tuxedo-project-todo"
+url = "git@github.com:adhipk/tuxedo-project-todo.git"
+refreshPeriod = "168h"
+path = "projects/tuxedo-project-todo"
+requiredExecutables = []
+rerunWhenMissingPaths = []
+setupCommands = []
+
+[[externalProjects]]
+name = "gh-create-repo"
+url = "git@github.com:adhipk/gh-create-repo.git"
+refreshPeriod = "168h"
+path = "projects/gh-create-repo"
+requiredExecutables = []
+rerunWhenMissingPaths = []
+setupCommands = []
+
+[[externalProjects]]
+name = "macos-default-apps"
+url = "git@github.com:adhipk/macos-default-apps.git"
+refreshPeriod = "168h"
+path = "projects/macos-default-apps"
+requiredExecutables = []
+rerunWhenMissingPaths = []
+setupCommands = []
+
+[[externalProjects]]
+name = "unescape-cli"
+url = "git@github.com:adhipk/unescape-cli.git"
+refreshPeriod = "168h"
+path = "projects/unescape-cli"
+requiredExecutables = []
+rerunWhenMissingPaths = []
+setupCommands = []

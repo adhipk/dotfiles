@@ -1,0 +1,62 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: scratchpads
+version: 1.0.0
+description: Provides the reusable Ghostty and yabai scratchpad manager and its Fn shortcuts.
+dataKey: modules.scratchpads
+distribution:
+  standalone: true
+  platform: macos
+requires:
+  executables:
+    - bash
+    - jq
+    - tmux
+    - yabai
+    - yq
+optional:
+  executables:
+    - tmux-session-template
+    - tmux-border-accent
+state:
+  preserved: []
+  ephemeral: []
+commands:
+  - name: scratchpads
+    source: bin/scratchpads
+    target: ~/bin/scratchpads
+    bridge: home/bin/executable_scratchpads.tmpl
+targets:
+  - service: command
+    source: bin/scratchpads
+    destination: ~/bin/scratchpads
+    bridge: home/bin/executable_scratchpads.tmpl
+    ownership: exclusive
+  - service: skhd-helper
+    source: bin/toggle_ghostty_quick_terminal.sh
+    destination: ~/.config/skhd/toggle_ghostty_quick_terminal.sh
+    bridge: home/dot_config/skhd/executable_toggle_ghostty_quick_terminal.sh.tmpl
+    ownership: exclusive
+  - service: scratchpads-config
+    source: config/defaults.toml
+    destination: ~/.config/scratchpads/config.toml
+    bridge: home/dot_config/scratchpads/config.toml.tmpl
+    ownership: exclusive
+  - service: scratchpads-config
+    source: lib/config.sh
+    destination: ~/.config/scratchpads/config.sh
+    bridge: home/dot_config/scratchpads/config.sh.tmpl
+    ownership: exclusive
+  - service: skhd
+    source: targets/skhdrc.tmpl
+    destination: ~/.skhdrc
+    bridge: home/dot_skhdrc.tmpl
+    ownership: contribution
+  - service: yabai
+    source: targets/yabairc.tmpl
+    destination: ~/.yabairc
+    bridge: home/dot_yabairc.tmpl
+    ownership: contribution
+tests:
+  - tests/test_module.sh
+  - tests/test_scratchpads.sh

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+export TODO_DIR="$PWD"
+export TODO_FILE="$TODO_DIR/todo.txt"
+export DONE_FILE="$TODO_DIR/done.txt"
+touch "$TODO_FILE" "$DONE_FILE"
+exec tuxedo "$@"

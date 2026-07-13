@@ -1,0 +1,6 @@
+# man-me: name=default-apps
+# man-me: category=Development and Repo
+# man-me: usage=default-apps list; default-apps get .md; default-apps set .md Obsidian
+# man-me: description=Inspect and change macOS default application handlers.
+# man-me: tags=defaults macos app handlers duti development
+# man-me: source=home/bin/symlink_default-apps.tmpl

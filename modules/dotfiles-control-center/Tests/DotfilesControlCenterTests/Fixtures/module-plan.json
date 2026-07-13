@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "operation": "module-purge",
+  "module": {
+    "id": "alpha",
+    "enabled": true,
+    "targetEnabled": false,
+    "description": "Alpha fixture module",
+    "dataKey": "modules.alpha"
+  },
+  "exclusiveTargets": ["~/bin/alpha"],
+  "contributionTargets": ["~/.config/example/config"],
+  "preservedState": ["~/.local/state/alpha", "./alpha-data"],
+  "ephemeralState": ["~/.cache/alpha"],
+  "stateRootRequired": true,
+  "confirmation": "alpha",
+  "sourcePreserved": true,
+  "executable": true,
+  "blockers": []
+}

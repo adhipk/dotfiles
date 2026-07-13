@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -n "${DOTFILES_DIR:-}" ]]; then
+    MODULE_DIR="$DOTFILES_DIR/modules/dotfiles-control-center"
+else
+    MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+fi
+CALLER_CWD="$(pwd -P)"
+
+[[ -f "$MODULE_DIR/Package.swift" ]] || {
+    printf 'dotfiles-control-center: package not found: %s\n' "$MODULE_DIR" >&2
+    exit 1
+}
+
+export DOTFILES_CONTROL_CENTER_CWD="$CALLER_CWD"
+exec /usr/bin/env swift run \
+    --package-path "$MODULE_DIR" \
+    --configuration release \
+    dotfiles-control-center "$@"

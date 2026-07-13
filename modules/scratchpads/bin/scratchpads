@@ -1,0 +1,1295 @@
+#!/usr/bin/env bash
+# man-me: name=scratchpads
+# man-me: category=Window and Display
+# man-me: usage=scratchpads open quick; scratchpads open codex; scratchpads open projects; scratchpads close; scratchpads rules; scratchpads debug
+# man-me: description=Ghostty and yabai scratchpad manager.
+# man-me: tags=scratchpad scratchpads ghostty yabai window terminal
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -r "$SCRIPT_DIR/../lib/config.sh" ]]; then
+  DEFAULT_CONFIG_LIB="$SCRIPT_DIR/../lib/config.sh"
+  DEFAULT_CONFIG_FILE="$SCRIPT_DIR/../config/defaults.toml"
+else
+  DEFAULT_CONFIG_LIB="$HOME/.config/scratchpads/config.sh"
+  DEFAULT_CONFIG_FILE="$HOME/.config/scratchpads/config.toml"
+fi
+SCRATCHPADS_CONFIG_LIB="${SCRATCHPADS_CONFIG_LIB:-$DEFAULT_CONFIG_LIB}"
+SCRATCHPADS_CONFIG_FILE="${SCRATCHPADS_CONFIG_FILE:-$DEFAULT_CONFIG_FILE}"
+if [[ ! -r "$SCRATCHPADS_CONFIG_LIB" ]]; then
+  printf 'scratchpads: missing config adapter: %s\n' "$SCRATCHPADS_CONFIG_LIB" >&2
+  exit 1
+fi
+# shellcheck source=../lib/config.sh
+source "$SCRATCHPADS_CONFIG_LIB"
+
+SCRATCHPAD_LOG_FILE="${SCRATCHPAD_LOG_FILE:-/tmp/scratchpads_${USER:-unknown}.log}"
+TMUX_SESSIONIZER="${TMUX_SESSIONIZER_CMD:-$HOME/bin/tmux-sessionizer-zoxide}"
+SCRATCHPAD_TERMINAL_LABEL="${SCRATCHPAD_TERMINAL_LABEL:-$(scratchpads_config_string '.tmux.terminal_label' 'terminal')}"
+SCRATCHPAD_DOTFILES_DIR="${SCRATCHPAD_DOTFILES_DIR:-$(scratchpads_home_path "$(scratchpads_config_string '.paths.dotfiles' 'dotfiles')")}"
+SCRATCHPAD_PROJECTS_DIR="${SCRATCHPAD_PROJECTS_DIR:-$(scratchpads_home_path "$(scratchpads_config_string '.paths.projects' 'projects')")}"
+SCRATCHPAD_DOTFILES_TMUX_SESSION="${SCRATCHPAD_DOTFILES_TMUX_SESSION:-$(scratchpads_config_string '.tmux.dotfiles_session' 'dotfiles')}"
+SCRATCHPAD_PROJECTS_TMUX_SESSION="${SCRATCHPAD_PROJECTS_TMUX_SESSION:-$(scratchpads_config_string '.tmux.projects_session' 'projects')}"
+SCRATCHPADS_COMMAND="${SCRATCHPADS_COMMAND:-$SCRIPT_DIR/${BASH_SOURCE[0]##*/}}"
+SCRATCHPAD_TMUX_CLIENT_OPTION="@scratchpads_terminal_client"
+SCRATCHPAD_TMUX_TARGET_OPTION="@scratchpads_terminal_target"
+SCRATCHPAD_LOCK_ROOT="${SCRATCHPAD_LOCK_ROOT:-${TMPDIR:-/tmp}/scratchpads_${USER:-unknown}}"
+SCRATCHPAD_OPEN_LOCK_DIR=""
+
+usage() {
+  cat <<'EOF'
+Usage:
+  scratchpads open quick
+  scratchpads open codex
+  scratchpads open projects
+  scratchpads tmux dotfiles
+  scratchpads tmux projects
+  scratchpads tmux nvim
+  scratchpads close
+  scratchpads debug
+  scratchpads rules
+EOF
+}
+
+log() {
+  local ts
+  ts=$(date '+%Y-%m-%dT%H:%M:%S%z')
+  printf '%s [%s] %s\n' "$ts" "${0##*/}" "$*" >> "$SCRATCHPAD_LOG_FILE"
+}
+
+release_scratchpad_open_lock() {
+  [ -n "$SCRATCHPAD_OPEN_LOCK_DIR" ] || return 0
+
+  rm -f "$SCRATCHPAD_OPEN_LOCK_DIR/pid" >/dev/null 2>&1 || true
+  rmdir "$SCRATCHPAD_OPEN_LOCK_DIR" >/dev/null 2>&1 || true
+  SCRATCHPAD_OPEN_LOCK_DIR=""
+}
+
+acquire_scratchpad_open_lock() {
+  local label="$1"
+  local lock_dir="${SCRATCHPAD_LOCK_ROOT}_open_${label}.lock"
+  local owner_pid=""
+
+  if ! mkdir "$lock_dir" 2>/dev/null; then
+    owner_pid=$(cat "$lock_dir/pid" 2>/dev/null || true)
+    if [ -z "$owner_pid" ]; then
+      # mkdir is atomic, but the winner still needs a moment to publish its PID.
+      sleep 0.05
+      owner_pid=$(cat "$lock_dir/pid" 2>/dev/null || true)
+    fi
+    if [[ "$owner_pid" =~ ^[0-9]+$ ]] && kill -0 "$owner_pid" 2>/dev/null; then
+      log "ignoring concurrent scratchpad request label=$label owner_pid=$owner_pid"
+      return 1
+    fi
+
+    rm -f "$lock_dir/pid" >/dev/null 2>&1 || true
+    rmdir "$lock_dir" >/dev/null 2>&1 || true
+    if ! mkdir "$lock_dir" 2>/dev/null; then
+      log "ignoring concurrent scratchpad request label=$label"
+      return 1
+    fi
+  fi
+
+  SCRATCHPAD_OPEN_LOCK_DIR="$lock_dir"
+  printf '%s\n' "$$" > "$lock_dir/pid"
+  trap release_scratchpad_open_lock EXIT
+}
+
+query_windows_json() {
+  local windows_json
+  if ! windows_json=$(yabai -m query --windows 2>/dev/null); then
+    log "yabai query --windows unavailable"
+    return 1
+  fi
+  printf '%s\n' "$windows_json"
+}
+
+query_focused_window_json() {
+  local window_json
+  if ! window_json=$(yabai -m query --windows --window 2>/dev/null); then
+    log "yabai query --windows --window unavailable"
+    return 1
+  fi
+  printf '%s\n' "$window_json"
+}
+
+focused_space_index() {
+  yabai -m query --spaces --space | jq -r '.index'
+}
+
+focused_display_index() {
+  yabai -m query --displays --display | jq -r '.index'
+}
+
+restore_origin_focus() {
+  local display_index="${1:-}"
+  local space_index="${2:-}"
+
+  if [ -n "$display_index" ]; then
+    yabai -m display --focus "$display_index" >/dev/null 2>&1 || true
+  fi
+  if [ -n "$space_index" ]; then
+    yabai -m space --focus "$space_index" >/dev/null 2>&1 || true
+  fi
+}
+
+scratchpad_ids() {
+  local label="${1:-}"
+  local windows_json
+
+  windows_json=$(query_windows_json) || return 1
+
+  if [ -n "$label" ]; then
+    printf '%s\n' "$windows_json" | jq -r --arg label "$label" '
+      .[]
+      | select((.scratchpad // "") == $label)
+      | .id'
+  else
+    printf '%s\n' "$windows_json" | jq -r '
+      .[]
+      | select((.scratchpad // "") | length > 0)
+      | .id'
+  fi
+}
+
+scratchpad_visible_ids() {
+  local label="$1"
+  local windows_json
+
+  windows_json=$(query_windows_json) || return 1
+  printf '%s\n' "$windows_json" | jq -r --arg label "$label" '
+    .[]
+    | select((.scratchpad // "") == $label)
+    | select(."is-visible" == true)
+    | .id'
+}
+
+scratchpad_summaries() {
+  local label="${1:-}"
+  local windows_json
+
+  windows_json=$(query_windows_json) || return 1
+
+  if [ -n "$label" ]; then
+    printf '%s\n' "$windows_json" | jq -c --arg label "$label" '
+      .[]
+      | select((.scratchpad // "") == $label)
+      | {id, app, title, scratchpad, is_visible: ."is-visible", has_focus: ."has-focus"}'
+  else
+    printf '%s\n' "$windows_json" | jq -c '
+      .[]
+      | select((.scratchpad // "") | length > 0)
+      | {id, app, title, scratchpad, is_visible: ."is-visible", has_focus: ."has-focus"}'
+  fi
+}
+
+window_id_exists() {
+  local target_id="$1"
+  local windows_json
+
+  windows_json=$(query_windows_json) || return 2
+
+  printf '%s\n' "$windows_json" | jq -e --argjson target_id "$target_id" '
+    any(.[]; .id == $target_id)
+  ' >/dev/null
+}
+
+focused_non_scratchpad_window_id() {
+  local focused_json
+  local focused_id
+  local focused_label
+
+  focused_json=$(query_focused_window_json) || return 1
+  focused_id=$(printf '%s\n' "$focused_json" | jq -r '.id // empty')
+  focused_label=$(printf '%s\n' "$focused_json" | jq -r '(.scratchpad // "") | select(length > 0)')
+
+  if [ -n "$focused_id" ] && [ -z "$focused_label" ]; then
+    printf '%s\n' "$focused_id"
+  fi
+}
+
+focused_scratchpad_is_label() {
+  local label="$1"
+  local focused_json
+  local focused_label
+
+  focused_json=$(query_focused_window_json) || return 1
+  focused_label=$(printf '%s\n' "$focused_json" | jq -r '(.scratchpad // "")')
+
+  [ "$focused_label" = "$label" ]
+}
+
+focused_scratchpad_label() {
+  local focused_json
+
+  focused_json=$(query_focused_window_json) || return 1
+  printf '%s\n' "$focused_json" | jq -r '(.scratchpad // "")'
+}
+
+ensure_scratchpad_shadow() {
+  local window_id="$1"
+  local window_json
+
+  window_json=$(yabai -m query --windows --window "$window_id" 2>/dev/null) || return 0
+  if [ "$(printf '%s\n' "$window_json" | jq -r '."has-shadow" // false')" != "true" ]; then
+    yabai -m window "$window_id" --toggle shadow >/dev/null 2>&1 || true
+  fi
+}
+
+suppress_scratchpad_border() {
+  local window_id="$1"
+  local border_helper="$HOME/bin/tmux-border-accent"
+
+  [ -x "$border_helper" ] || return 0
+  "$border_helper" suppress-scratchpads "$window_id" >/dev/null 2>&1 || true
+}
+
+polish_scratchpad_window() {
+  local window_id="$1"
+
+  ensure_scratchpad_shadow "$window_id"
+  suppress_scratchpad_border "$window_id"
+}
+
+focus_scratchpad_window() {
+  local window_id="$1"
+
+  yabai -m window --focus "$window_id" >/dev/null 2>&1 || true
+  polish_scratchpad_window "$window_id"
+}
+
+visible_non_scratchpad_window_id() {
+  local windows_json
+
+  windows_json=$(query_windows_json) || return 1
+  printf '%s\n' "$windows_json" | jq -r '
+    [ .[]
+      | select(."is-visible" == true)
+      | select((.scratchpad // "") | length == 0)
+      | .id
+    ] | last // empty'
+}
+
+restore_focus_after_close() {
+  local preferred_id="${1:-}"
+  local fallback_id
+
+  if [ -n "$preferred_id" ] && window_id_exists "$preferred_id"; then
+    if yabai -m window "$preferred_id" --focus >/dev/null 2>&1; then
+      log "restored focus to previous window id=$preferred_id"
+      return 0
+    fi
+  fi
+
+  if yabai -m window --focus recent >/dev/null 2>&1; then
+    log "restored focus to recent window"
+    return 0
+  fi
+
+  fallback_id=$(visible_non_scratchpad_window_id 2>/dev/null || true)
+  if [ -n "$fallback_id" ] && yabai -m window "$fallback_id" --focus >/dev/null 2>&1; then
+    log "restored focus to visible non-scratchpad window id=$fallback_id"
+    return 0
+  fi
+
+  log "could not restore focus after scratchpad close"
+  return 1
+}
+
+hide_scratchpad_and_restore_focus() {
+  local label="$1"
+  local fallback_id
+
+  log "hiding scratchpad label=$label"
+  yabai -m window --toggle "$label" >/dev/null 2>&1 || true
+  sleep 0.1
+
+  if yabai -m window --focus recent >/dev/null 2>&1; then
+    if ! focused_scratchpad_is_label "$label"; then
+      log "focused recent non-scratchpad window"
+      return 0
+    fi
+  fi
+
+  fallback_id=$(visible_non_scratchpad_window_id 2>/dev/null || true)
+  if [ -n "$fallback_id" ] && yabai -m window "$fallback_id" --focus >/dev/null 2>&1; then
+    log "focused visible non-scratchpad window id=$fallback_id"
+    return 0
+  fi
+
+  log "could not restore focus after hiding scratchpad label=$label"
+  return 1
+}
+
+close_focused_scratchpad_window() {
+  local app="${1:-}"
+
+  if [ "$app" = "Ghostty" ] && [ "$(uname -s)" = "Darwin" ]; then
+    if /usr/bin/osascript <<'APPLESCRIPT' >/dev/null 2>&1
+tell application "Ghostty"
+  if exists front window then
+    close window front window
+  end if
+end tell
+APPLESCRIPT
+    then
+      log "closed focused Ghostty window via AppleScript"
+      return 0
+    fi
+
+    log "Ghostty AppleScript close failed; falling back to yabai --close"
+  fi
+
+  log "closing focused scratchpad window via yabai app=${app:-<unknown>}"
+  yabai -m window --close >/dev/null 2>&1 || true
+}
+
+close_window_ids() {
+  local label="${1:-}"
+  local ids="${2:-}"
+  local restore_id="${3:-}"
+  local id
+
+  if [ -z "$ids" ]; then
+    log "close_window_ids label=${label:-<any>} no windows to close"
+    return 0
+  fi
+
+  while IFS= read -r id; do
+    [ -n "$id" ] || continue
+    log "closing scratchpad${label:+ label=$label} id=$id"
+    if yabai -m window "$id" --focus >/dev/null 2>&1; then
+      sleep 0.1
+      local focused_id=""
+      local focused_app=""
+      if query_focused_window_json >/dev/null 2>&1; then
+        local focused_json
+        focused_json=$(query_focused_window_json)
+        focused_id=$(printf '%s\n' "$focused_json" | jq -r '.id // empty')
+        focused_app=$(printf '%s\n' "$focused_json" | jq -r '.app // empty')
+        log "focused scratchpad candidate id=$focused_id app=${focused_app:-<empty>}"
+      fi
+
+      if [ "$focused_id" = "$id" ]; then
+        close_focused_scratchpad_window "$focused_app"
+      else
+        log "focused window id=$focused_id did not match scratchpad id=$id; skipping front-window close"
+        yabai -m window "$id" --close >/dev/null 2>&1 || true
+      fi
+    else
+      log "could not focus scratchpad id=$id; trying yabai close by id"
+      yabai -m window "$id" --close >/dev/null 2>&1 || true
+    fi
+
+    sleep 0.1
+    if window_id_exists "$id"; then
+      log "scratchpad id=$id still exists after close attempt"
+    else
+      case $? in
+        1)
+          log "confirmed scratchpad id=$id closed"
+          ;;
+        2)
+          log "could not verify scratchpad id=$id after close attempt"
+          ;;
+        *)
+          log "close verification returned unexpected status for id=$id"
+          ;;
+      esac
+    fi
+  done <<EOF_IDS
+$ids
+EOF_IDS
+
+  restore_focus_after_close "$restore_id" || true
+}
+
+close_all_scratchpads() {
+  local ids
+  local restore_id
+
+  log "close_all_scratchpads start"
+
+  if ! ids=$(query_windows_json 2>/dev/null | jq -r '
+    .[]
+    | select((.scratchpad // "") | length > 0)
+    | .id'); then
+    log "close_all_scratchpads could not query yabai"
+    return 0
+  fi
+
+  if [ -z "$ids" ]; then
+    log "close_all_scratchpads no transient scratchpads to close"
+    return 0
+  fi
+
+  restore_id=$(focused_non_scratchpad_window_id 2>/dev/null || true)
+  close_window_ids "" "$ids" "$restore_id"
+  log "close_all_scratchpads done"
+}
+
+close_scratchpads_for_label() {
+  local label="$1"
+  local ids
+  local restore_id
+
+  if ! ids=$(scratchpad_ids "$label" 2>/dev/null); then
+    log "close_scratchpads_for_label label=$label could not query yabai"
+    return 0
+  fi
+
+  if [ -z "$ids" ]; then
+    log "close_scratchpads_for_label label=$label nothing to close"
+    return 0
+  fi
+
+  restore_id=$(focused_non_scratchpad_window_id 2>/dev/null || true)
+  close_window_ids "$label" "$ids" "$restore_id"
+}
+
+close_scratchpads_except_label() {
+  local keep_label="$1"
+  local ids
+  local restore_id
+
+  if ! ids=$(query_windows_json 2>/dev/null | jq -r --arg keep_label "$keep_label" '
+    .[]
+    | select((.scratchpad // "") | length > 0)
+    | select((.scratchpad // "") != $keep_label)
+    | .id'); then
+    log "close_scratchpads_except_label keep_label=$keep_label could not query yabai"
+    return 0
+  fi
+
+  if [ -z "$ids" ]; then
+    log "close_scratchpads_except_label keep_label=$keep_label nothing to close"
+    return 0
+  fi
+
+  restore_id=$(focused_non_scratchpad_window_id 2>/dev/null || true)
+  close_window_ids "" "$ids" "$restore_id"
+}
+
+close_duplicate_scratchpads_for_label() {
+  local label="$1"
+  local ids
+  local duplicate_ids
+
+  ids=$(scratchpad_ids "$label" 2>/dev/null || true)
+  if [ -z "$ids" ]; then
+    return 0
+  fi
+
+  duplicate_ids=$(printf '%s\n' "$ids" | tail -n +2)
+  if [ -z "$duplicate_ids" ]; then
+    return 0
+  fi
+
+  log "closing duplicate scratchpads for label=$label"
+  close_window_ids "$label" "$duplicate_ids" ""
+}
+
+hide_scratchpad_label() {
+  local label="$1"
+  local visible_ids
+  local restore_id
+
+  if ! visible_ids=$(scratchpad_visible_ids "$label" 2>/dev/null); then
+    log "hide_scratchpad_label label=$label could not query yabai"
+    return 0
+  fi
+
+  if [ -z "$visible_ids" ]; then
+    log "hide_scratchpad_label label=$label no visible scratchpad"
+    return 0
+  fi
+
+  restore_id=$(focused_non_scratchpad_window_id 2>/dev/null || true)
+  log "hiding scratchpad label=$label"
+  yabai -m window --toggle "$label" >/dev/null 2>&1 || true
+  restore_focus_after_close "$restore_id" || true
+}
+
+toggle_scratchpad_label() {
+  local label="$1"
+  local profile="$2"
+  local ids
+  local visible_ids
+  local restore_id
+  local win_id
+
+  if ! ids=$(scratchpad_ids "$label" 2>/dev/null); then
+    log "toggle_scratchpad_label label=$label could not query yabai"
+    return 1
+  fi
+
+  if [ -z "$ids" ]; then
+    log "toggle_scratchpad_label label=$label nothing to toggle"
+    return 1
+  fi
+
+  visible_ids=$(scratchpad_visible_ids "$label" 2>/dev/null || true)
+  restore_id=$(focused_non_scratchpad_window_id 2>/dev/null || true)
+
+  log "toggling scratchpad label=$label"
+  yabai -m window --toggle "$label" >/dev/null 2>&1 || true
+
+  if [ -n "$visible_ids" ]; then
+    restore_focus_after_close "$restore_id" || true
+    return 0
+  fi
+
+  sleep 0.1
+  win_id=$(scratchpad_ids "$label" 2>/dev/null | head -1 || true)
+  if [ -n "$win_id" ]; then
+    yabai -m window "$win_id" --grid "$(scratchpad_grid_for_profile "$profile")" >/dev/null 2>&1 || true
+    focus_scratchpad_window "$win_id"
+  fi
+}
+
+scratchpad_window_title() {
+  printf 'scratchpad:%s\n' "$1"
+}
+
+scratchpad_profile_for_label() {
+  case "$1" in
+    "$SCRATCHPAD_TERMINAL_LABEL")
+      printf '%s\n' "codex"
+      ;;
+    codex_dotfiles)
+      printf '%s\n' "codex"
+      ;;
+    projects_tmux)
+      printf '%s\n' "codex"
+      ;;
+    quick_terminal)
+      printf '%s\n' "bottom"
+      ;;
+    *)
+      printf '%s\n' "bottom"
+      ;;
+  esac
+}
+
+scratchpad_grid_for_profile() {
+  case "$1" in
+    codex)
+      printf '%s\n' "10:10:1:1:8:8"
+      ;;
+    bottom)
+      printf '%s\n' "6:1:0:4:1:2"
+      ;;
+    *)
+      printf '%s\n' "6:1:0:4:1:2"
+      ;;
+  esac
+}
+
+launch_ghostty() {
+  local title="$1"
+  local initial_command="${2:-}"
+  local profile="${3:-}"
+  local cwd="${4:-$HOME}"
+  local ghostty_args=(
+    --working-directory="$cwd"
+    --title="$title"
+    --background=#000000
+    --background-opacity=1
+    --background-blur=false
+    --macos-titlebar-style=hidden
+    --window-padding-x=12
+    --window-padding-y=10
+    --window-padding-balance=true
+    --resize-overlay=never
+    --window-save-state=never
+    --mouse-hide-while-typing=true
+    --quit-after-last-window-closed=true
+  )
+  # A scratchpad is a fresh terminal process, even when its launcher was
+  # invoked from inside tmux. Leaking TMUX would make the initial command try
+  # to switch a client that does not exist yet instead of attaching one.
+  local -a clean_ghostty_env=(env -u ZDOTDIR -u TMUX -u TMUX_PANE)
+
+  if [ -n "$initial_command" ]; then
+    ghostty_args+=(--command="$initial_command")
+  fi
+
+  if [ "$(uname -s)" != "Darwin" ] && command -v ghostty >/dev/null 2>&1; then
+    log "launching ghostty window via +new-window cwd=$cwd title=$title"
+    if "${clean_ghostty_env[@]}" ghostty +new-window "${ghostty_args[@]}" >/dev/null 2>&1; then
+      return 0
+    fi
+    log "ghostty +new-window launch failed; falling back"
+  fi
+
+  if [ "$(uname -s)" = "Darwin" ]; then
+    log "launching Ghostty via open cwd=$cwd title=$title"
+    "${clean_ghostty_env[@]}" open -n -a Ghostty --args "${ghostty_args[@]}" >/dev/null 2>&1 || {
+      log "Ghostty open launch failed"
+      return 1
+    }
+  else
+    log "launching Ghostty via open -n -a Ghostty --args --working-directory=$cwd --title=$title"
+    "${clean_ghostty_env[@]}" open -n -a Ghostty --args "${ghostty_args[@]}" >/dev/null 2>&1 || {
+      log "Ghostty launch failed"
+      return 1
+    }
+  fi
+}
+
+send_command_to_ghostty_window() {
+  local title="$1"
+  local command_text="$2"
+
+  [ -n "$command_text" ] || return 0
+
+  log "sending command to Ghostty window title=$title command=$command_text"
+  if ! /usr/bin/osascript - "$title" "$command_text" <<'APPLESCRIPT'
+on run argv
+  set windowTitle to item 1 of argv
+  set commandText to item 2 of argv
+
+  tell application "Ghostty"
+    activate
+    repeat with win in windows
+      if name of win is windowTitle then
+        activate window win
+        set term to terminal 1 of selected tab of win
+        input text commandText to term
+        send key "enter" to term
+        focus term
+        return
+      end if
+    end repeat
+  end tell
+end run
+APPLESCRIPT
+  then
+    log "failed to send command to Ghostty window title=$title"
+    return 1
+  fi
+}
+
+center_grid_for_label() {
+  scratchpad_grid_for_profile "$(scratchpad_profile_for_label "$1")"
+}
+
+print_rule_for_label() {
+  local label="$1"
+  local profile
+  local title
+  local grid
+
+  profile=$(scratchpad_profile_for_label "$label")
+  title=$(scratchpad_window_title "$label")
+  grid=$(scratchpad_grid_for_profile "$profile")
+
+  printf 'yabai -m rule --remove "scratchpad_%s" >/dev/null 2>&1 || true\n' "$label"
+  printf 'yabai -m rule --add label="scratchpad_%s" app="^Ghostty$" title="^%s$" scratchpad="%s" grid="%s"\n' "$label" "$title" "$label" "$grid"
+}
+
+print_static_rules() {
+  printf 'yabai -m rule --remove "scratchpad_codex_dotfiles" >/dev/null 2>&1 || true\n'
+  printf 'yabai -m rule --remove "scratchpad_projects_tmux" >/dev/null 2>&1 || true\n'
+  print_rule_for_label "$SCRATCHPAD_TERMINAL_LABEL"
+  print_rule_for_label "quick_terminal"
+}
+
+ghostty_window_ids_json() {
+  local windows_json
+  windows_json=$(query_windows_json) || return 1
+  printf '%s\n' "$windows_json" | jq -c '[ .[] | select(.app == "Ghostty") | .id ]'
+}
+
+ghostty_window_id_for_title() {
+  local title="$1"
+  local windows_json
+
+  windows_json=$(query_windows_json) || return 1
+  printf '%s\n' "$windows_json" | jq -r --arg title "$title" '
+    [ .[]
+      | select(.app == "Ghostty")
+      | select(.title == $title)
+      | .id
+    ] | last // empty'
+}
+
+close_duplicate_scratchpad_title_windows() {
+  local label="$1"
+  local keep_id="$2"
+  local title
+  local duplicate_ids
+  local id
+
+  title=$(scratchpad_window_title "$label")
+  duplicate_ids=$(query_windows_json 2>/dev/null | jq -r \
+    --arg title "$title" \
+    --argjson keep_id "$keep_id" '
+      .[]
+      | select(.app == "Ghostty")
+      | select(.title == $title)
+      | select(.id != $keep_id)
+      | .id' || true)
+
+  [ -n "$duplicate_ids" ] || return 0
+
+  while IFS= read -r id; do
+    [ -n "$id" ] || continue
+    log "closing duplicate Ghostty scratchpad title=$title id=$id keep_id=$keep_id"
+    yabai -m window "$id" --close >/dev/null 2>&1 || true
+  done <<EOF_IDS
+$duplicate_ids
+EOF_IDS
+}
+
+new_ghostty_window_id() {
+  local before_json="${1:-[]}"
+  local windows_json="$2"
+
+  printf '%s\n' "$windows_json" | jq -r --argjson before "$before_json" '
+    [ .[]
+      | select(.app == "Ghostty")
+      | .id
+    ] - $before
+    | last // empty'
+}
+
+window_scratchpad_label() {
+  local target_id="$1"
+  local windows_json
+
+  windows_json=$(query_windows_json) || return 1
+  printf '%s\n' "$windows_json" | jq -r --argjson target_id "$target_id" '
+    .[]
+    | select(.id == $target_id)
+    | (.scratchpad // "")'
+}
+
+open_scratchpad() {
+  local label="$1"
+  local profile="${2:-}"
+  shift
+  if [ $# -gt 0 ]; then
+    shift
+  fi
+
+  if [ -z "$profile" ]; then
+    profile=$(scratchpad_profile_for_label "$label")
+  fi
+
+  if [ "$profile" != "bottom" ]; then
+    printf '%s\n' "Unknown scratchpad profile: $profile" >&2
+    return 1
+  fi
+
+  open_scratchpad_with_profile "$label" "$profile" "$@"
+}
+
+open_scratchpad_with_profile() {
+  local label="$1"
+  local profile="$2"
+  shift
+  shift
+
+  local existing_ids
+  local before_json="[]"
+  local windows_json
+  local win_id
+  local title
+  local command_text=""
+  local initial_command=""
+
+  log "open label=$label profile=$profile args=$*"
+
+  if existing_ids=$(scratchpad_ids "$label" 2>/dev/null); then
+    if [ -n "$existing_ids" ]; then
+      log "existing scratchpad label=$label found; closing instead of spawning a duplicate"
+      close_scratchpads_for_label "$label"
+      return 0
+    fi
+  else
+    log "open label=$label could not inspect existing scratchpads"
+  fi
+
+  if windows_json=$(ghostty_window_ids_json 2>/dev/null); then
+    before_json="$windows_json"
+  fi
+
+  title=$(scratchpad_window_title "$label")
+
+  log "launching quick scratchpad"
+  initial_command="direct:/bin/zsh"
+  command_text="${*:-}"
+
+  if win_id=$(ghostty_window_id_for_title "$title" 2>/dev/null); then
+    if [ -n "$win_id" ]; then
+      log "found existing Ghostty window with scratchpad title label=$label win_id=$win_id"
+      yabai -m window "$win_id" --scratchpad "$label" >/dev/null 2>&1 || true
+      yabai -m window "$win_id" --grid "$(scratchpad_grid_for_profile "$profile")" >/dev/null 2>&1 || true
+      focus_scratchpad_window "$win_id"
+      send_command_to_ghostty_window "$title" "$command_text" || true
+      return 0
+    fi
+  fi
+
+  launch_ghostty "$title" "$initial_command" "$profile"
+
+  for _ in {1..30}; do
+    if ! windows_json=$(query_windows_json 2>/dev/null); then
+      sleep 0.1
+      continue
+    fi
+
+    win_id=$(new_ghostty_window_id "$before_json" "$windows_json")
+    if [ -n "$win_id" ]; then
+      break
+    fi
+    sleep 0.1
+  done
+
+  if [ -n "$win_id" ]; then
+    local assigned_label
+    assigned_label=$(window_scratchpad_label "$win_id" 2>/dev/null || true)
+    if [ "$assigned_label" = "$label" ]; then
+      log "static rule assigned label=$label to win_id=$win_id"
+    else
+      log "fallback assigning label=$label to win_id=$win_id current_label=${assigned_label:-<empty>}"
+      yabai -m window "$win_id" --scratchpad "$label" >/dev/null 2>&1 || true
+    fi
+    yabai -m window "$win_id" --grid "$(scratchpad_grid_for_profile "$profile")" >/dev/null 2>&1 || true
+    focus_scratchpad_window "$win_id"
+    send_command_to_ghostty_window "$title" "$command_text" || true
+  else
+    log "failed to locate the new Ghostty window for label=$label"
+  fi
+}
+
+open_or_focus_scratchpad_with_profile() {
+  local label="$1"
+  local profile="$2"
+  local cwd="$3"
+  local command_text="$4"
+  local initial_command="${5:-direct:/bin/zsh}"
+
+  local before_json="[]"
+  local origin_display
+  local origin_space
+  local windows_json
+  local win_id
+  local title
+
+  log "open_or_focus label=$label profile=$profile cwd=$cwd command=$command_text"
+
+  title=$(scratchpad_window_title "$label")
+  origin_display=$(focused_display_index 2>/dev/null || true)
+  origin_space=$(focused_space_index 2>/dev/null || true)
+
+  if win_id=$(scratchpad_ids "$label" 2>/dev/null | head -1); then
+    if [ -n "$win_id" ]; then
+      if focused_scratchpad_is_label "$label"; then
+        hide_scratchpad_and_restore_focus "$label" || true
+        return 0
+      fi
+
+      log "focusing existing scratchpad label=$label win_id=$win_id"
+      restore_origin_focus "$origin_display" "$origin_space"
+      if [ -n "$origin_space" ]; then
+        yabai -m window "$win_id" --space "$origin_space" >/dev/null 2>&1 || true
+      fi
+      if ! scratchpad_visible_ids "$label" 2>/dev/null | grep -qx "$win_id"; then
+        yabai -m window --toggle "$label" >/dev/null 2>&1 || true
+        sleep 0.1
+      fi
+      yabai -m window "$win_id" --grid "$(scratchpad_grid_for_profile "$profile")" >/dev/null 2>&1 || true
+      focus_scratchpad_window "$win_id"
+      return 0
+    fi
+  else
+    log "open_or_focus label=$label could not inspect scratchpads"
+  fi
+
+  if win_id=$(ghostty_window_id_for_title "$title" 2>/dev/null); then
+    if [ -n "$win_id" ]; then
+      log "claiming existing Ghostty window title=$title win_id=$win_id"
+      restore_origin_focus "$origin_display" "$origin_space"
+      yabai -m window "$win_id" --scratchpad "$label" >/dev/null 2>&1 || true
+      if [ -n "$origin_space" ]; then
+        yabai -m window "$win_id" --space "$origin_space" >/dev/null 2>&1 || true
+      fi
+      yabai -m window "$win_id" --grid "$(scratchpad_grid_for_profile "$profile")" >/dev/null 2>&1 || true
+      focus_scratchpad_window "$win_id"
+      return 0
+    fi
+  fi
+
+  if windows_json=$(ghostty_window_ids_json 2>/dev/null); then
+    before_json="$windows_json"
+  fi
+
+  restore_origin_focus "$origin_display" "$origin_space"
+  launch_ghostty "$title" "$initial_command" "$profile" "$cwd"
+
+  for _ in {1..30}; do
+    if ! windows_json=$(query_windows_json 2>/dev/null); then
+      sleep 0.1
+      continue
+    fi
+
+    win_id=$(new_ghostty_window_id "$before_json" "$windows_json")
+    if [ -n "$win_id" ]; then
+      break
+    fi
+    sleep 0.1
+  done
+
+  if [ -n "$win_id" ]; then
+    local assigned_label
+    assigned_label=$(window_scratchpad_label "$win_id" 2>/dev/null || true)
+    if [ "$assigned_label" != "$label" ]; then
+      log "fallback assigning label=$label to win_id=$win_id current_label=${assigned_label:-<empty>}"
+      yabai -m window "$win_id" --scratchpad "$label" >/dev/null 2>&1 || true
+    fi
+    if [ -n "$origin_space" ]; then
+      yabai -m window "$win_id" --space "$origin_space" >/dev/null 2>&1 || true
+    fi
+    restore_origin_focus "$origin_display" "$origin_space"
+    yabai -m window "$win_id" --grid "$(scratchpad_grid_for_profile "$profile")" >/dev/null 2>&1 || true
+    focus_scratchpad_window "$win_id"
+    send_command_to_ghostty_window "$title" "$command_text" || true
+  else
+    log "failed to locate new Ghostty window for label=$label"
+  fi
+}
+
+open_codex_dotfiles_scratchpad() {
+  open_terminal_tmux_scratchpad "dotfiles"
+}
+
+ensure_standard_scratchpad_tmux_windows() {
+  local session="$1"
+  local cwd="$2"
+
+  if [ -x "$HOME/bin/tmux-session-template" ]; then
+    "$HOME/bin/tmux-session-template" ensure "$session" "$cwd"
+  fi
+}
+
+ensure_dotfiles_tmux_session() {
+  local session="$SCRATCHPAD_DOTFILES_TMUX_SESSION"
+  local dotfiles_dir="$SCRATCHPAD_DOTFILES_DIR"
+
+  if [ ! -d "$dotfiles_dir" ]; then
+    printf 'scratchpads: dotfiles directory not found: %s\n' "$dotfiles_dir" >&2
+    return 1
+  fi
+
+  if ! command -v tmux >/dev/null 2>&1; then
+    printf 'scratchpads: tmux is required for the dotfiles scratchpad.\n' >&2
+    return 1
+  fi
+
+  if ! tmux has-session -t "=$session" 2>/dev/null; then
+    tmux new-session -d -e DOTFILES_TMUX_TEMPLATE=skip -s "$session" -c "$dotfiles_dir" -n terminal
+  fi
+  ensure_standard_scratchpad_tmux_windows "$session" "$dotfiles_dir"
+
+  tmux select-window -t "=${session}:codex" >/dev/null 2>&1 || true
+}
+
+ensure_projects_tmux_session() {
+  local target="${1:-codex}"
+  local session="$SCRATCHPAD_PROJECTS_TMUX_SESSION"
+  local project_dir="$SCRATCHPAD_PROJECTS_DIR"
+
+  if [ ! -d "$project_dir" ]; then
+    printf 'scratchpads: projects directory not found: %s\n' "$project_dir" >&2
+    return 1
+  fi
+
+  if ! command -v tmux >/dev/null 2>&1; then
+    printf 'scratchpads: tmux is required for the projects scratchpad.\n' >&2
+    return 1
+  fi
+
+  if ! tmux has-session -t "=$session" 2>/dev/null; then
+    tmux new-session -d -e DOTFILES_TMUX_TEMPLATE=skip -s "$session" -c "$project_dir" -n terminal
+  fi
+  ensure_standard_scratchpad_tmux_windows "$session" "$project_dir"
+
+  tmux select-window -t "=${session}:${target}" >/dev/null 2>&1 \
+    || tmux select-window -t "=${session}:codex" >/dev/null 2>&1 \
+    || true
+}
+
+tmux_target_session_for() {
+  case "$1" in
+    codex|dotfiles)
+      printf '%s\n' "$SCRATCHPAD_DOTFILES_TMUX_SESSION"
+      ;;
+    projects|nvim)
+      printf '%s\n' "$SCRATCHPAD_PROJECTS_TMUX_SESSION"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+tmux_target_window_for() {
+  case "$1" in
+    codex|dotfiles|projects)
+      printf '%s\n' "codex"
+      ;;
+    nvim)
+      printf '%s\n' "nvim"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+ensure_tmux_target() {
+  case "$1" in
+    codex|dotfiles)
+      ensure_dotfiles_tmux_session
+      ;;
+    projects|nvim)
+      ensure_projects_tmux_session "$(tmux_target_window_for "$1")"
+      ;;
+    *)
+      printf 'scratchpads: unknown tmux target: %s\n' "$1" >&2
+      return 1
+      ;;
+  esac
+}
+
+set_terminal_scratchpad_target() {
+  local target="$1"
+  tmux set-option -gq "$SCRATCHPAD_TMUX_TARGET_OPTION" "$target" 2>/dev/null || true
+}
+
+current_terminal_scratchpad_target() {
+  tmux show-option -gqv "$SCRATCHPAD_TMUX_TARGET_OPTION" 2>/dev/null || true
+}
+
+record_terminal_scratchpad_client() {
+  local tty_name
+
+  tty_name=$(tty 2>/dev/null || true)
+  [ -n "$tty_name" ] || return 0
+  tmux set-option -gq "$SCRATCHPAD_TMUX_CLIENT_OPTION" "$tty_name" 2>/dev/null || true
+}
+
+infer_terminal_scratchpad_client() {
+  tmux list-clients -F '#{client_name} #{client_session}' 2>/dev/null \
+    | awk -v dotfiles="$SCRATCHPAD_DOTFILES_TMUX_SESSION" \
+          -v projects="$SCRATCHPAD_PROJECTS_TMUX_SESSION" \
+          '$2 == dotfiles || $2 == projects { print $1; exit }'
+}
+
+terminal_scratchpad_client() {
+  local client
+
+  client=$(tmux show-option -gqv "$SCRATCHPAD_TMUX_CLIENT_OPTION" 2>/dev/null || true)
+  if [ -n "$client" ] && tmux list-clients -F '#{client_name}' 2>/dev/null | grep -Fx -- "$client" >/dev/null; then
+    printf '%s\n' "$client"
+    return 0
+  fi
+
+  client=$(infer_terminal_scratchpad_client)
+  [ -n "$client" ] || return 1
+  tmux set-option -gq "$SCRATCHPAD_TMUX_CLIENT_OPTION" "$client" 2>/dev/null || true
+  printf '%s\n' "$client"
+}
+
+switch_terminal_scratchpad_client() {
+  local target="$1"
+  local session
+  local window
+  local client
+
+  ensure_tmux_target "$target"
+  session=$(tmux_target_session_for "$target")
+  window=$(tmux_target_window_for "$target")
+  tmux select-window -t "=${session}:${window}" >/dev/null 2>&1 || true
+
+  if client=$(terminal_scratchpad_client); then
+    tmux switch-client -c "$client" -t "=$session" >/dev/null 2>&1 || return 1
+    set_terminal_scratchpad_target "$target"
+    return 0
+  fi
+
+  return 1
+}
+
+attach_tmux_session() {
+  local session="$1"
+  local target="${2:-$session}"
+
+  record_terminal_scratchpad_client
+  set_terminal_scratchpad_target "$target"
+
+  if [ -n "${TMUX:-}" ]; then
+    exec tmux switch-client -t "=$session"
+  fi
+
+  exec tmux attach -t "=$session"
+}
+
+attach_dotfiles_tmux_session() {
+  ensure_dotfiles_tmux_session
+  attach_tmux_session "$SCRATCHPAD_DOTFILES_TMUX_SESSION" "dotfiles"
+}
+
+attach_projects_tmux_session() {
+  local target="${1:-codex}"
+  ensure_projects_tmux_session "$(tmux_target_window_for "$target")"
+  attach_tmux_session "$SCRATCHPAD_PROJECTS_TMUX_SESSION" "$target"
+}
+
+open_projects_tmux_scratchpad() {
+  open_terminal_tmux_scratchpad "projects"
+}
+
+open_terminal_tmux_scratchpad() {
+  local target="$1"
+  local label="$SCRATCHPAD_TERMINAL_LABEL"
+  local profile="codex"
+  local origin_display
+  local origin_space
+  local current_target
+  local visible_ids
+  local win_id
+  local attach_command
+
+  ensure_tmux_target "$target"
+
+  origin_display=$(focused_display_index 2>/dev/null || true)
+  origin_space=$(focused_space_index 2>/dev/null || true)
+  current_target=$(current_terminal_scratchpad_target)
+
+  win_id=$(scratchpad_ids "$label" 2>/dev/null | head -1 || true)
+  if [ -n "$win_id" ]; then
+    close_duplicate_scratchpad_title_windows "$label" "$win_id"
+  fi
+
+  visible_ids=$(scratchpad_visible_ids "$label" 2>/dev/null || true)
+  if [ -n "$visible_ids" ]; then
+    if [ "$current_target" = "$target" ]; then
+      hide_scratchpad_and_restore_focus "$label" || true
+      return 0
+    fi
+
+    switch_terminal_scratchpad_client "$target" || true
+    [ -z "$win_id" ] || focus_scratchpad_window "$win_id"
+    return 0
+  fi
+
+  close_scratchpads_except_label "$label"
+  close_duplicate_scratchpads_for_label "$label"
+  switch_terminal_scratchpad_client "$target" || true
+
+  if win_id=$(scratchpad_ids "$label" 2>/dev/null | head -1); then
+    if [ -n "$win_id" ]; then
+      log "focusing existing terminal scratchpad label=$label win_id=$win_id target=$target"
+      restore_origin_focus "$origin_display" "$origin_space"
+      if [ -n "$origin_space" ]; then
+        yabai -m window "$win_id" --space "$origin_space" >/dev/null 2>&1 || true
+      fi
+      if ! scratchpad_visible_ids "$label" 2>/dev/null | grep -qx "$win_id"; then
+        yabai -m window --toggle "$label" >/dev/null 2>&1 || true
+        sleep 0.1
+      fi
+      yabai -m window "$win_id" --grid "$(scratchpad_grid_for_profile "$profile")" >/dev/null 2>&1 || true
+      focus_scratchpad_window "$win_id"
+      return 0
+    fi
+  fi
+
+  printf -v attach_command '%q tmux %q' "$SCRATCHPADS_COMMAND" "$target"
+  open_or_focus_scratchpad_with_profile \
+    "$label" \
+    "$profile" \
+    "$SCRATCHPAD_DOTFILES_DIR" \
+    "" \
+    "$attach_command"
+}
+
+debug_state() {
+  {
+    printf 'log_file=%s\n' "$SCRATCHPAD_LOG_FILE"
+    printf 'tmux_sessionizer=%s\n' "$TMUX_SESSIONIZER"
+    printf 'dotfiles_dir=%s\n' "$SCRATCHPAD_DOTFILES_DIR"
+    printf 'dotfiles_tmux_session=%s\n' "$SCRATCHPAD_DOTFILES_TMUX_SESSION"
+    printf 'projects_dir=%s\n' "$SCRATCHPAD_PROJECTS_DIR"
+    printf 'projects_tmux_session=%s\n' "$SCRATCHPAD_PROJECTS_TMUX_SESSION"
+    printf '\nfocused_window:\n'
+    if query_focused_window_json >/dev/null 2>&1; then
+      query_focused_window_json | jq '{id, app, title, scratchpad, is_visible: ."is-visible", has_focus: ."has-focus"}'
+    else
+      printf '(unavailable)\n'
+    fi
+    printf '\nscratchpads:\n'
+    if scratchpad_output=$(scratchpad_summaries 2>/dev/null); then
+      if [ -n "$scratchpad_output" ]; then
+        printf '%s\n' "$scratchpad_output"
+      else
+        printf '(none)\n'
+      fi
+    else
+      printf '(unavailable)\n'
+    fi
+  } | tee -a "$SCRATCHPAD_LOG_FILE"
+}
+
+main() {
+  local group="${1:-}"
+  local action="${2:-}"
+
+  case "$group:$action" in
+    open:quick)
+      acquire_scratchpad_open_lock "quick_terminal" || return 0
+      open_scratchpad "quick_terminal" "bottom"
+      ;;
+    open:codex)
+      acquire_scratchpad_open_lock "$SCRATCHPAD_TERMINAL_LABEL" || return 0
+      open_codex_dotfiles_scratchpad
+      ;;
+    open:projects)
+      acquire_scratchpad_open_lock "$SCRATCHPAD_TERMINAL_LABEL" || return 0
+      open_projects_tmux_scratchpad
+      ;;
+    tmux:projects)
+      attach_projects_tmux_session "projects"
+      ;;
+    tmux:codex|tmux:dotfiles)
+      attach_dotfiles_tmux_session
+      ;;
+    tmux:nvim)
+      attach_projects_tmux_session "nvim"
+      ;;
+    close:)
+      close_all_scratchpads
+      ;;
+    debug:)
+      debug_state
+      ;;
+    rules:)
+      print_static_rules
+      ;;
+    :|help:|:help|-h:|--help:|:-h|:--help)
+      usage
+      ;;
+    *)
+      printf '%s\n' "Unknown command: ${group:-<none>} ${action:-<none>}" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+}
+
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  main "$@"
+fi

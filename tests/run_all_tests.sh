@@ -17,11 +17,24 @@ FAILED_SUITES=()
 
 # Test suites to run
 TEST_SUITES=(
+    "test_agent_timer.sh"
+    "test_dotfiles_lib.sh"
+    "test_module_lifecycle.sh"
+    "test_module_integration.sh"
+    "test_system_uninstall.sh"
+    "test_dependencies.sh"
+    "test_control_center.sh"
     "test_colorscheme.sh"
     "test_configs.sh"
+    "test_window_layout.sh"
+    "test_space_display.sh"
     "test_scratchpads.sh"
     "test_projects.sh"
+    "test_hyperspace.sh"
+    "test_kit_tts.sh"
     "test_todo.sh"
+    "test_unescape_cli.sh"
+    "test_gh_create_repo.sh"
     "test_tmux_session_template.sh"
     "test_tmux_workspace.sh"
     "test_tmux_which_key.sh"
@@ -29,6 +42,7 @@ TEST_SUITES=(
     "test_tmux_border_accent.sh"
     "test_tmux_yazi_pane.sh"
     "test_whichkey.sh"
+    "test_shortcut_guide.sh"
     "test_source_state.sh"
     "test_default_apps.sh"
     "test_install.sh"
@@ -69,8 +83,8 @@ for suite in "${TEST_SUITES[@]}"; do
     echo ""
 
     # Extract pass/fail counts from output
-    PASSED=$(echo "$SUITE_OUTPUT" | grep "Results:" | grep -oE "[0-9]+ passed" | grep -oE "[0-9]+")
-    FAILED=$(echo "$SUITE_OUTPUT" | grep "Results:" | grep -oE "[0-9]+ failed" | grep -oE "[0-9]+")
+    PASSED=$(echo "$SUITE_OUTPUT" | grep "Results:" | grep -oE "[0-9]+ passed" | awk '{ total += $1 } END { print total + 0 }')
+    FAILED=$(echo "$SUITE_OUTPUT" | grep "Results:" | grep -oE "[0-9]+ failed" | awk '{ total += $1 } END { print total + 0 }')
 
     if [ -n "$PASSED" ]; then
         TOTAL_PASSED=$((TOTAL_PASSED + PASSED))

@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-# man-me: name=projects
-# man-me: category=Project Spaces
-# man-me: usage=projects pick; projects new [id]; projects adopt; projects status; projects list
-# man-me: description=ProjectDeck-backed project and yabai space manager.
-# man-me: tags=project projects projectdeck spaces hyper hotkeys skhd yabai
-exec "$HOME/.config/yabai/projects" "$@"

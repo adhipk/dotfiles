@@ -1,0 +1,12 @@
+# man-me: name=unescape-buffer
+# man-me: category=Text, Speech, and Clipboard
+# man-me: usage=printf 'line\\n' | unescape-buffer
+# man-me: description=Decode common escaped characters from stdin with the Node.js streaming command.
+# man-me: tags=text stdin escape unescape node clipboard
+# man-me: source=home/bin/symlink_unescape-buffer.tmpl
+# man-me: name=unescape-string
+# man-me: category=Text, Speech, and Clipboard
+# man-me: usage=printf 'line\\n' | unescape-string
+# man-me: description=Decode common escaped characters from stdin with Bash and sed.
+# man-me: tags=text stdin escape unescape sed clipboard
+# man-me: source=home/bin/symlink_unescape-string.tmpl

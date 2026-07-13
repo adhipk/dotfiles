@@ -204,25 +204,32 @@ installed_path_for_source() {
       printf '%s/.config/karabiner/karabiner.json' "$HOME"
       ;;
     home/dot_config/*)
-      printf '%s/.config/%s' "$HOME" "${source_path#home/dot_config/}"
+      rest="${source_path#home/dot_config/}"
+      printf '%s/.config/%s' "$HOME" "${rest%.tmpl}"
       ;;
-    home/dot_skhdrc)
+    home/dot_skhdrc|home/dot_skhdrc.tmpl)
       printf '%s/.skhdrc' "$HOME"
       ;;
-    home/dot_yabairc)
+    home/dot_yabairc|home/dot_yabairc.tmpl)
       printf '%s/.yabairc' "$HOME"
       ;;
-    home/dot_tmux.conf)
+    home/dot_tmux.conf|home/dot_tmux.conf.tmpl)
       printf '%s/.tmux.conf' "$HOME"
       ;;
     home/dot_zshrc)
       printf '%s/.zshrc' "$HOME"
       ;;
-    scripts/projectdeck/ProjectDeck.swift)
+    modules/projects/projectdeck/ProjectDeck.swift)
       printf '%s/.config/yabai/projectdeck' "$HOME"
       ;;
-    scripts/default-apps.sh)
-      printf '%s/bin/default-apps' "$HOME"
+    modules/app-focus/bin/hotkeys)
+      printf '%s/bin/hotkeys' "$HOME"
+      ;;
+    modules/app-focus/bin/focus_app.sh)
+      printf '%s/.config/skhd/focus_app.sh' "$HOME"
+      ;;
+    modules/app-focus/bin/app-mru.sh)
+      printf '%s/.config/skhd/app-mru.sh' "$HOME"
       ;;
     commands/*|bootstrap.sh|install.sh|Makefile|scripts/*)
       if [[ -n "$SOURCE_DIR" ]]; then

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+store="${FAKE_CRONTAB_STORE:?FAKE_CRONTAB_STORE is required}"
+if [[ "${1:-}" == "-l" ]]; then
+    [[ -f "$store" ]] && cat "$store"
+    exit 0
+fi
+[[ $# -eq 1 ]] || exit 2
+cp "$1" "$store"

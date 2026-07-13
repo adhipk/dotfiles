@@ -1,0 +1,60 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: tmux-yazi
+version: 1.0.0
+description: Adds cwd-aware Yazi pane and window views to tmux and Ghostty.
+dataKey: modules.tmuxYazi
+distribution:
+  standalone: true
+requires:
+  executables:
+    - bash
+    - tmux
+    - yazi
+  libraries:
+    - core.sh
+    - tmux.sh
+state:
+  preserved: []
+  ephemeral:
+    - 'tmux-pane-option:@dotfiles_yazi_side'
+    - 'tmux-wait-channel:dotfiles-yazi-pane-*'
+commands:
+  - name: tmux-yazi-pane
+    source: bin/tmux-yazi-pane
+    target: ~/bin/tmux-yazi-pane
+    bridge: home/bin/executable_tmux-yazi-pane.tmpl
+targets:
+  - service: tmux
+    source: targets/tmux.conf.tmpl
+    destination: ~/.tmux.conf
+    bridge: home/dot_tmux.conf.tmpl
+    ownership: contribution
+  - service: tmux-resurrect
+    source: targets/tmux-resurrect-process.tmpl
+    destination: ~/.tmux.conf
+    bridge: home/dot_tmux.conf.tmpl
+    ownership: contribution
+  - service: ghostty
+    source: targets/ghostty.conf.tmpl
+    destination: ~/Library/Application Support/com.mitchellh.ghostty/config
+    bridge: home/Library/Application Support/com.mitchellh.ghostty/config.tmpl
+    ownership: contribution
+  - service: ghostty
+    source: targets/ghostty-description.tmpl
+    destination: ~/Library/Application Support/com.mitchellh.ghostty/config
+    bridge: home/Library/Application Support/com.mitchellh.ghostty/config.tmpl
+    ownership: contribution
+  - service: tmux-which-key
+    source: targets/tmux-which-key-new-window.yaml.tmpl
+    destination: ~/.config/tmux/which-key.yaml
+    bridge: home/dot_config/tmux/which-key.yaml.tmpl
+    ownership: contribution
+  - service: tmux-which-key
+    source: targets/tmux-which-key-pane.yaml.tmpl
+    destination: ~/.config/tmux/which-key.yaml
+    bridge: home/dot_config/tmux/which-key.yaml.tmpl
+    ownership: contribution
+tests:
+  - tests/test_module.sh
+  - tests/test_tmux_yazi_pane.sh

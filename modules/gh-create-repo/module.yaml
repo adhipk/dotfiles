@@ -1,0 +1,28 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: gh-create-repo
+version: 1.0.0
+description: Thin chezmoi adapter for the pinned gh-create-repo utility checkout.
+dataKey: modules.ghCreateRepo
+distribution:
+  standalone: false
+requires:
+  executables:
+    - bash
+    - gh
+    - gh-create-repo
+    - yq
+state:
+  preserved: []
+  ephemeral: []
+commands:
+  - name: gh-create-repo
+    source: targets/gh-create-repo-path.tmpl
+    target: ~/bin/gh-create-repo
+targets:
+  - source: targets/gh-create-repo-path.tmpl
+    destination: ~/bin/gh-create-repo
+    bridge: home/bin/symlink_gh-create-repo.tmpl
+    ownership: exclusive
+tests:
+  - tests/test_module.sh

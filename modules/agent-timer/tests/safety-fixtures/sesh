@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+case "$*" in
+    "list --tmux --json")
+        printf '%s\n' "${FAKE_SESH_JSON:-[]}"
+        ;;
+    *)
+        printf 'unexpected fake sesh command: %s\n' "$*" >&2
+        exit 2
+        ;;
+esac

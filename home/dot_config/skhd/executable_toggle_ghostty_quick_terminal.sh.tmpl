@@ -1,0 +1,3 @@
+{{- if .modules.scratchpads.enabled -}}
+{{ includeTemplate "../modules/scratchpads/bin/toggle_ghostty_quick_terminal.sh" . }}
+{{- end -}}

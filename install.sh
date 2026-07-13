@@ -9,11 +9,23 @@ set -euo pipefail
 DOTFILES_DIR="${DOTFILES_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 CHEZMOI_SOURCE_ROOT="$DOTFILES_DIR"
 CHEZMOI_DESTINATION="${HOME:?HOME is not set}"
+MODULE_CONTROLLER="$DOTFILES_DIR/modules/module-lifecycle/bin/dotfiles-module"
+DEPENDENCY_CONTROLLER="${DOTFILES_DEPS_BIN:-$DOTFILES_DIR/modules/dependencies/bin/dotfiles-deps}"
 
 if ! command -v chezmoi >/dev/null 2>&1; then
     echo "chezmoi is not installed. Run ./bootstrap.sh or brew install chezmoi." >&2
     exit 1
 fi
+
+validate_modules() {
+    if [[ ! -x "$MODULE_CONTROLLER" ]]; then
+        echo "Module lifecycle controller is missing or not executable: $MODULE_CONTROLLER" >&2
+        return 1
+    fi
+
+    echo "[dotfiles] validating module manifests..."
+    DOTFILES_DIR="$DOTFILES_DIR" "$MODULE_CONTROLLER" validate --json >/dev/null
+}
 
 is_dry_run=false
 for arg in "$@"; do
@@ -78,10 +90,20 @@ install_tmux_plugins() {
         "$installer"
 }
 
+apply_tmux_plugin_pins() {
+    if [[ ! -x "$DEPENDENCY_CONTROLLER" ]]; then
+        echo "[dotfiles] dependency pin controller is missing: $DEPENDENCY_CONTROLLER" >&2
+        return 1
+    fi
+
+    echo "[dotfiles] applying immutable tmux plugin pins..."
+    HOME="$CHEZMOI_DESTINATION" DOTFILES_DIR="$DOTFILES_DIR" \
+        "$DEPENDENCY_CONTROLLER" pins apply --manager tpm
+}
+
 install_tmux_command_center() {
     local plugin_dir="$CHEZMOI_DESTINATION/.tmux/plugins/tmux-which-key"
     local managed_config="$CHEZMOI_DESTINATION/.config/tmux/which-key.yaml"
-    local expected_revision="85fb9756447b989f3b94e515d1e6ee7fec76cba2"
 
     if [[ ! -d "$plugin_dir" ]]; then
         echo "[dotfiles] tmux-which-key is missing after TPM installation: $plugin_dir" >&2
@@ -92,10 +114,6 @@ install_tmux_command_center() {
         return 1
     fi
 
-    if [[ -d "$plugin_dir/.git" ]]; then
-        echo "[dotfiles] pinning tmux-which-key to $expected_revision..."
-        git -C "$plugin_dir" checkout --quiet --detach "$expected_revision"
-    fi
     echo "[dotfiles] linking tmux command-center configuration..."
     ln -sfn "$managed_config" "$plugin_dir/config.yaml"
 }
@@ -124,6 +142,7 @@ reload_ghostty_config() {
 echo "[dotfiles] repository:  $DOTFILES_DIR"
 echo "[dotfiles] source:      $CHEZMOI_SOURCE_ROOT"
 echo "[dotfiles] destination: $CHEZMOI_DESTINATION"
+validate_modules
 echo "[dotfiles] pending changes before apply:"
 show_status
 if [[ "${DOTFILES_DEBUG:-0}" == "1" ]]; then
@@ -139,6 +158,7 @@ if [[ "$is_dry_run" == true ]]; then
 else
     ensure_workspace_directories
     install_tmux_plugins
+    apply_tmux_plugin_pins
     install_tmux_command_center
     reload_tmux_config
     reload_ghostty_config

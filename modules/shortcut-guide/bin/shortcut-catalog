@@ -1,0 +1,346 @@
+#!/usr/bin/env python3
+"""Generate deterministic shortcut data and documentation from rendered skhd state."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import tempfile
+from typing import Any
+
+
+SCHEMA_VERSION = 1
+CATEGORY_ORDER = {
+    "Projects": 0,
+    "Apps & Focus": 1,
+    "Windows": 2,
+    "Spaces & Displays": 3,
+    "Capture": 4,
+    "System": 5,
+}
+REQUIRED_BINDING_FIELDS = (
+    "owner",
+    "rawKey",
+    "displayKey",
+    "title",
+    "detail",
+    "category",
+    "command",
+    "sourceSection",
+)
+OWNER_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+MANIFEST_ID_PATTERN = re.compile(
+    r"^id:\s*([A-Za-z0-9][A-Za-z0-9-]*)\s*(?:#.*)?$", re.MULTILINE
+)
+
+
+class CatalogError(RuntimeError):
+    """A user-actionable catalog generation failure."""
+
+
+def module_directory() -> Path:
+    if value := os.environ.get("SHORTCUT_GUIDE_MODULE_DIR"):
+        return Path(value).expanduser().resolve()
+    if value := os.environ.get("DOTFILES_DIR"):
+        return (Path(value).expanduser().resolve() / "modules" / "shortcut-guide")
+    return Path(__file__).resolve().parent.parent
+
+
+def default_root() -> Path:
+    return module_directory().parent.parent
+
+
+def run(command: list[str], *, environment: dict[str, str] | None = None) -> bytes:
+    try:
+        result = subprocess.run(
+            command,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=environment,
+        )
+    except FileNotFoundError as error:
+        raise CatalogError(f"required executable not found: {command[0]}") from error
+
+    if result.returncode != 0:
+        detail = result.stderr.decode("utf-8", errors="replace").strip()
+        rendered = " ".join(command)
+        raise CatalogError(f"command failed ({result.returncode}): {rendered}\n{detail}")
+    return result.stdout
+
+
+def render_desired_skhd(root: Path) -> bytes:
+    chezmoi = os.environ.get("SHORTCUT_CATALOG_CHEZMOI_BIN", "chezmoi")
+    home = Path(os.environ.get("HOME", str(Path.home()))).expanduser()
+    return run([chezmoi, "-S", str(root), "cat", str(home / ".skhdrc")])
+
+
+def build_whichkey(binary: Path, build_output: Path) -> None:
+    script = module_directory() / "install" / "build-whichkey.sh"
+    environment = os.environ.copy()
+    environment["WHICHKEY_BUILD_PATH"] = str(build_output)
+    environment["WHICHKEY_INSTALL_PATH"] = str(binary)
+    run([str(script)], environment=environment)
+    if not binary.is_file() or not os.access(binary, os.X_OK):
+        raise CatalogError(
+            "shortcut guide binary was not produced; catalog generation requires macOS and swiftc"
+        )
+
+
+def parse_bindings(rendered: bytes, temporary_directory: Path) -> list[dict[str, Any]]:
+    rendered_path = temporary_directory / "rendered.skhdrc"
+    rendered_path.write_bytes(rendered)
+
+    configured_binary = os.environ.get("SHORTCUT_CATALOG_WHICHKEY_BIN")
+    if configured_binary:
+        whichkey = Path(configured_binary).expanduser().resolve()
+        if not whichkey.is_file() or not os.access(whichkey, os.X_OK):
+            raise CatalogError(f"configured WhichKey binary is not executable: {whichkey}")
+    else:
+        whichkey = temporary_directory / "bin" / "whichkey"
+        build_output = temporary_directory / "build" / "whichkey"
+        build_whichkey(whichkey, build_output)
+
+    encoded = run([str(whichkey), "--dump-json", str(rendered_path)])
+    try:
+        bindings = json.loads(encoded)
+    except json.JSONDecodeError as error:
+        raise CatalogError(f"WhichKey emitted invalid JSON: {error}") from error
+    if not isinstance(bindings, list):
+        raise CatalogError("WhichKey JSON must be an array of shortcut bindings")
+    return bindings
+
+
+def known_module_owners(root: Path) -> set[str]:
+    owners = {"root"}
+    manifests = sorted((root / "modules").glob("*/module.yaml"))
+    if not manifests:
+        raise CatalogError(f"no module manifests found under {root / 'modules'}")
+
+    for manifest in manifests:
+        match = MANIFEST_ID_PATTERN.search(manifest.read_text(encoding="utf-8"))
+        if match is None:
+            raise CatalogError(f"module manifest has no scalar id: {manifest}")
+        owner = match.group(1)
+        if owner != manifest.parent.name:
+            raise CatalogError(
+                f"module manifest id {owner!r} does not match directory {manifest.parent.name!r}"
+            )
+        if owner in owners:
+            raise CatalogError(f"duplicate module owner id: {owner}")
+        owners.add(owner)
+    return owners
+
+
+def stable_identifier(owner: str, raw_key: str, command: str) -> str:
+    material = json.dumps(
+        [owner, raw_key, command], ensure_ascii=False, separators=(",", ":")
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(material).hexdigest()}"
+
+
+def normalize_bindings(
+    bindings: list[dict[str, Any]], valid_owners: set[str]
+) -> list[dict[str, str]]:
+    normalized: list[dict[str, str]] = []
+    seen_identifiers: set[str] = set()
+
+    for index, binding in enumerate(bindings):
+        if not isinstance(binding, dict):
+            raise CatalogError(f"binding {index} is not an object")
+        for field in REQUIRED_BINDING_FIELDS:
+            if not isinstance(binding.get(field), str):
+                raise CatalogError(f"binding {index} has no string {field!r}")
+
+        owner = binding["owner"]
+        if not OWNER_PATTERN.fullmatch(owner):
+            raise CatalogError(f"binding {index} has invalid owner {owner!r}")
+        if owner not in valid_owners:
+            raise CatalogError(f"binding {index} references unknown module owner {owner!r}")
+
+        stable_id = stable_identifier(owner, binding["rawKey"], binding["command"])
+        if stable_id in seen_identifiers:
+            raise CatalogError(
+                "duplicate stable shortcut identity for "
+                f"{owner!r}, {binding['rawKey']!r}, {binding['command']!r}"
+            )
+        seen_identifiers.add(stable_id)
+        normalized.append(
+            {
+                "stableId": stable_id,
+                "owner": owner,
+                "rawKey": binding["rawKey"],
+                "displayKey": binding["displayKey"],
+                "title": binding["title"],
+                "detail": binding["detail"],
+                "category": binding["category"],
+                "command": binding["command"],
+                "sourceSection": binding["sourceSection"],
+            }
+        )
+
+    normalized.sort(
+        key=lambda binding: (
+            CATEGORY_ORDER.get(binding["category"], len(CATEGORY_ORDER)),
+            binding["category"].casefold(),
+            binding["displayKey"].casefold(),
+            binding["title"].casefold(),
+            binding["stableId"],
+        )
+    )
+    return normalized
+
+
+def json_document(rendered: bytes, bindings: list[dict[str, str]]) -> bytes:
+    document = {
+        "schemaVersion": SCHEMA_VERSION,
+        "renderedSourceSha256": hashlib.sha256(rendered).hexdigest(),
+        "shortcuts": bindings,
+    }
+    return (
+        json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+
+
+def markdown_escape(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("|", "\\|").replace("\n", "<br>")
+
+
+def owner_link(owner: str) -> str:
+    if owner == "root":
+        return "[root](../../../home/dot_skhdrc.tmpl)"
+    return f"[{owner}](../../{owner}/README.md)"
+
+
+def markdown_document(rendered: bytes, bindings: list[dict[str, str]]) -> bytes:
+    digest = hashlib.sha256(rendered).hexdigest()
+    lines = [
+        "<!-- Generated by modules/shortcut-guide/bin/shortcut-catalog. Do not edit. -->",
+        "",
+        "# Desktop Shortcut Catalog",
+        "",
+        "This catalog is derived from the desired skhd state rendered by "
+        "`chezmoi -S ROOT cat \"$HOME/.skhdrc\"`. Shortcut definitions remain in "
+        "their skhd source fragments and are not duplicated in module manifests.",
+        "",
+        f"- Shortcuts: {len(bindings)}",
+        f"- Rendered source SHA-256: `{digest}`",
+        "",
+    ]
+
+    categories = sorted(
+        {binding["category"] for binding in bindings},
+        key=lambda category: (CATEGORY_ORDER.get(category, len(CATEGORY_ORDER)), category.casefold()),
+    )
+    for category in categories:
+        lines.extend(
+            [
+                f"## {category}",
+                "",
+                "| Shortcut | Action | Details | Owner |",
+                "| --- | --- | --- | --- |",
+            ]
+        )
+        for binding in bindings:
+            if binding["category"] != category:
+                continue
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        markdown_escape(binding["displayKey"]),
+                        markdown_escape(binding["title"]),
+                        markdown_escape(binding["detail"]),
+                        owner_link(binding["owner"]),
+                    ]
+                )
+                + " |"
+            )
+        lines.append("")
+    return ("\n".join(lines).rstrip() + "\n").encode("utf-8")
+
+
+def atomic_write(path: Path, content: bytes) -> bool:
+    if path.is_file() and path.read_bytes() == content:
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(temporary_path, 0o644)
+        os.replace(temporary_path, path)
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+    return True
+
+
+def check_outputs(outputs: dict[Path, bytes]) -> int:
+    stale: list[Path] = []
+    for path, expected in outputs.items():
+        if not path.is_file() or path.read_bytes() != expected:
+            stale.append(path)
+    if not stale:
+        print("shortcut-catalog: generated outputs are current")
+        return 0
+    for path in stale:
+        print(f"shortcut-catalog: stale or missing: {path}", file=sys.stderr)
+    print(
+        "shortcut-catalog: run `make shortcuts-update` or "
+        "`modules/shortcut-guide/bin/shortcut-catalog update`",
+        file=sys.stderr,
+    )
+    return 1
+
+
+def parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Generate or verify the deterministic rendered-skhd shortcut catalog."
+    )
+    parser.add_argument("mode", choices=("update", "check"))
+    parser.add_argument("--root", type=Path, default=default_root())
+    parser.add_argument("--output-dir", type=Path)
+    return parser.parse_args()
+
+
+def main() -> int:
+    arguments = parse_arguments()
+    root = arguments.root.expanduser().resolve()
+    output_directory = (
+        arguments.output_dir.expanduser().resolve()
+        if arguments.output_dir
+        else module_directory() / "generated"
+    )
+
+    try:
+        rendered = render_desired_skhd(root)
+        with tempfile.TemporaryDirectory(prefix="shortcut-catalog.") as temporary:
+            parsed = parse_bindings(rendered, Path(temporary))
+        normalized = normalize_bindings(parsed, known_module_owners(root))
+        outputs = {
+            output_directory / "shortcuts.json": json_document(rendered, normalized),
+            output_directory / "shortcuts.md": markdown_document(rendered, normalized),
+        }
+        if arguments.mode == "check":
+            return check_outputs(outputs)
+        for path, content in outputs.items():
+            changed = atomic_write(path, content)
+            print(f"shortcut-catalog: {'updated' if changed else 'unchanged'} {path}")
+        return 0
+    except CatalogError as error:
+        print(f"shortcut-catalog: {error}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

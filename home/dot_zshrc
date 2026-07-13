@@ -114,13 +114,10 @@ export PNPM_HOME="$HOME/Library/pnpm"
 path=("$PNPM_HOME" $path)
 # pnpm end
 
-# sesh/tmux session manager integration
-
-bindkey -s '\ee' "tmux-session-picker\n"      # Alt+e (existing tmux sessions via sesh)
-bindkey -s '\eh' "tmux-sessionizer -s 0\n"    # Alt+h (sesh slot 0)
-bindkey -s '\et' "tmux-sessionizer -s 1\n"    # Alt+t (sesh slot 1)
-bindkey -s '\en' "tmux-sessionizer -s 2\n"    # Alt+n (sesh slot 2)
-bindkey -s '\es' "tmux-sessionizer -s 3\n"    # Alt+s (sesh slot 3)
+# Optional sesh/tmux session-manager bindings are rendered by the
+# tmux-sessions module. The guard keeps shell startup valid after disable or
+# physical removal.
+[ -r "$HOME/.config/zsh/tmux-sessions.zsh" ] && source "$HOME/.config/zsh/tmux-sessions.zsh"
 
 # Tmux aliases
 alias ta='tmux attach -t'

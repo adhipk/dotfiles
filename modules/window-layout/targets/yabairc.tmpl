@@ -1,0 +1,24 @@
+# Window layout defaults
+yabai -m config layout                       bsp
+yabai -m config window_placement             second_child
+yabai -m config mouse_follows_focus          off
+yabai -m config focus_follows_mouse          off
+yabai -m config mouse_modifier               fn
+yabai -m config mouse_action1                move
+yabai -m config mouse_action2                resize
+yabai -m config mouse_drop_action            swap
+yabai -m config split_ratio                  0.50
+yabai -m config auto_balance                 on
+
+# Float system preferences and other non-tileable apps. Labels make a module
+# disable reconcile cleanly without deleting the shared yabai target.
+yabai -m rule --add label="window_layout_system_settings" app="^System Settings$" manage=off
+yabai -m rule --add label="window_layout_calculator" app="^Calculator$" manage=off
+yabai -m rule --add label="window_layout_karabiner" app="^Karabiner" manage=off
+yabai -m rule --add label="window_layout_archive_utility" app="^Archive Utility$" manage=off
+yabai -m rule --add label="window_layout_finder_dialogs" app="^Finder$" title="^(Copy|Connect|Move|Info|Pref)" manage=off
+yabai -m rule --add label="window_layout_activity_monitor" app="^Activity Monitor$" manage=off
+yabai -m rule --add label="window_layout_app_store" app="^App Store$" manage=off
+yabai -m rule --add label="window_layout_system_information" app="^System Information$" manage=off
+yabai -m rule --add label="window_layout_keychain_access" app="^Keychain Access$" manage=off
+yabai -m rule --add label="window_layout_shortcut_guide" title="^skhd keys$" manage=off

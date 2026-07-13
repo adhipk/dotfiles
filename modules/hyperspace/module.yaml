@@ -1,0 +1,55 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: hyperspace
+version: 1.0.0
+description: Dormant pinned-session slots and Spotlight terminal experiment.
+dataKey: modules.hyperspace
+distribution:
+  standalone: true
+requires:
+  executables:
+    - bash
+    - jq
+optional:
+  executables:
+    - fzf
+    - ghostty
+    - open
+    - osascript
+    - rg
+    - sesh
+    - skhd
+    - tmux
+    - zsh
+state:
+  preserved:
+    - ~/.config/sesh/hyperspaces.json
+    - ~/.config/sesh/hyperspace.env
+  ephemeral: []
+commands:
+  - name: hyperspace
+    source: bin/hyperspace
+    target: ~/.config/skhd/modules/hyperspace/hyperspace
+targets:
+  - source: bin/hyperspace
+    destination: ~/.config/skhd/modules/hyperspace/hyperspace
+    bridge: home/dot_config/skhd/modules/hyperspace/executable_hyperspace.tmpl
+    ownership: exclusive
+  - source: bin/open-spotlight-scratchpad
+    destination: ~/.config/skhd/modules/hyperspace/open_spotlight_scratchpad
+    bridge: home/dot_config/skhd/modules/hyperspace/executable_open_spotlight_scratchpad.tmpl
+    ownership: exclusive
+  - source: bin/spotlight-zsh
+    destination: ~/.config/skhd/modules/hyperspace/spotlight-zsh
+    bridge: home/dot_config/skhd/modules/hyperspace/executable_spotlight-zsh.tmpl
+    ownership: exclusive
+  - source: config/zshrc
+    destination: ~/.config/skhd/modules/hyperspace/.zshrc
+    bridge: home/dot_config/skhd/modules/hyperspace/dot_zshrc.tmpl
+    ownership: exclusive
+  - source: targets/hyperspace.skhdrc
+    destination: ~/.config/skhd/modules/hyperspace.skhdrc
+    bridge: home/dot_config/skhd/modules/hyperspace.skhdrc.tmpl
+    ownership: exclusive
+tests:
+  - tests/test_module.sh

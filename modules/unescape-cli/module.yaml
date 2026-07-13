@@ -1,0 +1,38 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: unescape-cli
+version: 1.0.0
+description: Symlink adapters for the two commands supplied by the external unescape-cli checkout.
+dataKey: modules.unescapeCli
+distribution:
+  standalone: false
+requires:
+  executables:
+    - bash
+    - node
+    - sed
+    - unescape-buffer
+    - unescape-string
+state:
+  preserved: []
+  ephemeral: []
+commands:
+  - name: unescape-buffer
+    source: targets/unescape-buffer-path.tmpl
+    target: ~/bin/unescape-buffer
+  - name: unescape-string
+    source: targets/unescape-string-path.tmpl
+    target: ~/bin/unescape-string
+targets:
+  - service: command
+    source: targets/unescape-buffer-path.tmpl
+    destination: ~/bin/unescape-buffer
+    bridge: home/bin/symlink_unescape-buffer.tmpl
+    ownership: exclusive
+  - service: command
+    source: targets/unescape-string-path.tmpl
+    destination: ~/bin/unescape-string
+    bridge: home/bin/symlink_unescape-string.tmpl
+    ownership: exclusive
+tests:
+  - tests/test_module.sh

@@ -1,0 +1,10 @@
+#!/bin/sh
+
+module_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+if [ -f "$module_dir/.zshrc" ]; then
+  default_zdotdir="$module_dir"
+else
+  default_zdotdir="$module_dir/../config"
+fi
+
+exec env ZDOTDIR="${SPOTLIGHT_ZDOTDIR:-$default_zdotdir}" SPOTLIGHT_SHELL=1 /bin/zsh -l

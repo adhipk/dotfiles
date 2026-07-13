@@ -1,0 +1,12 @@
+[
+  {
+    "id": "alpha",
+    "enabled": true,
+    "description": "Alpha fixture module"
+  },
+  {
+    "id": "beta",
+    "enabled": false,
+    "description": "Beta fixture module"
+  }
+]

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "operation": "module-purge",
+  "status": "complete",
+  "module": {
+    "id": "alpha",
+    "dataKey": "modules.alpha",
+    "enabled": false,
+    "previouslyEnabled": true
+  },
+  "changed": true,
+  "sourcePreserved": true
+}

@@ -1,0 +1,1653 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROGRAM="${0##*/}"
+SELF="$(cd "$(dirname "$0")" && pwd)/${0##*/}"
+RUNTIME_PATH="${HOME:?HOME is not set}/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+export PATH="${AGENT_TIMER_PATH:-$RUNTIME_PATH}"
+STATE_DIR="${AGENT_TIMER_STATE_DIR:-${XDG_STATE_HOME:-${HOME:?HOME is not set}/.local/state}/agent-timer}"
+CONFIG_FILE="${AGENT_TIMER_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-timer/config.toml}"
+TMUX_BIN="${AGENT_TIMER_TMUX_BIN:-tmux}"
+SESH_BIN="${AGENT_TIMER_SESH_BIN:-sesh}"
+JQ_BIN="${AGENT_TIMER_JQ_BIN:-jq}"
+YQ_BIN="${AGENT_TIMER_YQ_BIN:-yq}"
+PS_BIN="${AGENT_TIMER_PS_BIN:-ps}"
+CRONTAB_BIN="${AGENT_TIMER_CRONTAB_BIN:-crontab}"
+NOTIFIER_BIN="${AGENT_TIMER_NOTIFIER_BIN:-terminal-notifier}"
+AFPLAY_BIN="${AGENT_TIMER_AFPLAY_BIN:-/usr/bin/afplay}"
+CRON_MARKER="# agent-timer backstop"
+FALLBACK_SECONDS="${AGENT_TIMER_DEFAULT_SECONDS:-600}"
+FALLBACK_WARNING_SECONDS="${AGENT_TIMER_DEFAULT_WARNING_SECONDS:-60}"
+FALLBACK_RETENTION_SECONDS="${AGENT_TIMER_DEFAULT_RETENTION_SECONDS:-604800}"
+FALLBACK_EXPIRY_SOUND="${AGENT_TIMER_DEFAULT_EXPIRY_SOUND:-Ping}"
+
+DOTFILES_LIB_DIR="${DOTFILES_LIB_DIR:-$HOME/.local/lib/dotfiles}"
+if [[ ! -r "$DOTFILES_LIB_DIR/locks.sh" ]]; then
+    REPO_LIB_DIR="$(cd "$(dirname "$SELF")/../../.." 2>/dev/null && pwd)/home/dot_local/lib/dotfiles"
+    [[ -r "$REPO_LIB_DIR/locks.sh" ]] && DOTFILES_LIB_DIR="$REPO_LIB_DIR"
+fi
+for library in core locks state; do
+    [[ -r "$DOTFILES_LIB_DIR/$library.sh" ]] || {
+        printf '%s: required standard library is missing: %s\n' "$PROGRAM" "$DOTFILES_LIB_DIR/$library.sh" >&2
+        exit 2
+    }
+    # shellcheck source=/dev/null
+    source "$DOTFILES_LIB_DIR/$library.sh"
+done
+
+DEFAULT_WARNING_MESSAGE="TASK TIME WARNING: checkpoint due soon. Keep the primary task running; delegate read-only checkpoint preparation to an available subagent, preserve the current artifact, and avoid expanding scope."
+DEFAULT_EXPIRY_MESSAGE="TASK CHECKPOINT DUE: keep the primary task running. Delegate status collection to an available subagent and post the checkpoint as commentary (not final). If no subagent result is ready, post a minimal root snapshot at the next safe boundary; never wait; continue open canonical tasks immediately. Report the artifact, validation, working-tree state, open task IDs, and next step. A new %SECONDS%s block is armed immediately; do not interrupt Codex or end the turn or tmux session. Stop only when the requested work is complete or genuinely blocked."
+
+usage() {
+    cat <<'EOF'
+Usage:
+  agent-timer start [--seconds N] [--target TMUX_TARGET] [--message TEXT] [--json]
+  agent-timer status [--id ID] [--json]
+  agent-timer sessions [--json]
+  agent-timer manage
+  agent-timer close SESSION [--yes] [--force-active]
+  agent-timer cancel [--id ID]
+  agent-timer shutdown [--reason TEXT]
+  agent-timer enable
+  agent-timer prune
+  agent-timer tick
+  agent-timer install-cron
+  agent-timer uninstall-cron
+
+`start` reads TASK_TIMELIMIT_SECS unless --seconds is supplied. It records an
+immutable checkpoint block for the active turn and launches one detached worker.
+At warning and checkpoint expiry the worker types a literal steering message
+plus Enter into the same verified tmux agent pane. Expiry immediately advances
+the same timer into another block; it never sends an interrupt key.
+EOF
+}
+
+die() {
+    printf '%s: %s\n' "$PROGRAM" "$*" >&2
+    exit 2
+}
+
+require_command() {
+    command -v "$1" >/dev/null 2>&1 || die "required command is missing: $1"
+}
+
+config_value() {
+    local key="$1"
+    local fallback="$2"
+    local value
+
+    if [[ ! -r "$CONFIG_FILE" ]]; then
+        printf '%s\n' "$fallback"
+        return 0
+    fi
+    require_command "$YQ_BIN"
+    value="$("$YQ_BIN" -p=toml -r ".${key} // \"${fallback}\"" "$CONFIG_FILE" 2>/dev/null)" ||
+        die "invalid timer configuration: $CONFIG_FILE"
+    printf '%s\n' "$value"
+}
+
+configured_seconds() {
+    if [[ -n "${TASK_TIMELIMIT_SECS:-}" ]]; then
+        printf '%s\n' "$TASK_TIMELIMIT_SECS"
+    else
+        config_value default_seconds "$FALLBACK_SECONDS"
+    fi
+}
+
+configured_warning_seconds() {
+    if [[ -n "${TASK_TIME_WARNING_SECS:-}" ]]; then
+        printf '%s\n' "$TASK_TIME_WARNING_SECS"
+    else
+        config_value warning_seconds "$FALLBACK_WARNING_SECONDS"
+    fi
+}
+
+configured_retention_seconds() {
+    if [[ -n "${AGENT_TIMER_RETENTION_SECS:-}" ]]; then
+        printf '%s\n' "$AGENT_TIMER_RETENTION_SECS"
+    else
+        config_value retention_seconds "$FALLBACK_RETENTION_SECONDS"
+    fi
+}
+
+configured_expiry_sound() {
+    if [[ -n "${AGENT_TIMER_EXPIRY_SOUND:-}" ]]; then
+        printf '%s\n' "$AGENT_TIMER_EXPIRY_SOUND"
+    else
+        config_value expiry_sound "$FALLBACK_EXPIRY_SOUND"
+    fi
+}
+
+now_epoch() {
+    if [[ -n "${AGENT_TIMER_NOW:-}" ]]; then
+        printf '%s\n' "$AGENT_TIMER_NOW"
+    else
+        date +%s
+    fi
+}
+
+is_positive_integer() {
+    [[ "$1" =~ ^[0-9]+$ ]] && (( "$1" > 0 ))
+}
+
+is_active_status() {
+    case "$1" in
+        running|warning) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+render_expiry_message() {
+    local message="$1"
+    local seconds="$2"
+    printf '%s\n' "${message//\%SECONDS\%/$seconds}"
+}
+
+safe_id() {
+    printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_'
+}
+
+state_file_for() {
+    printf '%s/%s.json\n' "$STATE_DIR" "$(safe_id "$1")"
+}
+
+load_states_json() {
+    local files=("$STATE_DIR"/*.json)
+    if [[ ! -f "${files[0]}" ]]; then
+        printf '[]\n'
+        return 0
+    fi
+    "$JQ_BIN" -s '.' "${files[@]}"
+}
+
+state_lock_dir() {
+    printf '%s.lock\n' "${1%.json}"
+}
+
+session_lock_dir() {
+    printf '%s/session-%s.lock\n' "$STATE_DIR" "$(safe_id "$1")"
+}
+
+lifecycle_lock_dir() {
+    printf '%s/lifecycle.lock\n' "$STATE_DIR"
+}
+
+disabled_latch_file() {
+    printf '%s/module-disabled\n' "$STATE_DIR"
+}
+
+acquire_lock() {
+    dotfiles_lock_acquire "$1" 2000 0.02
+}
+
+release_lock() {
+    local lock_dir="${1:-${AGENT_TIMER_CURRENT_LOCK_DIR:-}}"
+    [[ -n "$lock_dir" ]] || return 0
+    dotfiles_lock_release "$lock_dir"
+    if [[ "${AGENT_TIMER_CURRENT_LOCK_DIR:-}" == "$lock_dir" ]]; then
+        AGENT_TIMER_CURRENT_LOCK_DIR=""
+    fi
+    return 0
+}
+
+# Compatibility wrapper for single-state critical sections. New code may hold
+# more than one lock by calling acquire_lock/release_lock with explicit paths.
+with_lock() {
+    local state_file="$1"
+    AGENT_TIMER_CURRENT_LOCK_DIR="$(state_lock_dir "$state_file")"
+    acquire_lock "$AGENT_TIMER_CURRENT_LOCK_DIR"
+}
+
+write_state() {
+    local state_file="$1"
+    local contents="$2"
+    printf '%s\n' "$contents" | dotfiles_atomic_write "$state_file" 600
+}
+
+tmux_snapshot() {
+    local target="$1"
+    "$TMUX_BIN" display-message -p -t "$target" -F '#{session_id}|#{session_name}|#{window_id}|#{pane_id}|#{pane_pid}|#{pane_tty}|#{pane_current_command}'
+}
+
+is_agent_command() {
+    agent_kind "$1" >/dev/null
+}
+
+agent_kind() {
+    local command_line="$1"
+    case "$command_line" in
+        codex|codex\ *|*/codex|*/codex\ *|*'/bin/codex '*|*'/bin/codex') printf 'codex\n' ;;
+        claude|claude\ *|*/claude|*/claude\ *) printf 'claude\n' ;;
+        opencode|opencode\ *|*/opencode|*/opencode\ *) printf 'opencode\n' ;;
+        *) return 1 ;;
+    esac
+}
+
+configured_preferred_agents() {
+    local agents="${AGENT_TIMER_PREFERRED_AGENTS:-}"
+    local agent
+
+    if [[ -n "$agents" ]]; then
+        agents="${agents//,/ }"
+        for agent in $agents; do
+            [[ -n "$agent" ]] && printf '%s\n' "$agent"
+        done
+        return 0
+    fi
+
+    if [[ -r "$CONFIG_FILE" ]]; then
+        require_command "$YQ_BIN"
+        while IFS= read -r agent; do
+            [[ -n "$agent" && "$agent" != "null" ]] && printf '%s\n' "$agent"
+        done < <("$YQ_BIN" -p=toml -r '.preferred_agents[]? // empty' "$CONFIG_FILE" 2>/dev/null || true)
+        return 0
+    fi
+
+    printf '%s\n' codex claude opencode
+}
+
+agent_preference_rank() {
+    local kind="$1"
+    local preferred rank=99
+    rank=0
+    while IFS= read -r preferred; do
+        [[ "$preferred" == "$kind" ]] && {
+            printf '%s\n' "$rank"
+            return 0
+        }
+        rank=$((rank + 1))
+    done < <(configured_preferred_agents)
+    printf '%s\n' "$rank"
+}
+
+find_agent_pid() {
+    local pane_pid="$1"
+    local frontier="$pane_pid"
+    local next_frontier=""
+    local parent child command_line kind depth process_rows
+    local -a candidate_pids=() candidate_ranks=()
+    local best_index=-1 best_rank=999 index rank scan_errors=0
+
+    if [[ -n "${AGENT_TIMER_TEST_AGENT_PID:-}" ]]; then
+        printf '%s\n' "$AGENT_TIMER_TEST_AGENT_PID"
+        return 0
+    fi
+
+    process_rows="$("$PS_BIN" -axo pid=,ppid= 2>/dev/null)" || return 2
+    command_line="$(process_command "$pane_pid")" || return 2
+    if kind="$(agent_kind "$command_line")"; then
+        rank="$(agent_preference_rank "$kind")"
+        candidate_pids+=("$pane_pid")
+        candidate_ranks+=("$rank")
+        best_rank=$rank
+        best_index=0
+    fi
+
+    for depth in 1 2 3 4 5 6 7 8; do
+        next_frontier=""
+        for parent in $frontier; do
+            while IFS= read -r child; do
+                [[ -n "$child" ]] || continue
+                if ! command_line="$(process_command "$child")"; then
+                    scan_errors=1
+                    continue
+                fi
+                if kind="$(agent_kind "$command_line")"; then
+                    rank="$(agent_preference_rank "$kind")"
+                    candidate_pids+=("$child")
+                    candidate_ranks+=("$rank")
+                    if (( rank < best_rank )); then
+                        best_rank=$rank
+                        best_index=$((${#candidate_pids[@]} - 1))
+                    fi
+                fi
+                next_frontier="$next_frontier $child"
+            done < <(awk -v parent="$parent" '$2 == parent { print $1 }' <<<"$process_rows")
+        done
+        frontier="$next_frontier"
+        [[ -n "$frontier" ]] || break
+    done
+
+    if (( best_index >= 0 )); then
+        printf '%s\n' "${candidate_pids[$best_index]}"
+        return 0
+    fi
+    (( scan_errors == 0 )) || return 2
+    return 1
+}
+
+process_started_at() {
+    "$PS_BIN" -p "$1" -o lstart= 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+process_command() {
+    "$PS_BIN" -p "$1" -o command= 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+process_elapsed() {
+    "$PS_BIN" -p "$1" -o etime= 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+agent_is_descendant() {
+    local pane_pid="$1"
+    local expected_pid="$2"
+    local frontier="$pane_pid"
+    local next_frontier=""
+    local parent child depth
+
+    [[ "$pane_pid" == "$expected_pid" ]] && return 0
+    if [[ -n "${AGENT_TIMER_TEST_AGENT_PID:-}" && "$expected_pid" == "$AGENT_TIMER_TEST_AGENT_PID" ]]; then
+        return 0
+    fi
+    for depth in 1 2 3 4 5 6 7 8; do
+        next_frontier=""
+        for parent in $frontier; do
+            while IFS= read -r child; do
+                [[ -n "$child" ]] || continue
+                [[ "$child" == "$expected_pid" ]] && return 0
+                next_frontier="$next_frontier $child"
+            done < <("$PS_BIN" -axo pid=,ppid= 2>/dev/null | awk -v parent="$parent" '$2 == parent { print $1 }')
+        done
+        frontier="$next_frontier"
+        [[ -n "$frontier" ]] || break
+    done
+    return 1
+}
+
+format_deadline() {
+    local epoch="$1"
+    if date -u -r "$epoch" '+%Y-%m-%dT%H:%M:%SZ' >/dev/null 2>&1; then
+        date -u -r "$epoch" '+%Y-%m-%dT%H:%M:%SZ'
+    else
+        date -u -d "@$epoch" '+%Y-%m-%dT%H:%M:%SZ'
+    fi
+}
+
+notify_user() {
+    local title="$1"
+    local message="$2"
+    if command -v "$NOTIFIER_BIN" >/dev/null 2>&1; then
+        "$NOTIFIER_BIN" -title "$title" -message "$message" >/dev/null 2>&1 || true
+    fi
+}
+
+play_expiry_sound() {
+    local state="$1"
+    local sound sound_dir sound_file pane_tty
+
+    sound="$(configured_expiry_sound)"
+    case "$sound" in
+        ''|none|off|false) return 0 ;;
+        *[!A-Za-z0-9._-]*) sound="$FALLBACK_EXPIRY_SOUND" ;;
+    esac
+    sound_dir="${AGENT_TIMER_SOUND_DIR:-/System/Library/Sounds}"
+    sound_file="$sound_dir/$sound.aiff"
+    if [[ -x "$AFPLAY_BIN" && -r "$sound_file" ]]; then
+        "$AFPLAY_BIN" "$sound_file" >/dev/null 2>&1 || true
+        return 0
+    fi
+
+    # Portable fallback: write BEL to the pane output device, never its input.
+    pane_tty="$($JQ_BIN -r '.tmux.paneTty // empty' <<<"$state")"
+    if [[ "$pane_tty" == /dev/* && -w "$pane_tty" ]]; then
+        printf '\a' >"$pane_tty" 2>/dev/null || true
+    fi
+    return 0
+}
+
+verify_live_target() {
+    local state="$1"
+    local target current_snapshot
+    local current_session_id current_session_name current_window_id current_pane_id current_pane_pid current_pane_tty current_pane_command
+    local expected_session_id expected_pane_id expected_pane_pid expected_pane_tty
+    local agent_pid expected_started current_started expected_command current_command
+
+    target="$($JQ_BIN -r '.target' <<<"$state")"
+    current_snapshot="$(tmux_snapshot "$target" 2>/dev/null || true)"
+    [[ -n "$current_snapshot" ]] || return 1
+    IFS='|' read -r current_session_id current_session_name current_window_id current_pane_id current_pane_pid current_pane_tty current_pane_command <<<"$current_snapshot"
+    expected_session_id="$($JQ_BIN -r '.tmux.sessionId' <<<"$state")"
+    expected_pane_id="$($JQ_BIN -r '.tmux.paneId' <<<"$state")"
+    expected_pane_pid="$($JQ_BIN -r '.tmux.panePid | tostring' <<<"$state")"
+    expected_pane_tty="$($JQ_BIN -r '.tmux.paneTty' <<<"$state")"
+    [[ "$current_session_id" == "$expected_session_id" ]] || return 1
+    [[ "$current_pane_id" == "$expected_pane_id" ]] || return 1
+    [[ "$current_pane_pid" == "$expected_pane_pid" ]] || return 1
+    [[ "$current_pane_tty" == "$expected_pane_tty" ]] || return 1
+
+    agent_pid="$($JQ_BIN -r '.agent.pid // empty' <<<"$state")"
+    expected_started="$($JQ_BIN -r '.agent.startedAt // empty' <<<"$state")"
+    expected_command="$($JQ_BIN -r '.agent.command // empty' <<<"$state")"
+    [[ -n "$agent_pid" && -n "$expected_started" && -n "$expected_command" ]] || return 1
+    kill -0 "$agent_pid" 2>/dev/null || return 1
+    current_started="$(process_started_at "$agent_pid")"
+    [[ "$current_started" == "$expected_started" ]] || return 1
+    current_command="$(process_command "$agent_pid")"
+    [[ "$current_command" == "$expected_command" ]] || return 1
+    is_agent_command "$current_command" || return 1
+    agent_is_descendant "$current_pane_pid" "$agent_pid"
+}
+
+send_steer() {
+    local target="$1"
+    local message="$2"
+
+    message="${message//$'\n'/ }"
+    message="${message//$'\r'/ }"
+    "$TMUX_BIN" send-keys -t "$target" -l "$message"
+    # A rapid literal stream enters Codex's paste-burst state. End is a harmless
+    # non-character event at the current end of this single-line message; Codex
+    # deterministically flushes and clears the burst before processing Enter.
+    "$TMUX_BIN" send-keys -t "$target" End
+    "$TMUX_BIN" send-keys -t "$target" Enter
+}
+
+stop_worker_from_state() {
+    local state="$1"
+    local worker_pid expected_started current_started command_line child child_command attempt
+
+    worker_pid="$($JQ_BIN -r '.worker.pid // empty' <<<"$state")"
+    expected_started="$($JQ_BIN -r '.worker.startedAt // empty' <<<"$state")"
+    [[ -n "$worker_pid" && -n "$expected_started" ]] || return 0
+    kill -0 "$worker_pid" 2>/dev/null || return 0
+    current_started="$(process_started_at "$worker_pid" || true)"
+    [[ "$current_started" == "$expected_started" ]] || return 0
+    command_line="$(process_command "$worker_pid" || true)"
+    case "$command_line" in
+        *"agent-timer _worker "*)
+            while IFS= read -r child; do
+                [[ -n "$child" ]] || continue
+                child_command="$(process_command "$child" || true)"
+                case "$child_command" in
+                    sleep|sleep\ *|*/sleep|*/sleep\ *) kill "$child" 2>/dev/null || true ;;
+                esac
+            done < <("$PS_BIN" -axo pid=,ppid= 2>/dev/null | awk -v parent="$worker_pid" '$2 == parent { print $1 }')
+            kill "$worker_pid" 2>/dev/null || true
+            for attempt in 1 2 3 4 5 6 7 8 9 10; do
+                kill -0 "$worker_pid" 2>/dev/null || return 0
+                sleep 0.05
+            done
+            current_started="$(process_started_at "$worker_pid" || true)"
+            [[ "$current_started" == "$expected_started" ]] && kill -KILL "$worker_pid" 2>/dev/null || true
+            ;;
+    esac
+}
+
+worker_is_live() {
+    local state="$1"
+    local worker_pid expected_started current_started command_line launch_status
+
+    worker_pid="$($JQ_BIN -r '.worker.pid // empty' <<<"$state")"
+    expected_started="$($JQ_BIN -r '.worker.startedAt // empty' <<<"$state")"
+    launch_status="$($JQ_BIN -r '.workerLaunchStatus // empty' <<<"$state")"
+    [[ -n "$worker_pid" && -n "$expected_started" ]] || return 1
+    # A missing launch status is accepted only for a fingerprinted legacy
+    # worker that was armed before tmux-owned registration existed.
+    [[ -z "$launch_status" || "$launch_status" == "ready" ]] || return 1
+    kill -0 "$worker_pid" 2>/dev/null || return 1
+    current_started="$(process_started_at "$worker_pid")"
+    [[ "$current_started" == "$expected_started" ]] || return 1
+    command_line="$(process_command "$worker_pid")"
+    case "$command_line" in
+        *"agent-timer _worker "*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+worker_launch_command() {
+    local state_file="$1"
+    local token="$2"
+    local command="env"
+    local name value quoted
+    local -a environment=(
+        "HOME=$HOME"
+        "DOTFILES_LIB_DIR=$DOTFILES_LIB_DIR"
+        "AGENT_TIMER_PATH=$PATH"
+        "AGENT_TIMER_STATE_DIR=$STATE_DIR"
+        "AGENT_TIMER_CONFIG_FILE=$CONFIG_FILE"
+        "AGENT_TIMER_TMUX_BIN=$TMUX_BIN"
+        "AGENT_TIMER_JQ_BIN=$JQ_BIN"
+        "AGENT_TIMER_PS_BIN=$PS_BIN"
+        "AGENT_TIMER_NOTIFIER_BIN=$NOTIFIER_BIN"
+        "AGENT_TIMER_AFPLAY_BIN=$AFPLAY_BIN"
+        "AGENT_TIMER_DEFAULT_EXPIRY_SOUND=$FALLBACK_EXPIRY_SOUND"
+    )
+
+    # Tmux owns the worker process, so explicitly carry the small set of
+    # per-session overrides that affect worker behavior into the server-owned
+    # shell. Do not carry AGENT_TIMER_NOW: a fixed test clock would stop a real
+    # recurring worker from advancing.
+    for name in AGENT_TIMER_WORKER_POLL_SECONDS AGENT_TIMER_EXPIRY_SOUND AGENT_TIMER_SOUND_DIR AGENT_TIMER_TEST_AGENT_PID; do
+        value="${!name:-}"
+        [[ -n "$value" ]] && environment+=("$name=$value")
+    done
+    for value in "${environment[@]}"; do
+        printf -v quoted '%q' "$value"
+        command="$command $quoted"
+    done
+    printf -v quoted '%q' "$SELF"
+    command="$command $quoted"
+    printf -v quoted '%q' "$state_file"
+    command="$command _worker $quoted"
+    printf -v quoted '%q' "$token"
+    printf '%s %s\n' "$command" "$quoted"
+}
+
+launch_worker() {
+    local target="$1"
+    local state_file="$2"
+    local token="$3"
+    local command
+
+    command="$(worker_launch_command "$state_file" "$token")"
+    "$TMUX_BIN" run-shell -b -t "$target" "$command"
+}
+
+wait_for_worker_registration() {
+    local state_file="$1"
+    local expected_token="$2"
+    local attempt=1 state token pid launch_status
+    local attempts="${AGENT_TIMER_WORKER_REGISTRATION_ATTEMPTS:-40}"
+
+    is_positive_integer "$attempts" || attempts=40
+    while (( attempt <= attempts )); do
+        [[ -f "$state_file" ]] || return 1
+        state="$(cat "$state_file")"
+        token="$($JQ_BIN -r '.token // empty' <<<"$state")"
+        [[ "$token" == "$expected_token" ]] || return 1
+        pid="$($JQ_BIN -r '.worker.pid // empty' <<<"$state")"
+        launch_status="$($JQ_BIN -r '.workerLaunchStatus // empty' <<<"$state")"
+        if [[ -n "$pid" && "$launch_status" == "ready" ]] && kill -0 "$pid" 2>/dev/null; then
+            printf '%s\n' "$state"
+            return 0
+        fi
+        sleep 0.05
+        attempt=$((attempt + 1))
+    done
+    [[ -f "$state_file" ]] && cat "$state_file"
+    return 1
+}
+
+await_worker_or_cancel() {
+    local state_file="$1"
+    local expected_token="$2"
+    local state lock_dir token status updated
+
+    if state="$(wait_for_worker_registration "$state_file" "$expected_token")"; then
+        printf '%s\n' "$state"
+        return 0
+    fi
+
+    lock_dir="$(state_lock_dir "$state_file")"
+    acquire_lock "$lock_dir" || return 1
+    [[ -f "$state_file" ]] || { release_lock "$lock_dir" || true; return 1; }
+    state="$(cat "$state_file")"
+    token="$($JQ_BIN -r '.token // empty' <<<"$state")"
+    status="$($JQ_BIN -r '.status // empty' <<<"$state")"
+    if [[ "$token" == "$expected_token" ]] && is_active_status "$status" && worker_is_live "$state"; then
+        release_lock "$lock_dir" || true
+        printf '%s\n' "$state"
+        return 0
+    fi
+    if [[ "$token" == "$expected_token" ]] && is_active_status "$status"; then
+        stop_worker_from_state "$state"
+        updated="$($JQ_BIN --argjson now "$(now_epoch)" \
+            '.status="canceled" | .canceledAt=$now | .workerLaunchStatus="timeout" | .workerLaunchFailedAt=$now' \
+            <<<"$state")"
+        write_state "$state_file" "$updated"
+    fi
+    release_lock "$lock_dir" || true
+    return 1
+}
+
+start_timer() {
+    local seconds="$1"
+    local target="$2"
+    local timer_id="$3"
+    local turn_id="$4"
+    local cwd="$5"
+    local expiry_message="$6"
+    local warning_message="$7"
+    local warning_seconds="$8"
+    local no_worker="$9"
+    local now deadline warning_at token state_file state_lock session_lock lifecycle_lock snapshot current_snapshot
+    local tmux_session tmux_session_name window_id pane_id pane_pid pane_tty pane_command
+    local check_session check_session_name check_window check_pane check_pid check_tty check_command
+    local agent_pid agent_started agent_command state existing_turn existing_status old_state
+
+    is_positive_integer "$seconds" || die "TASK_TIMELIMIT_SECS must be a positive integer (got '${seconds:-unset}')"
+    is_positive_integer "$warning_seconds" || warning_seconds="$FALLBACK_WARNING_SECONDS"
+    expiry_message="$(render_expiry_message "$expiry_message" "$seconds")"
+    require_command "$JQ_BIN"
+    require_command "$TMUX_BIN"
+    mkdir -p "$STATE_DIR"
+    chmod 700 "$STATE_DIR"
+
+    [[ -n "$target" ]] || die "no tmux target; run inside tmux or pass --target"
+    snapshot="$(tmux_snapshot "$target" 2>/dev/null)" || die "tmux target does not exist: $target"
+    IFS='|' read -r tmux_session tmux_session_name window_id pane_id pane_pid pane_tty pane_command <<<"$snapshot"
+    agent_pid="$(find_agent_pid "$pane_pid")" || die "could not identify a supported terminal agent in $target; Codex is the default—run codex in this pane or switch to the codex tmux window"
+    agent_started="$(process_started_at "$agent_pid")"
+    agent_command="$(process_command "$agent_pid")"
+    [[ -n "$agent_started" && -n "$agent_command" ]] || die "could not fingerprint agent process $agent_pid"
+    is_agent_command "$agent_command" || die "process $agent_pid is not a supported terminal agent"
+    target="$pane_id"
+
+    [[ -n "$timer_id" ]] || timer_id="tmux-${pane_id#%}"
+    state_file="$(state_file_for "$timer_id")"
+    state_lock="$(state_lock_dir "$state_file")"
+    session_lock="$(session_lock_dir "$tmux_session")"
+    lifecycle_lock="$(lifecycle_lock_dir)"
+    acquire_lock "$lifecycle_lock" || die "could not lock timer lifecycle"
+    if [[ -f "$(disabled_latch_file)" ]]; then
+        release_lock "$lifecycle_lock" || true
+        die "agent timer is disabled; re-enable the module before arming a timer"
+    fi
+    if ! acquire_lock "$session_lock"; then
+        release_lock "$lifecycle_lock" || true
+        die "could not lock tmux session: $tmux_session"
+    fi
+    current_snapshot="$(tmux_snapshot "$pane_id" 2>/dev/null || true)"
+    IFS='|' read -r check_session check_session_name check_window check_pane check_pid check_tty check_command <<<"$current_snapshot"
+    if [[ -z "$current_snapshot" || "$check_session" != "$tmux_session" || "$check_pane" != "$pane_id" || "$check_pid" != "$pane_pid" || "$check_tty" != "$pane_tty" ]] ||
+        ! agent_is_descendant "$pane_pid" "$agent_pid"; then
+        release_lock "$session_lock" || true
+        release_lock "$lifecycle_lock" || true
+        die "tmux target changed while the timer was arming: $pane_id"
+    fi
+    if ! acquire_lock "$state_lock"; then
+        release_lock "$session_lock" || true
+        release_lock "$lifecycle_lock" || true
+        die "could not lock timer state: $state_file"
+    fi
+
+    if [[ -f "$state_file" && -n "$turn_id" ]]; then
+        existing_turn="$($JQ_BIN -r '.turnId // empty' "$state_file")"
+        existing_status="$($JQ_BIN -r '.status // empty' "$state_file")"
+        if [[ "$existing_turn" == "$turn_id" ]] && is_active_status "$existing_status"; then
+            state="$(cat "$state_file")"
+            if [[ "$no_worker" == "1" ]] || worker_is_live "$state"; then
+                printf '%s\n' "$state"
+                release_lock "$state_lock" || true
+                release_lock "$session_lock" || true
+                release_lock "$lifecycle_lock" || true
+                return 0
+            fi
+            token="$($JQ_BIN -r '.token' <<<"$state")"
+            state="$($JQ_BIN --argjson now "$(now_epoch)" \
+                'del(.worker) | .workerLaunchStatus="pending" | .workerRelaunchedAt=$now' <<<"$state")"
+            write_state "$state_file" "$state"
+            if ! launch_worker "$target" "$state_file" "$token"; then
+                state="$($JQ_BIN --argjson now "$(now_epoch)" \
+                    '.status="canceled" | .canceledAt=$now | .workerLaunchStatus="failed" | .workerLaunchFailedAt=$now' \
+                    <<<"$state")"
+                write_state "$state_file" "$state"
+                release_lock "$state_lock" || true
+                release_lock "$session_lock" || true
+                release_lock "$lifecycle_lock" || true
+                die "tmux could not relaunch the recurring worker for $timer_id"
+            fi
+            release_lock "$state_lock" || true
+            release_lock "$session_lock" || true
+            release_lock "$lifecycle_lock" || true
+            if ! state="$(await_worker_or_cancel "$state_file" "$token")"; then
+                die "tmux relaunched the recurring worker for $timer_id, but it did not register"
+            fi
+            printf '%s\n' "$state"
+            return 0
+        fi
+    fi
+
+    if [[ -f "$state_file" ]]; then
+        old_state="$(cat "$state_file")"
+        stop_worker_from_state "$old_state"
+    fi
+
+    now="$(now_epoch)"
+    deadline=$((now + seconds))
+    if (( seconds <= 1 )); then
+        warning_seconds=0
+    elif (( warning_seconds >= seconds )); then
+        warning_seconds=$((seconds / 2))
+    fi
+    warning_at=$((deadline - warning_seconds))
+    token="${now}-$$-${RANDOM:-0}"
+
+    state="$($JQ_BIN -n \
+        --arg id "$timer_id" \
+        --arg token "$token" \
+        --arg turnId "$turn_id" \
+        --arg cwd "$cwd" \
+        --arg target "$target" \
+        --arg sessionId "$tmux_session" \
+        --arg sessionName "$tmux_session_name" \
+        --arg windowId "$window_id" \
+        --arg paneId "$pane_id" \
+        --arg paneTty "$pane_tty" \
+        --arg command "$pane_command" \
+        --arg agentStarted "$agent_started" \
+        --arg agentCommand "$agent_command" \
+        --arg warningMessage "$warning_message" \
+        --arg expiryMessage "$expiry_message" \
+        --argjson seconds "$seconds" \
+        --argjson startedAt "$now" \
+        --argjson warningAt "$warning_at" \
+        --argjson deadlineAt "$deadline" \
+        --argjson warningSeconds "$warning_seconds" \
+        --argjson panePid "$pane_pid" \
+        --argjson agentPid "$agent_pid" \
+        '{version:3,id:$id,token:$token,turnId:$turnId,cwd:$cwd,target:$target,seconds:$seconds,warningSeconds:$warningSeconds,startedAt:$startedAt,warningAt:$warningAt,deadlineAt:$deadlineAt,status:"running",checkpointCount:0,warningMessage:$warningMessage,expiryMessage:$expiryMessage,tmux:{sessionId:$sessionId,sessionName:$sessionName,windowId:$windowId,paneId:$paneId,panePid:$panePid,paneTty:$paneTty,command:$command},agent:{pid:$agentPid,startedAt:$agentStarted,command:$agentCommand}}')"
+    write_state "$state_file" "$state"
+
+    if [[ "$no_worker" != "1" ]]; then
+        state="$($JQ_BIN '.workerLaunchStatus="pending"' <<<"$state")"
+        write_state "$state_file" "$state"
+        if ! launch_worker "$target" "$state_file" "$token"; then
+            state="$($JQ_BIN --argjson now "$(now_epoch)" \
+                '.status="canceled" | .canceledAt=$now | .workerLaunchStatus="failed" | .workerLaunchFailedAt=$now' \
+                <<<"$state")"
+            write_state "$state_file" "$state"
+            release_lock "$state_lock" || true
+            release_lock "$session_lock" || true
+            release_lock "$lifecycle_lock" || true
+            die "tmux could not launch the recurring worker for $timer_id"
+        fi
+    fi
+    release_lock "$state_lock" || true
+    release_lock "$session_lock" || true
+    release_lock "$lifecycle_lock" || true
+
+    if [[ "$no_worker" != "1" ]]; then
+        if ! state="$(await_worker_or_cancel "$state_file" "$token")"; then
+            die "tmux launched the recurring worker for $timer_id, but it did not register"
+        fi
+    fi
+    printf '%s\n' "$state"
+}
+
+fire_state() {
+    local state_file="$1"
+    local expected_token="$2"
+    local phase="$3"
+    local state token status now due target message updated lock_dir
+
+    [[ -f "$state_file" ]] || return 0
+    lock_dir="$(state_lock_dir "$state_file")"
+    acquire_lock "$lock_dir" || return 0
+    [[ -f "$state_file" ]] || { release_lock "$lock_dir" || true; return 0; }
+    state="$(cat "$state_file")"
+    token="$($JQ_BIN -r '.token' <<<"$state")"
+    status="$($JQ_BIN -r '.status' <<<"$state")"
+    [[ "$token" == "$expected_token" ]] || { release_lock "$lock_dir" || true; return 0; }
+    case "$status" in canceled|closed|close-failed|completed|disabled|expired|stale) release_lock "$lock_dir" || true; return 0 ;; esac
+
+    now="$(now_epoch)"
+    if [[ "$phase" == "warning" ]]; then
+        due="$($JQ_BIN -r '.warningAt' <<<"$state")"
+        [[ "$status" == "running" && "$now" -ge "$due" ]] || { release_lock "$lock_dir" || true; return 0; }
+        message="$($JQ_BIN -r '.warningMessage' <<<"$state")"
+    else
+        due="$($JQ_BIN -r '.deadlineAt' <<<"$state")"
+        [[ "$now" -ge "$due" ]] || { release_lock "$lock_dir" || true; return 0; }
+        message="$($JQ_BIN -r '.expiryMessage' <<<"$state")"
+    fi
+
+    if ! verify_live_target "$state"; then
+        updated="$($JQ_BIN --argjson now "$now" '.status="stale" | .staleAt=$now' <<<"$state")"
+        write_state "$state_file" "$updated"
+        release_lock "$lock_dir" || true
+        notify_user "Agent timer target changed" "Skipped a stale timer rather than steering a reused pane."
+        return 0
+    fi
+
+    target="$($JQ_BIN -r '.target' <<<"$state")"
+    if [[ "$phase" == "warning" ]]; then
+        if ! send_steer "$target" "$message"; then
+            release_lock "$lock_dir" || true
+            return 1
+        fi
+        updated="$($JQ_BIN --argjson now "$now" '.status="warning" | .warningSentAt=$now' <<<"$state")"
+        write_state "$state_file" "$updated"
+        release_lock "$lock_dir" || true
+        notify_user "Agent task time warning" "$message"
+        return 0
+    fi
+
+    # Persist the next block before steering. A PreToolUse hook triggered by the
+    # checkpoint can therefore never observe the old overdue deadline.
+    updated="$($JQ_BIN --argjson now "$now" '
+        . as $previous
+        | ($previous.warningSeconds // ($previous.deadlineAt - $previous.warningAt)) as $warningSeconds
+        | .version=3
+        | .status="running"
+        | .checkpointCount=((.checkpointCount // 0) + 1)
+        | .lastCheckpointAt=$now
+        | .lastCheckpointDeadlineAt=$previous.deadlineAt
+        | .lastCheckpointDeliveryStatus="pending"
+        | .startedAt=$now
+        | .warningSeconds=$warningSeconds
+        | .warningAt=($now + .seconds - $warningSeconds)
+        | .deadlineAt=($now + .seconds)
+        | del(.warningSentAt, .expiredAt, .lastCheckpointDeliveredAt, .lastCheckpointDeliveryFailedAt)
+    ' <<<"$state")"
+    if ! write_state "$state_file" "$updated"; then
+        release_lock "$lock_dir" || true
+        return 1
+    fi
+
+    if send_steer "$target" "$message"; then
+        updated="$($JQ_BIN --argjson now "$now" '.lastCheckpointDeliveryStatus="sent" | .lastCheckpointDeliveredAt=$now' <<<"$updated")"
+        if ! write_state "$state_file" "$updated"; then
+            release_lock "$lock_dir" || true
+            notify_user "Agent checkpoint delivery uncertain" "The next timer block is armed, but delivery status could not be persisted."
+            return 1
+        fi
+        release_lock "$lock_dir" || true
+        notify_user "Agent checkpoint due" "$message"
+        play_expiry_sound "$updated"
+        return 0
+    fi
+
+    updated="$($JQ_BIN --argjson now "$now" '.lastCheckpointDeliveryStatus="failed" | .lastCheckpointDeliveryFailedAt=$now' <<<"$updated")"
+    write_state "$state_file" "$updated" || true
+    release_lock "$lock_dir" || true
+    notify_user "Agent checkpoint delivery failed" "The next timer block remains armed; the checkpoint steer could not be delivered."
+    return 1
+}
+
+AGENT_TIMER_SLEEP_PID=""
+
+worker_cleanup() {
+    if [[ -n "${AGENT_TIMER_SLEEP_PID:-}" ]]; then
+        kill "$AGENT_TIMER_SLEEP_PID" 2>/dev/null || true
+        wait "$AGENT_TIMER_SLEEP_PID" 2>/dev/null || true
+        AGENT_TIMER_SLEEP_PID=""
+    fi
+}
+
+worker_sleep() {
+    local delay="$1"
+    local status
+    (( delay > 0 )) || return 0
+    sleep "$delay" &
+    AGENT_TIMER_SLEEP_PID=$!
+    if wait "$AGENT_TIMER_SLEEP_PID"; then
+        status=0
+    else
+        status=$?
+    fi
+    AGENT_TIMER_SLEEP_PID=""
+    return "$status"
+}
+
+register_worker_state() {
+    local state_file="$1"
+    local expected_token="$2"
+    local lock_dir state token status pid started existing_pid existing_started current_started updated
+
+    pid="$$"
+    started="$(process_started_at "$pid")"
+    [[ -n "$started" ]] || return 1
+    lock_dir="$(state_lock_dir "$state_file")"
+    acquire_lock "$lock_dir" || return 1
+    [[ -f "$state_file" ]] || { release_lock "$lock_dir" || true; return 1; }
+    state="$(cat "$state_file")"
+    token="$($JQ_BIN -r '.token // empty' <<<"$state")"
+    status="$($JQ_BIN -r '.status // empty' <<<"$state")"
+    if [[ "$token" != "$expected_token" ]] || ! is_active_status "$status"; then
+        release_lock "$lock_dir" || true
+        return 1
+    fi
+
+    existing_pid="$($JQ_BIN -r '.worker.pid // empty' <<<"$state")"
+    existing_started="$($JQ_BIN -r '.worker.startedAt // empty' <<<"$state")"
+    if [[ -n "$existing_pid" && "$existing_pid" != "$pid" && -n "$existing_started" ]] && kill -0 "$existing_pid" 2>/dev/null; then
+        current_started="$(process_started_at "$existing_pid")"
+        if [[ "$current_started" == "$existing_started" ]]; then
+            release_lock "$lock_dir" || true
+            return 1
+        fi
+    fi
+
+    updated="$($JQ_BIN \
+        --argjson pid "$pid" \
+        --arg startedAt "$started" \
+        --argjson now "$(now_epoch)" \
+        '.worker={pid:$pid,startedAt:$startedAt} | .workerLaunchStatus="ready" | .workerRegisteredAt=$now' \
+        <<<"$state")"
+    write_state "$state_file" "$updated"
+    release_lock "$lock_dir" || true
+}
+
+retire_stale_worker_state() {
+    local state_file="$1"
+    local expected_token="$2"
+    local lock_dir state token status updated
+
+    [[ -f "$state_file" ]] || return 0
+    lock_dir="$(state_lock_dir "$state_file")"
+    acquire_lock "$lock_dir" || return 0
+    [[ -f "$state_file" ]] || { release_lock "$lock_dir" || true; return 0; }
+    state="$(cat "$state_file")"
+    token="$($JQ_BIN -r '.token // empty' <<<"$state")"
+    status="$($JQ_BIN -r '.status // empty' <<<"$state")"
+    if [[ "$token" != "$expected_token" ]] || ! is_active_status "$status"; then
+        release_lock "$lock_dir" || true
+        return 0
+    fi
+    if verify_live_target "$state"; then
+        release_lock "$lock_dir" || true
+        return 1
+    fi
+    updated="$($JQ_BIN --argjson now "$(now_epoch)" '.status="stale" | .staleAt=$now' <<<"$state")"
+    write_state "$state_file" "$updated"
+    release_lock "$lock_dir" || true
+    notify_user "Agent timer target ended" "Retired the recurring timer after its agent or tmux pane exited."
+    return 0
+}
+
+worker_wait_until() {
+    local state_file="$1"
+    local expected_token="$2"
+    local due="$3"
+    local poll_seconds="${AGENT_TIMER_WORKER_POLL_SECONDS:-5}"
+    local state token status now delay
+
+    is_positive_integer "$poll_seconds" || poll_seconds=5
+    while :; do
+        [[ -f "$state_file" ]] || return 1
+        state="$(cat "$state_file")"
+        token="$($JQ_BIN -r '.token // empty' <<<"$state")"
+        status="$($JQ_BIN -r '.status // empty' <<<"$state")"
+        [[ "$token" == "$expected_token" ]] && is_active_status "$status" || return 1
+        if ! verify_live_target "$state"; then
+            if retire_stale_worker_state "$state_file" "$expected_token"; then
+                return 1
+            fi
+            continue
+        fi
+        now="$(now_epoch)"
+        delay=$((due - now))
+        (( delay > 0 )) || return 0
+        (( delay > poll_seconds )) && delay="$poll_seconds"
+        worker_sleep "$delay" || return 1
+    done
+}
+
+worker() {
+    local state_file="$1"
+    local token="$2"
+    local state warning_at deadline status state_token
+
+    trap worker_cleanup EXIT
+    # TERM is the normal lifecycle stop used by cancel, shutdown, and Codex's
+    # Stop hook. Return success so tmux does not surface expected cleanup as a
+    # failed run-shell command. Preserve diagnostic statuses for other signals.
+    trap 'exit 129' HUP
+    trap 'exit 130' INT
+    trap 'exit 0' TERM
+    register_worker_state "$state_file" "$token" || return 1
+    while [[ -f "$state_file" ]]; do
+        state="$(cat "$state_file")"
+        state_token="$($JQ_BIN -r '.token // empty' <<<"$state")"
+        status="$($JQ_BIN -r '.status // empty' <<<"$state")"
+        [[ "$state_token" == "$token" ]] && is_active_status "$status" || break
+        warning_at="$($JQ_BIN -r '.warningAt' <<<"$state")"
+        deadline="$($JQ_BIN -r '.deadlineAt' <<<"$state")"
+        worker_wait_until "$state_file" "$token" "$warning_at" || break
+        # A transient warning delivery failure must not cancel the checkpoint.
+        fire_state "$state_file" "$token" warning || true
+        worker_wait_until "$state_file" "$token" "$deadline" || break
+        # Expiry re-arms this same token; the next loop observes the new block.
+        fire_state "$state_file" "$token" expiry || true
+    done
+    trap - EXIT HUP INT TERM
+}
+
+hook_context() {
+    local state="$1"
+    local event="$2"
+    local deadline seconds remaining now message
+    deadline="$($JQ_BIN -r '.deadlineAt' <<<"$state")"
+    seconds="$($JQ_BIN -r '.seconds' <<<"$state")"
+    now="$(now_epoch)"
+    remaining=$((deadline - now))
+    (( remaining < 0 )) && remaining=0
+    message="TASK TIMEBOX ACTIVE: current ${seconds}s checkpoint block; deadline $(format_deadline "$deadline"); ${remaining}s remaining. Checkpoint expiry re-arms a fresh ${seconds}s block; ordinary steering and subagents do not reset the current block."
+    "$JQ_BIN" -n --arg event "$event" --arg message "$message" '{hookSpecificOutput:{hookEventName:$event,additionalContext:$message}}'
+}
+
+handle_hook() {
+    local input event session_id turn_id cwd seconds target timer_id state state_file now deadline reason status state_turn lock_dir token
+    input="$(cat)"
+    require_command "$JQ_BIN"
+    event="$($JQ_BIN -r '.hook_event_name // empty' <<<"$input")"
+    session_id="$($JQ_BIN -r '.session_id // empty' <<<"$input")"
+    turn_id="$($JQ_BIN -r '.turn_id // empty' <<<"$input")"
+    cwd="$($JQ_BIN -r '.cwd // empty' <<<"$input")"
+    timer_id="codex-${session_id:-unknown}"
+    state_file="$(state_file_for "$timer_id")"
+
+    case "$event" in
+        UserPromptSubmit)
+            seconds="$(configured_seconds)"
+            if ! is_positive_integer "$seconds"; then
+                reason="TASK_TIMELIMIT_SECS is invalid; no task deadline was armed. Set it to a positive integer before starting Codex."
+                "$JQ_BIN" -n --arg event "$event" --arg reason "$reason" '{systemMessage:$reason,hookSpecificOutput:{hookEventName:$event,additionalContext:$reason}}'
+                return 0
+            fi
+            target="${TMUX_PANE:-}"
+            if ! state="$(start_timer "$seconds" "$target" "$timer_id" "$turn_id" "$cwd" "${AGENT_TIMER_EXPIRY_MESSAGE:-$DEFAULT_EXPIRY_MESSAGE}" "${AGENT_TIMER_WARNING_MESSAGE:-$DEFAULT_WARNING_MESSAGE}" "$(configured_warning_seconds)" "${AGENT_TIMER_NO_WORKER:-0}" 2>&1)"; then
+                reason="Agent task timer could not start: $state"
+                "$JQ_BIN" -n --arg event "$event" --arg reason "$reason" '{systemMessage:$reason,hookSpecificOutput:{hookEventName:$event,additionalContext:$reason}}'
+                return 0
+            fi
+            hook_context "$state" "$event"
+            ;;
+        SubagentStart)
+            if [[ -f "$state_file" ]]; then
+                state="$(cat "$state_file")"
+                status="$($JQ_BIN -r '.status // empty' <<<"$state")"
+                state_turn="$($JQ_BIN -r '.turnId // empty' <<<"$state")"
+                if [[ "$state_turn" == "$turn_id" ]] && is_active_status "$status"; then
+                    hook_context "$state" "$event"
+                else
+                    printf '{}\n'
+                fi
+            else
+                printf '{}\n'
+            fi
+            ;;
+        PreToolUse)
+            if [[ ! -f "$state_file" ]]; then
+                exit 0
+            fi
+            state="$(cat "$state_file")"
+            status="$($JQ_BIN -r '.status // empty' <<<"$state")"
+            state_turn="$($JQ_BIN -r '.turnId // empty' <<<"$state")"
+            if [[ "$state_turn" != "$turn_id" ]] || ! is_active_status "$status"; then
+                printf '{}\n'
+                return 0
+            fi
+            now="$(now_epoch)"
+            deadline="$($JQ_BIN -r '.deadlineAt' <<<"$state")"
+            if (( now >= deadline )); then
+                token="$($JQ_BIN -r '.token' <<<"$state")"
+                fire_state "$state_file" "$token" expiry || true
+                if [[ -f "$state_file" ]]; then
+                    state="$(cat "$state_file")"
+                    status="$($JQ_BIN -r '.status // empty' <<<"$state")"
+                    if is_active_status "$status"; then
+                        hook_context "$state" "$event"
+                    else
+                        printf '{}\n'
+                    fi
+                else
+                    printf '{}\n'
+                fi
+            else
+                printf '{}\n'
+            fi
+            ;;
+        Stop)
+            if [[ -f "$state_file" ]]; then
+                lock_dir="$(state_lock_dir "$state_file")"
+                acquire_lock "$lock_dir" || { printf '{}\n'; return 0; }
+                [[ -f "$state_file" ]] || { release_lock "$lock_dir" || true; printf '{}\n'; return 0; }
+                state="$(cat "$state_file")"
+                status="$($JQ_BIN -r '.status // empty' <<<"$state")"
+                state_turn="$($JQ_BIN -r '.turnId // empty' <<<"$state")"
+                if [[ "$state_turn" == "$turn_id" ]] && is_active_status "$status"; then
+                    stop_worker_from_state "$state"
+                    state="$($JQ_BIN --argjson now "$(now_epoch)" '.status="completed" | .completedAt=$now' <<<"$state")"
+                    write_state "$state_file" "$state"
+                fi
+                release_lock "$lock_dir" || true
+            fi
+            printf '{}\n'
+            ;;
+        *) printf '{}\n' ;;
+    esac
+}
+
+tick_all() {
+    local state_file state token status now warning_at deadline
+    require_command "$JQ_BIN"
+    mkdir -p "$STATE_DIR"
+    now="$(now_epoch)"
+    for state_file in "$STATE_DIR"/*.json; do
+        [[ -f "$state_file" ]] || continue
+        state="$(cat "$state_file")"
+        token="$($JQ_BIN -r '.token' <<<"$state")"
+        status="$($JQ_BIN -r '.status' <<<"$state")"
+        warning_at="$($JQ_BIN -r '.warningAt' <<<"$state")"
+        deadline="$($JQ_BIN -r '.deadlineAt' <<<"$state")"
+        case "$status" in canceled|closed|close-failed|completed|disabled|expired|stale) continue ;; esac
+        if (( now >= deadline )); then
+            fire_state "$state_file" "$token" expiry || true
+        elif [[ "$status" == "running" ]] && (( now >= warning_at )); then
+            fire_state "$state_file" "$token" warning || true
+        fi
+    done
+    prune_states
+}
+
+prune_states() {
+    local retention
+    local state_file state status timestamp now age lock_dir
+    retention="$(configured_retention_seconds)"
+    is_positive_integer "$retention" || retention="$FALLBACK_RETENTION_SECONDS"
+    now="$(now_epoch)"
+    for state_file in "$STATE_DIR"/*.json; do
+        [[ -f "$state_file" ]] || continue
+        lock_dir="$(state_lock_dir "$state_file")"
+        acquire_lock "$lock_dir" || continue
+        if [[ ! -f "$state_file" ]]; then
+            release_lock "$lock_dir" || true
+            continue
+        fi
+        state="$(cat "$state_file")"
+        status="$($JQ_BIN -r '.status' <<<"$state")"
+        case "$status" in
+            canceled|closed|close-failed|completed|disabled|expired|stale)
+                timestamp="$($JQ_BIN -r '.canceledAt // .closedAt // .closeFailedAt // .completedAt // .shutdownAt // .expiredAt // .staleAt // .deadlineAt' <<<"$state")"
+                age=$((now - timestamp))
+                if (( age >= retention )); then
+                    rm -f "$state_file"
+                fi
+                ;;
+        esac
+        release_lock "$lock_dir" || true
+    done
+}
+
+reconcile_states() {
+    local state_file state status now updated lock_dir
+    mkdir -p "$STATE_DIR"
+    now="$(now_epoch)"
+    for state_file in "$STATE_DIR"/*.json; do
+        [[ -f "$state_file" ]] || continue
+        lock_dir="$(state_lock_dir "$state_file")"
+        acquire_lock "$lock_dir" || continue
+        if [[ ! -f "$state_file" ]]; then
+            release_lock "$lock_dir" || true
+            continue
+        fi
+        state="$(cat "$state_file")"
+        status="$($JQ_BIN -r '.status' <<<"$state")"
+        if [[ "$status" == "running" || "$status" == "warning" ]] && ! verify_live_target "$state"; then
+            stop_worker_from_state "$state"
+            updated="$($JQ_BIN --argjson now "$now" '.status="stale" | .staleAt=$now' <<<"$state")"
+            write_state "$state_file" "$updated"
+        fi
+        release_lock "$lock_dir" || true
+    done
+}
+
+tmux_panes_json() {
+    local panes='[]'
+    local session_id session_name window_id window_name pane_id pane_pid pane_tty pane_command pane_path pane_active session_attached
+    local agent_pid agent_started agent_command agent_elapsed kind pane agent_json pane_lines scan_status scan_healthy
+
+    require_command "$TMUX_BIN"
+    pane_lines="$("$TMUX_BIN" list-panes -a -F '#{session_id}|#{session_name}|#{window_id}|#{window_name}|#{pane_id}|#{pane_pid}|#{pane_tty}|#{pane_current_command}|#{pane_current_path}|#{pane_active}|#{session_attached}')" ||
+        die "could not inspect tmux panes"
+    while IFS='|' read -r session_id session_name window_id window_name pane_id pane_pid pane_tty pane_command pane_path pane_active session_attached; do
+        [[ -n "$pane_id" && -n "$pane_pid" ]] || continue
+        agent_json='null'
+        scan_healthy=true
+        if agent_pid="$(find_agent_pid "$pane_pid" 2>/dev/null)"; then
+            agent_started=""
+            agent_command=""
+            agent_elapsed=""
+            agent_started="$(process_started_at "$agent_pid")" || scan_healthy=false
+            agent_command="$(process_command "$agent_pid")" || scan_healthy=false
+            agent_elapsed="$(process_elapsed "$agent_pid")" || scan_healthy=false
+            if [[ -n "$agent_started" && -n "$agent_command" ]] && is_agent_command "$agent_command"; then
+                kind="$(agent_kind "$agent_command")"
+                agent_json="$($JQ_BIN -n \
+                    --argjson pid "$agent_pid" \
+                    --arg kind "$kind" \
+                    --arg command "$agent_command" \
+                    --arg startedAt "$agent_started" \
+                    --arg elapsed "$agent_elapsed" \
+                    '{pid:$pid,kind:$kind,command:$command,startedAt:$startedAt,elapsed:$elapsed}')"
+            fi
+        else
+            scan_status=$?
+            [[ "$scan_status" -eq 1 ]] || scan_healthy=false
+        fi
+        pane="$($JQ_BIN -n \
+            --arg sessionId "$session_id" \
+            --arg sessionName "$session_name" \
+            --arg windowId "$window_id" \
+            --arg windowName "$window_name" \
+            --arg paneId "$pane_id" \
+            --argjson panePid "$pane_pid" \
+            --arg paneTty "$pane_tty" \
+            --arg command "$pane_command" \
+            --arg path "$pane_path" \
+            --argjson active "${pane_active:-0}" \
+            --argjson attached "${session_attached:-0}" \
+            --argjson scanHealthy "$scan_healthy" \
+            --argjson agent "$agent_json" \
+            '{sessionId:$sessionId,sessionName:$sessionName,windowId:$windowId,windowName:$windowName,paneId:$paneId,panePid:$panePid,paneTty:$paneTty,command:$command,path:$path,active:$active,attached:$attached,scanHealthy:$scanHealthy,agent:$agent}')"
+        panes="$($JQ_BIN --argjson pane "$pane" '. + [$pane]' <<<"$panes")"
+    done <<<"$pane_lines"
+    printf '%s\n' "$panes"
+}
+
+sesh_sessions_json() {
+    local sessions timers panes now
+    require_command "$SESH_BIN"
+    reconcile_states
+    sessions="$("$SESH_BIN" list --tmux --json)"
+    timers="$(load_states_json)"
+    panes="$(tmux_panes_json)"
+    now="$(now_epoch)"
+    "$JQ_BIN" -n --argjson sessions "$sessions" --argjson timers "$timers" --argjson panes "$panes" --argjson now "$now" '
+      [$sessions[] as $session |
+        ($panes | map(select(.sessionName == $session.Name))) as $sessionPanes |
+        (($sessionPanes[0].sessionId) // null) as $sessionId |
+        (($sessionPanes | length) > 0 and ($sessionPanes | map(.scanHealthy) | all)) as $scanHealthy |
+        ($sessionPanes | map(select(.agent != null)) | map(.agent + {
+          paneId: .paneId,
+          windowId: .windowId,
+          windowName: .windowName,
+          path: .path
+        })) as $agents |
+        ($timers | map(select(
+          if $sessionId == null then .tmux.sessionName == $session.Name
+          else .tmux.sessionId == $sessionId
+          end
+        )) | map(. + {
+          effectiveStatus: (if ((.status == "running" or .status == "warning") and .deadlineAt <= $now) then "overdue" else .status end),
+          remaining: ([.deadlineAt - $now, 0] | max)
+        })) as $matching |
+        ($matching | map(select(.effectiveStatus == "running" or .effectiveStatus == "warning" or .effectiveStatus == "overdue"))) as $activeTimers |
+        {
+          name: $session.Name,
+          sessionId: $sessionId,
+          path: $session.Path,
+          attached: $session.Attached,
+          windows: $session.Windows,
+          agents: $agents,
+          scanHealthy: $scanHealthy,
+          activityUnknown: ($scanHealthy | not),
+          agentCount: ($agents | length),
+          agentSummary: (if ($scanHealthy | not) then (if ($agents | length) == 0 then "unknown" else (($agents | map(.kind) | group_by(.) | map("\(length) \(.[0])") | join(",")) + "+?") end) elif ($agents | length) == 0 then "none" else ($agents | map(.kind) | group_by(.) | map("\(length) \(.[0])") | join(",")) end),
+          timers: ($matching | map({id,status:.effectiveStatus,target,deadlineAt,remaining})),
+          activeTimers: ($activeTimers | map({id,status:.effectiveStatus,target,deadlineAt,remaining})),
+          activeTimerCount: ($activeTimers | length),
+          timerSummary: (if ($activeTimers | length) == 0 then "none" else ($activeTimers | map(.effectiveStatus) | unique | join(",")) end),
+          nextDeadline: (($activeTimers | map(.deadlineAt) | min) // null),
+          hasActiveWork: (($session.Attached > 0) or (($agents | length) > 0) or (($activeTimers | length) > 0) or ($scanHealthy | not))
+        }
+      ]'
+}
+
+show_sessions() {
+    local json="$1"
+    local inventory
+    inventory="$(sesh_sessions_json)"
+    if [[ "$json" == "1" ]]; then
+        printf '%s\n' "$inventory"
+        return
+    fi
+    printf '%-18s %-8s %-7s %-12s %-18s %-10s %s\n' "SESSION" "ATTACHED" "WINDOWS" "AGENTS" "TIMER" "REMAINING" "PATH"
+    "$JQ_BIN" -r '.[] | [
+      .name,
+      (.attached|tostring),
+      (.windows|tostring),
+      .agentSummary,
+      .timerSummary,
+      (if (.activeTimers|length) == 0 then "-" else ((.activeTimers|map(.remaining)|min|tostring) + "s") end),
+      .path
+    ] | @tsv' <<<"$inventory" | while IFS=$'\t' read -r name attached windows agents timer remaining path; do
+        printf '%-18s %-8s %-7s %-12s %-18s %-10s %s\n' "$name" "$attached" "$windows" "$agents" "$timer" "$remaining" "$path"
+    done
+}
+
+manage_sessions() {
+    local selection
+    while true; do
+        clear 2>/dev/null || true
+        show_sessions 0
+        printf '\nType a session name to close it, Enter to open the sesh picker, or q to quit.\n> '
+        IFS= read -r selection || return 0
+        case "$selection" in
+            q|Q) return 0 ;;
+            "") exec "$SESH_BIN" picker --icons --hide-duplicates --separator-aware --tmux ;;
+            *) close_session "$selection" 0 0 ;;
+        esac
+        printf '\nPress Enter to refresh. '
+        IFS= read -r _ || return 0
+    done
+}
+
+close_session() {
+    local session_name="$1"
+    local yes="$2"
+    local force_active="$3"
+    local inventory session session_id attached agent_count timer_count activity_unknown reply session_lock current_snapshot current_id
+    local state_file state state_session status lock_dir updated closed_at cleanup_failed=0
+    [[ -n "$session_name" ]] || die "close requires a sesh session name"
+    inventory="$(sesh_sessions_json)"
+    session="$($JQ_BIN -c --arg name "$session_name" 'first(.[] | select(.name == $name)) // empty' <<<"$inventory")"
+    [[ -n "$session" ]] || die "sesh session not found: $session_name"
+    session_id="$($JQ_BIN -r '.sessionId // empty' <<<"$session")"
+    [[ -n "$session_id" ]] || die "could not resolve immutable tmux identity for sesh session: $session_name"
+    attached="$($JQ_BIN -r '.attached // 0' <<<"$session")"
+    agent_count="$($JQ_BIN -r '.agentCount // 0' <<<"$session")"
+    timer_count="$($JQ_BIN -r '.activeTimerCount // 0' <<<"$session")"
+    activity_unknown="$($JQ_BIN -r '.activityUnknown // true' <<<"$session")"
+
+    if (( attached > 0 || agent_count > 0 || timer_count > 0 )) || [[ "$activity_unknown" == "true" ]]; then
+        if [[ "$force_active" == "1" ]]; then
+            :
+        elif [[ ! -t 0 ]]; then
+            die "session $session_name is active or could not be fully inspected; rerun with --yes --force-active after reviewing its agents and timers"
+        else
+            printf 'Session %s is ACTIVE (attached=%s, agents=%s, timers=%s, scan-unknown=%s). Type its exact name to close it: ' \
+                "$session_name" "$attached" "$agent_count" "$timer_count" "$activity_unknown" >&2
+            read -r reply
+            [[ "$reply" == "$session_name" ]] || { printf 'Canceled.\n'; return 0; }
+            force_active=1
+        fi
+    elif [[ "$yes" != "1" ]]; then
+        [[ -t 0 ]] || die "close requires --yes when stdin is not interactive"
+        printf 'Close durable tmux session %s? [y/N] ' "$session_name" >&2
+        read -r reply
+        [[ "$reply" == "y" || "$reply" == "Y" ]] || { printf 'Canceled.\n'; return 0; }
+    fi
+
+    session_lock="$(session_lock_dir "$session_id")"
+    acquire_lock "$session_lock" || die "could not lock tmux session: $session_id"
+    current_snapshot="$(tmux_snapshot "$session_id" 2>/dev/null || true)"
+    current_id="${current_snapshot%%|*}"
+    if [[ -z "$current_snapshot" || "$current_id" != "$session_id" ]]; then
+        release_lock "$session_lock" || true
+        die "tmux session changed before close; nothing was killed: $session_name"
+    fi
+    if [[ "$force_active" != "1" ]]; then
+        inventory="$(sesh_sessions_json)"
+        session="$($JQ_BIN -c --arg sid "$session_id" 'first(.[] | select(.sessionId == $sid)) // empty' <<<"$inventory")"
+        if [[ -z "$session" || "$($JQ_BIN -r '.hasActiveWork // true' <<<"$session")" == "true" ]]; then
+            release_lock "$session_lock" || true
+            die "session $session_name became active after confirmation; nothing was killed (use --force-active only after reviewing it again)"
+        fi
+    fi
+
+    closed_at="$(now_epoch)"
+    for state_file in "$STATE_DIR"/*.json; do
+        [[ -f "$state_file" ]] || continue
+        lock_dir="$(state_lock_dir "$state_file")"
+        if ! acquire_lock "$lock_dir"; then
+            cleanup_failed=1
+            break
+        fi
+        if [[ ! -f "$state_file" ]]; then
+            release_lock "$lock_dir" || true
+            continue
+        fi
+        state="$(cat "$state_file")"
+        state_session="$($JQ_BIN -r '.tmux.sessionId // empty' <<<"$state")"
+        status="$($JQ_BIN -r '.status // empty' <<<"$state")"
+        if [[ "$state_session" == "$session_id" ]]; then
+            stop_worker_from_state "$state"
+            if is_active_status "$status"; then
+                updated="$($JQ_BIN --argjson now "$closed_at" --arg sessionId "$session_id" '.status="closed" | .closedAt=$now | .closedSessionId=$sessionId' <<<"$state")"
+                write_state "$state_file" "$updated"
+            fi
+        fi
+        release_lock "$lock_dir" || true
+    done
+
+    if [[ "$cleanup_failed" == "1" ]]; then
+        release_lock "$session_lock" || true
+        die "could not stop every timer for $session_name; the tmux session was not killed"
+    fi
+
+    if [[ "$force_active" != "1" ]]; then
+        inventory="$(sesh_sessions_json)"
+        session="$($JQ_BIN -c --arg sid "$session_id" 'first(.[] | select(.sessionId == $sid)) // empty' <<<"$inventory")"
+        if [[ -z "$session" || "$($JQ_BIN -r '.hasActiveWork // true' <<<"$session")" == "true" ]]; then
+            release_lock "$session_lock" || true
+            die "session $session_name became active during timer cleanup; it was not killed"
+        fi
+    fi
+
+    if ! "$TMUX_BIN" kill-session -t "$session_id"; then
+        for state_file in "$STATE_DIR"/*.json; do
+            [[ -f "$state_file" ]] || continue
+            lock_dir="$(state_lock_dir "$state_file")"
+            acquire_lock "$lock_dir" || continue
+            [[ -f "$state_file" ]] || { release_lock "$lock_dir" || true; continue; }
+            state="$(cat "$state_file")"
+            if "$JQ_BIN" -e --arg sid "$session_id" --argjson at "$closed_at" '.status == "closed" and .closedSessionId == $sid and .closedAt == $at' <<<"$state" >/dev/null; then
+                updated="$($JQ_BIN --argjson now "$(now_epoch)" '.status="close-failed" | .closeFailedAt=$now' <<<"$state")"
+                write_state "$state_file" "$updated"
+            fi
+            release_lock "$lock_dir" || true
+        done
+        release_lock "$session_lock" || true
+        die "tmux refused to close session $session_id; its timers remain stopped"
+    fi
+    release_lock "$session_lock" || true
+    printf 'Closed session %s and stopped its timers.\n' "$session_name"
+}
+
+show_status() {
+    local timer_id="$1"
+    local json="$2"
+    local state_file now deadline remaining
+    require_command "$JQ_BIN"
+    if [[ -n "$timer_id" ]]; then
+        state_file="$(state_file_for "$timer_id")"
+        [[ -f "$state_file" ]] || die "timer not found: $timer_id"
+        if [[ "$json" == "1" ]]; then
+            cat "$state_file"
+        else
+            now="$(now_epoch)"
+            deadline="$($JQ_BIN -r '.deadlineAt' "$state_file")"
+            remaining=$((deadline - now))
+            (( remaining < 0 )) && remaining=0
+            "$JQ_BIN" -r --arg remaining "$remaining" '"\(.id): \(.status), \($remaining)s remaining, target \(.target)"' "$state_file"
+        fi
+        return
+    fi
+    if [[ "$json" == "1" ]]; then
+        load_states_json
+    else
+        for state_file in "$STATE_DIR"/*.json; do
+            [[ -f "$state_file" ]] || continue
+            "$JQ_BIN" -r '"\(.id): \(.status), target \(.target)"' "$state_file"
+        done
+    fi
+}
+
+cancel_timer() {
+    local timer_id="$1"
+    local state_file state
+    [[ -n "$timer_id" ]] || die "cancel requires --id"
+    state_file="$(state_file_for "$timer_id")"
+    [[ -f "$state_file" ]] || die "timer not found: $timer_id"
+    with_lock "$state_file" || die "could not lock timer: $timer_id"
+    state="$(cat "$state_file")"
+    write_state "$state_file" "$($JQ_BIN --argjson now "$(now_epoch)" '.status="canceled" | .canceledAt=$now' <<<"$state")"
+    stop_worker_from_state "$state" || true
+    release_lock
+    printf 'Canceled %s\n' "$timer_id"
+}
+
+shutdown_timers() {
+    local reason="$1"
+    local lifecycle_lock latch state_file state status lock_dir updated now stopped=0 failures=0
+
+    mkdir -p "$STATE_DIR"
+    chmod 700 "$STATE_DIR"
+    lifecycle_lock="$(lifecycle_lock_dir)"
+    acquire_lock "$lifecycle_lock" || die "could not lock timer lifecycle for shutdown"
+    now="$(now_epoch)"
+    latch="$(disabled_latch_file)"
+    printf 'disabled_at=%s\nreason=%s\n' "$now" "$reason" | dotfiles_atomic_write "$latch" 600
+    for state_file in "$STATE_DIR"/*.json; do
+        [[ -f "$state_file" ]] || continue
+        lock_dir="$(state_lock_dir "$state_file")"
+        if ! acquire_lock "$lock_dir"; then
+            failures=$((failures + 1))
+            continue
+        fi
+        if [[ ! -f "$state_file" ]]; then
+            release_lock "$lock_dir" || true
+            continue
+        fi
+        state="$(cat "$state_file")"
+        status="$($JQ_BIN -r '.status // empty' <<<"$state")"
+        stop_worker_from_state "$state"
+        if is_active_status "$status"; then
+            updated="$($JQ_BIN --argjson now "$now" --arg reason "$reason" '.status="disabled" | .shutdownAt=$now | .shutdownReason=$reason' <<<"$state")"
+            write_state "$state_file" "$updated"
+            stopped=$((stopped + 1))
+        fi
+        release_lock "$lock_dir" || true
+    done
+    release_lock "$lifecycle_lock" || true
+    if (( failures > 0 )); then
+        die "shutdown could not lock $failures timer state file(s); module removal must abort"
+    fi
+    printf 'Stopped %s active timer(s); preserved state in %s.\n' "$stopped" "$STATE_DIR"
+}
+
+enable_timers() {
+    local lifecycle_lock latch
+    mkdir -p "$STATE_DIR"
+    chmod 700 "$STATE_DIR"
+    lifecycle_lock="$(lifecycle_lock_dir)"
+    acquire_lock "$lifecycle_lock" || die "could not lock timer lifecycle for enable"
+    latch="$(disabled_latch_file)"
+    rm -f "$latch"
+    release_lock "$lifecycle_lock" || true
+    printf 'Agent timer lifecycle is enabled; new turns may arm timers.\n'
+}
+
+install_cron() {
+    local temp_file existing_line
+    temp_file="$(mktemp "${TMPDIR:-/tmp}/agent-timer-cron.XXXXXX")"
+    "$CRONTAB_BIN" -l 2>/dev/null | grep -Fv "$CRON_MARKER" >"$temp_file" || true
+    existing_line="* * * * * $SELF tick >/dev/null 2>&1 $CRON_MARKER"
+    printf '%s\n' "$existing_line" >>"$temp_file"
+    "$CRONTAB_BIN" "$temp_file"
+    rm -f "$temp_file"
+    printf 'Installed minute-level recovery tick; the recurring worker remains the exact timer.\n'
+}
+
+uninstall_cron() {
+    local temp_file
+    temp_file="$(mktemp "${TMPDIR:-/tmp}/agent-timer-cron.XXXXXX")"
+    "$CRONTAB_BIN" -l 2>/dev/null | grep -Fv "$CRON_MARKER" >"$temp_file" || true
+    "$CRONTAB_BIN" "$temp_file"
+    rm -f "$temp_file"
+    printf 'Removed agent-timer cron backstop.\n'
+}
+
+command_start() {
+    local seconds
+    local target="${TMUX_PANE:-}"
+    local timer_id=""
+    local turn_id=""
+    local message="${AGENT_TIMER_EXPIRY_MESSAGE:-$DEFAULT_EXPIRY_MESSAGE}"
+    local warning_message="${AGENT_TIMER_WARNING_MESSAGE:-$DEFAULT_WARNING_MESSAGE}"
+    local warning_seconds
+    local json=0
+    local state
+
+    seconds="$(configured_seconds)"
+    warning_seconds="$(configured_warning_seconds)"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --seconds) [[ $# -ge 2 ]] || die "--seconds requires a value"; seconds="$2"; shift 2 ;;
+            --target) [[ $# -ge 2 ]] || die "--target requires a value"; target="$2"; shift 2 ;;
+            --id) [[ $# -ge 2 ]] || die "--id requires a value"; timer_id="$2"; shift 2 ;;
+            --turn-id) [[ $# -ge 2 ]] || die "--turn-id requires a value"; turn_id="$2"; shift 2 ;;
+            --message) [[ $# -ge 2 ]] || die "--message requires a value"; message="$2"; shift 2 ;;
+            --warning-message) [[ $# -ge 2 ]] || die "--warning-message requires a value"; warning_message="$2"; shift 2 ;;
+            --warning-seconds) [[ $# -ge 2 ]] || die "--warning-seconds requires a value"; warning_seconds="$2"; shift 2 ;;
+            --json) json=1; shift ;;
+            *) die "unknown start option: $1" ;;
+        esac
+    done
+    state="$(start_timer "$seconds" "$target" "$timer_id" "$turn_id" "$PWD" "$message" "$warning_message" "$warning_seconds" "${AGENT_TIMER_NO_WORKER:-0}")"
+    if [[ "$json" == "1" ]]; then
+        printf '%s\n' "$state"
+    else
+        "$JQ_BIN" -r '"Armed \(.id) for \(.seconds)s; deadline \(.deadlineAt); target \(.target)"' <<<"$state"
+    fi
+}
+
+main() {
+    local command="${1:-}"
+    local timer_id=""
+    local json=0
+    local yes=0
+    local force_active=0
+    local reason="manual"
+    [[ -n "$command" ]] || { usage; exit 2; }
+    shift || true
+
+    case "$command" in
+        start) command_start "$@" ;;
+        hook) handle_hook ;;
+        tick) tick_all ;;
+        status)
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --id) timer_id="$2"; shift 2 ;;
+                    --json) json=1; shift ;;
+                    *) die "unknown status option: $1" ;;
+                esac
+            done
+            show_status "$timer_id" "$json"
+            ;;
+        sessions)
+            [[ "${1:-}" == "--json" ]] && json=1
+            show_sessions "$json"
+            ;;
+        manage) manage_sessions ;;
+        close)
+            [[ $# -ge 1 ]] || die "close requires SESSION"
+            timer_id="$1"
+            shift
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --yes) yes=1; shift ;;
+                    --force-active) force_active=1; shift ;;
+                    *) die "unknown close option: $1" ;;
+                esac
+            done
+            close_session "$timer_id" "$yes" "$force_active"
+            ;;
+        cancel)
+            [[ "${1:-}" == "--id" && $# -ge 2 ]] || die "cancel requires --id ID"
+            cancel_timer "$2"
+            ;;
+        shutdown)
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --reason) [[ $# -ge 2 ]] || die "--reason requires a value"; reason="$2"; shift 2 ;;
+                    *) die "unknown shutdown option: $1" ;;
+                esac
+            done
+            shutdown_timers "$reason"
+            ;;
+        enable) [[ $# -eq 0 ]] || die "enable takes no options"; enable_timers ;;
+        prune) prune_states ;;
+        install-cron) install_cron ;;
+        uninstall-cron) uninstall_cron ;;
+        _worker) [[ $# -eq 2 ]] || exit 2; worker "$1" "$2" ;;
+        help|-h|--help) usage ;;
+        *) die "unknown command: $command" ;;
+    esac
+}
+
+main "$@"

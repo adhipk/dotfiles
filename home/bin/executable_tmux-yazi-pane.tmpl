@@ -1,0 +1,3 @@
+{{- if .modules.tmuxYazi.enabled -}}
+{{ includeTemplate "../modules/tmux-yazi/bin/tmux-yazi-pane" . }}
+{{- end -}}

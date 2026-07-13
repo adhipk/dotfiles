@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "$*" >>"${FAKE_AFPLAY_LOG:?FAKE_AFPLAY_LOG is required}"

@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+# This before-apply hook must remain mounted even while the module is disabled:
+# chezmoi runs it while the currently installed command still exists, before
+# reconciling the module's empty target templates.
+{{ if not .modules.agentTimer.enabled -}}
+timer="$HOME/bin/agent-timer"
+if [ -x "$timer" ]; then
+    "$timer" shutdown --reason module-disabled
+fi
+{{- else -}}
+latch="$HOME/.local/state/agent-timer/module-disabled"
+timer="$HOME/bin/agent-timer"
+if [ -e "$latch" ]; then
+    if [ -x "$timer" ]; then
+        "$timer" enable
+    else
+        rm -f "$latch"
+    fi
+fi
+{{- end }}

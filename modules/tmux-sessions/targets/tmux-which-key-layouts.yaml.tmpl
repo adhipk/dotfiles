@@ -1,0 +1,17 @@
+  - name: +Layouts
+    key: l
+    menu:
+      - name: Open layout
+        key: o
+        command: 'display-popup -EE -w 70% -h 60% "$HOME/bin/tmux-workspace pick --pane #{pane_id}"'
+      - name: Open and adopt layout
+        key: O
+        command: 'display-popup -EE -w 70% -h 60% "$HOME/bin/tmux-workspace pick --pane #{pane_id} --adopt"'
+      - name: Apply current
+        key: a
+        command: 'run-shell "$HOME/bin/tmux-workspace apply --session-id #{q:session_id}"'
+      - name: Repair current
+        key: r
+        command: >-
+          confirm-before -p "Rebuild drifted managed windows? (y/n)"
+          { run-shell "$HOME/bin/tmux-workspace repair --session-id #{q:session_id} --yes" }

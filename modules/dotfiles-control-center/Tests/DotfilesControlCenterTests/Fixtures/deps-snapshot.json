@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "complete": true,
+  "managerStatus": {
+    "git": "complete",
+    "homebrew": "complete",
+    "vscodium": "complete"
+  },
+  "errors": [],
+  "dependencies": {
+    "homebrew:formula:alpha": {
+      "installedPath": null,
+      "installedVersion": "1.0.0",
+      "resolvedVersion": "1.1.0"
+    }
+  }
+}

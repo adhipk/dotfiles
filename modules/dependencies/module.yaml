@@ -1,0 +1,35 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: dependencies
+version: 1.2.1
+description: Aggregates dependency declarations, installed snapshots, pins, and manager-backed drift checks.
+dataKey: modules.dependencies
+distribution:
+  standalone: true
+requires:
+  executables:
+    - python3
+    - yq
+optional:
+  executables:
+    - brew
+    - codium
+    - git
+state:
+  preserved: []
+  ephemeral: []
+commands:
+  - name: dotfiles-deps
+    source: bin/dotfiles-deps
+    target: ~/bin/dotfiles-deps
+targets:
+  - source: bin/dotfiles-deps
+    destination: ~/bin/dotfiles-deps
+    bridge: home/bin/executable_dotfiles-deps.tmpl
+    ownership: exclusive
+  - source: install/apply-git-pins.sh.tmpl
+    destination: chezmoi after-apply lifecycle
+    bridge: home/.chezmoiscripts/run_onchange_after_00-dependency-git-pins.sh.tmpl
+    ownership: exclusive
+tests:
+  - tests/test_dependencies.sh

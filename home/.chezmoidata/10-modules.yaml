@@ -1,0 +1,57 @@
+dotfiles:
+  profile: default
+  moduleApiVersion: 1
+
+# Checked-in defaults. Machine-specific overrides may be supplied from the
+# `data` section of ~/.config/chezmoi/chezmoi.{toml,yaml,json}.
+modules:
+  moduleLifecycle:
+    enabled: true
+  systemUninstall:
+    enabled: true
+  dependencies:
+    enabled: true
+  dotfilesControlCenter:
+    enabled: true
+  shortcutGuide:
+    enabled: true
+  appFocus:
+    enabled: true
+  windowLayout:
+    enabled: true
+  appearancePip:
+    enabled: true
+  spaceDisplay:
+    enabled: true
+  scratchpads:
+    enabled: true
+  agentTimer:
+    enabled: true
+    defaultSeconds: 600
+    warningSeconds: 60
+    retentionSeconds: 604800
+    expirySound: Ping
+    preferredAgents:
+      - codex
+      - claude
+      - opencode
+  tmuxSessions:
+    enabled: true
+  tmuxYazi:
+    enabled: true
+  terminalWindowTypes:
+    enabled: true
+  kitTts:
+    enabled: true
+  todo:
+    enabled: true
+  unescapeCli:
+    enabled: true
+  ghCreateRepo:
+    enabled: true
+  macosDefaultApps:
+    enabled: true
+  projects:
+    enabled: false
+  hyperspace:
+    enabled: false

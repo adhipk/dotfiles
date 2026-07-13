@@ -1,0 +1,72 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: app-focus
+version: 1.0.0
+description: Provides MRU app focus, presentation and zen modes, and origin-preserving terminal launch shortcuts.
+dataKey: modules.appFocus
+distribution:
+  standalone: true
+  platform: macos
+requires:
+  executables:
+    - bash
+    - jq
+    - yabai
+    - yq
+optional:
+  executables:
+    - terminal-notifier
+state:
+  preserved: []
+  ephemeral:
+    - ~/.config/skhd/app-mru
+    - ~/.config/skhd/presentation_mode
+    - ~/.config/skhd/zen_mode
+commands:
+  - name: hotkeys
+    source: bin/hotkeys
+    target: ~/bin/hotkeys
+    bridge: home/bin/executable_hotkeys.tmpl
+targets:
+  - service: app-focus
+    source: bin/hotkeys
+    destination: ~/bin/hotkeys
+    bridge: home/bin/executable_hotkeys.tmpl
+    ownership: exclusive
+  - service: app-focus
+    source: bin/focus_app.sh
+    destination: ~/.config/skhd/focus_app.sh
+    bridge: home/dot_config/skhd/executable_focus_app.sh.tmpl
+    ownership: exclusive
+  - service: app-focus
+    source: bin/app-mru.sh
+    destination: ~/.config/skhd/app-mru.sh
+    bridge: home/dot_config/skhd/executable_app-mru.sh.tmpl
+    ownership: exclusive
+  - service: app-focus
+    source: config/defaults.toml
+    destination: ~/.config/app-focus/config.toml
+    bridge: home/dot_config/app-focus/config.toml.tmpl
+    ownership: exclusive
+  - service: app-focus
+    source: lib/config.sh
+    destination: ~/.config/app-focus/config.sh
+    bridge: home/dot_config/app-focus/config.sh.tmpl
+    ownership: exclusive
+  - service: skhd
+    source: targets/skhd-apps.conf.tmpl
+    destination: ~/.skhdrc
+    bridge: home/dot_skhdrc.tmpl
+    ownership: contribution
+  - service: skhd
+    source: targets/skhd-modes.conf.tmpl
+    destination: ~/.skhdrc
+    bridge: home/dot_skhdrc.tmpl
+    ownership: contribution
+  - service: yabai
+    source: targets/yabai-signals.sh.tmpl
+    destination: ~/.yabairc
+    bridge: home/dot_yabairc.tmpl
+    ownership: contribution
+tests:
+  - tests/test_module.sh

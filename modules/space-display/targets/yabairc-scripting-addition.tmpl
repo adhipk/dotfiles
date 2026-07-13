@@ -1,0 +1,9 @@
+# Load the scripting addition when SIP allows it. Core tiling still works
+# without it, but advanced operations such as creating spaces do not.
+SA_LOADED=false
+if sudo yabai --load-sa; then
+  SA_LOADED=true
+  yabai -m signal --add label=space_display_load_sa event=dock_did_restart action="sudo yabai --load-sa"
+else
+  echo "yabai scripting addition unavailable; skipping automatic space creation." >&2
+fi

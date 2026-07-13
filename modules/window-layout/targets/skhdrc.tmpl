@@ -1,0 +1,56 @@
+# -- Cycle through windows on current desktop --
+alt - tab : yabai -m window --focus stack.next || yabai -m window --focus stack.first
+shift + alt - tab : yabai -m window --focus stack.prev || yabai -m window --focus stack.last
+
+# -- Set window to 50% split --
+ctrl + alt - left  : ~/.config/skhd/snap_window.sh left
+ctrl + alt - right : ~/.config/skhd/snap_window.sh right
+ctrl + alt - h : ~/.config/skhd/snap_window.sh left
+ctrl + alt - k : ~/.config/skhd/snap_window.sh right
+
+# -- Swap windows --
+ctrl + alt + shift - left  : yabai -m window --swap west
+ctrl + alt + shift - right : yabai -m window --swap east
+ctrl + alt + shift - up    : yabai -m window --swap north
+ctrl + alt + shift - down  : yabai -m window --swap south
+ctrl + alt + shift - h : yabai -m window --swap west
+ctrl + alt + shift - k : yabai -m window --swap east
+ctrl + alt + shift - u : yabai -m window --swap north
+ctrl + alt + shift - j : yabai -m window --swap south
+
+# -- Resize window incrementally (Option+Shift) --
+alt + shift - left  : yabai -m window --resize left:-100:0 || yabai -m window --resize right:-100:0
+alt + shift - right : yabai -m window --resize right:100:0 || yabai -m window --resize left:100:0
+alt + shift - up    : yabai -m window --resize top:0:-100 || yabai -m window --resize bottom:0:-100
+alt + shift - down  : yabai -m window --resize bottom:0:100 || yabai -m window --resize top:0:100
+alt + shift - h : yabai -m window --resize left:-100:0 || yabai -m window --resize right:-100:0
+alt + shift - k : yabai -m window --resize right:100:0 || yabai -m window --resize left:100:0
+alt + shift - u : yabai -m window --resize top:0:-100 || yabai -m window --resize bottom:0:-100
+alt + shift - j : yabai -m window --resize bottom:0:100 || yabai -m window --resize top:0:100
+
+# -- Fullscreen --
+ctrl + alt - return : yabai -m window --toggle zoom-fullscreen
+
+# -- Toggle split direction --
+ctrl + alt - s : yabai -m window --toggle split
+
+# -- Balance tree --
+ctrl + alt - b : yabai -m space --balance
+
+# -- Rotate tree --
+ctrl + alt - o : yabai -m space --rotate 90
+
+# -- Mirror tree --
+ctrl + alt - x : yabai -m space --mirror x-axis
+ctrl + alt - y : yabai -m space --mirror y-axis
+
+# -- Toggle float + center (remembered per app/title) --
+ctrl + alt - f : ~/.config/yabai/float-prefs toggle
+
+# -- Stack windows --
+ctrl + alt - d : yabai -m window --stack west
+ctrl + alt - g : yabai -m space --layout $(yabai -m query --spaces --space | jq -r '.type' | grep -q 'bsp' && echo 'stack' || echo 'bsp')
+
+# -- Window close / minimize --
+ctrl + alt - w : yabai -m window --close
+ctrl + alt - z : yabai -m window --minimize

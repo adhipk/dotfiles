@@ -1,0 +1,626 @@
+#!/usr/bin/env bash
+# man-me: name=tmux-session-template
+# man-me: category=Terminal and Sessions
+# man-me: usage=tmux-session-template auto SESSION; tmux-session-template ensure SESSION [DIRECTORY]; tmux-session-template cycle SESSION TYPE [WINDOW]; tmux-session-template new SESSION TYPE [PANE]; tmux-session-template duplicate SESSION [PANE]
+# man-me: description=Apply and navigate the standard terminal, Codex, Neovim, Tuxedo, and Awrit tmux window types.
+# man-me: tags=tmux terminal session template codex nvim tuxedo todo awrit browser window cycle new duplicate
+
+set -euo pipefail
+
+DOTFILES_LIB_DIR="${DOTFILES_LIB_DIR:-$HOME/.local/lib/dotfiles}"
+for library in core.sh tmux.sh; do
+  if [[ ! -r "$DOTFILES_LIB_DIR/$library" ]]; then
+    printf 'tmux-session-template: missing standard library: %s\n' "$DOTFILES_LIB_DIR/$library" >&2
+    exit 1
+  fi
+  # shellcheck source=/dev/null
+  source "$DOTFILES_LIB_DIR/$library"
+done
+
+# Preserve the helper's existing isolated-test socket override as a stable
+# compatibility alias for the public tmux library.
+if [[ -n "${TMUX_SESSION_TEMPLATE_SOCKET:-}" && -z "${DOTFILES_TMUX_SOCKET_NAME:-}" ]]; then
+  DOTFILES_TMUX_SOCKET_NAME="$TMUX_SESSION_TEMPLATE_SOCKET"
+  export DOTFILES_TMUX_SOCKET_NAME
+fi
+
+TEMPLATE_MARKER_OPTION="@dotfiles_tmux_template"
+TEMPLATE_MARKER_VALUE="standard"
+TEMPLATE_SKIP_ENV="DOTFILES_TMUX_TEMPLATE"
+WINDOW_TYPE_OPTION="@dotfiles_window_type"
+TEMPLATE_LOCK_CHANNEL=""
+TEMPLATE_LOCK_HELD=false
+
+usage() {
+  cat <<'EOF'
+Usage:
+  tmux-session-template auto SESSION
+  tmux-session-template ensure SESSION [DIRECTORY]
+  tmux-session-template cycle SESSION TYPE [CURRENT_WINDOW]
+  tmux-session-template new SESSION TYPE [SOURCE_PANE]
+  tmux-session-template duplicate SESSION [SOURCE_PANE]
+
+Modes:
+  auto    Apply only to a new, ordinary one-window shell session.
+  ensure  Add or repair the standard layout in an existing session.
+  cycle   Select the next window of TYPE in index order, wrapping around.
+  new     Create a TYPE window in SOURCE_PANE's directory and select it.
+  duplicate
+          Create and select another window matching SOURCE_PANE's type and directory.
+
+The standard layout is:
+  0  terminal  raw shell
+  1  codex     runs codex
+  2  nvim      runs nvim
+  3  tuxedo    runs this session directory's todo.txt TUI
+  4  awrit     typed shell; explicit create/duplicate launches Awrit
+EOF
+}
+
+tmux_cmd() {
+  dotfiles_tmux_cmd "$@"
+}
+
+session_target() {
+  local session="$1"
+  local session_id=""
+
+  if [[ "$session" == \$* && "${session#\$}" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "$session"
+  elif [[ "$session" == \$* ]]; then
+    session_id=$(tmux_cmd list-sessions -F '#{session_id}|#{session_name}' 2>/dev/null \
+      | awk -F '|' -v name="$session" '$2 == name { print $1; exit }' || true)
+    if [[ -n "$session_id" ]]; then
+      printf '%s\n' "$session_id"
+    else
+      printf '=%s\n' "$session"
+    fi
+  else
+    printf '=%s\n' "$session"
+  fi
+}
+
+session_pane_target() {
+  printf '%s:\n' "$(session_target "$1")"
+}
+
+session_window_target() {
+  local session="$1"
+  local window="$2"
+
+  printf '%s:%s\n' "$(session_target "$session")" "$window"
+}
+
+session_exists() {
+  tmux_cmd has-session -t "$(session_target "$1")" 2>/dev/null
+}
+
+release_session_lock() {
+  if [[ "$TEMPLATE_LOCK_HELD" == true && -n "$TEMPLATE_LOCK_CHANNEL" ]]; then
+    dotfiles_tmux_wait_lock_release "$TEMPLATE_LOCK_CHANNEL" >/dev/null 2>&1 || true
+    TEMPLATE_LOCK_HELD=false
+  fi
+}
+
+acquire_session_lock() {
+  local session="$1"
+  local session_id
+
+  session_id=$(tmux_cmd display-message -p -t "$(session_pane_target "$session")" '#{session_id}')
+  [[ -n "$session_id" ]] || {
+    printf 'tmux-session-template: could not identify session: %s\n' "$session" >&2
+    return 1
+  }
+
+  TEMPLATE_LOCK_CHANNEL="dotfiles-tmux-template-${session_id#\$}"
+  dotfiles_tmux_wait_lock_acquire "$TEMPLATE_LOCK_CHANNEL"
+  TEMPLATE_LOCK_HELD=true
+}
+
+session_window_count() {
+  tmux_cmd list-windows -t "$(session_target "$1")" -F '#{window_id}' | wc -l | tr -d '[:space:]'
+}
+
+session_pane_count() {
+  tmux_cmd list-panes -s -t "$(session_target "$1")" -F '#{pane_id}' | wc -l | tr -d '[:space:]'
+}
+
+session_is_grouped() {
+  [[ "$(tmux_cmd display-message -p -t "$(session_pane_target "$1")" '#{session_grouped}')" == "1" ]]
+}
+
+session_template_setting() {
+  local setting
+
+  setting=$(tmux_cmd show-environment -t "$(session_target "$1")" "$TEMPLATE_SKIP_ENV" 2>/dev/null || true)
+  printf '%s\n' "${setting#*=}"
+}
+
+session_template_marker() {
+  tmux_cmd show-options -qv -t "$1" "$TEMPLATE_MARKER_OPTION" 2>/dev/null || true
+}
+
+initial_pane_format() {
+  local session="$1"
+  local format="$2"
+
+  tmux_cmd list-panes -s -t "$(session_target "$session")" -F "$format" | head -n 1
+}
+
+session_directory() {
+  local session="$1"
+  local directory
+
+  directory=$(initial_pane_format "$session" '#{pane_current_path}')
+  if [[ -z "$directory" ]]; then
+    directory=$(initial_pane_format "$session" '#{pane_start_path}')
+  fi
+  printf '%s\n' "$directory"
+}
+
+window_type_index() {
+  case "$1" in
+    terminal) printf '0\n' ;;
+    codex) printf '1\n' ;;
+    nvim) printf '2\n' ;;
+    tuxedo) printf '3\n' ;;
+    awrit) printf '4\n' ;;
+    *) return 1 ;;
+  esac
+}
+
+window_type_command() {
+  case "$1" in
+    terminal) printf '\n' ;;
+    codex) printf 'codex\n' ;;
+    nvim) printf 'nvim\n' ;;
+    tuxedo) printf 'todo\n' ;;
+    awrit) printf 'awrit\n' ;;
+    *) return 1 ;;
+  esac
+}
+
+allows_legacy_index_migration() {
+  case "$1" in
+    terminal|codex|nvim) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+validate_window_type() {
+  window_type_index "$1" >/dev/null 2>&1 || {
+    printf 'tmux-session-template: unsupported window type: %s\n' "$1" >&2
+    return 2
+  }
+}
+
+window_ids() {
+  tmux_cmd list-windows -t "$(session_target "$1")" -F '#{window_id}' 2>/dev/null
+}
+
+window_names() {
+  tmux_cmd list-windows -t "$(session_target "$1")" -F '#{window_name}' 2>/dev/null
+}
+
+window_id_at_index() {
+  local session="$1"
+  local target_index="$2"
+
+  tmux_cmd list-windows -t "$(session_target "$session")" -F '#{window_index} #{window_id}' 2>/dev/null \
+    | awk -v target_index="$target_index" '$1 == target_index { print $2; exit }'
+}
+
+tmux_window_index() {
+  tmux_cmd display-message -p -t "$1" '#{window_index}' 2>/dev/null
+}
+
+tmux_window_name() {
+  tmux_cmd display-message -p -t "$1" '#{window_name}' 2>/dev/null
+}
+
+tmux_window_type() {
+  tmux_cmd show-options -wqv -t "$1" "$WINDOW_TYPE_OPTION" 2>/dev/null || true
+}
+
+mark_tmux_window_type() {
+  local window_id="$1"
+  local type="$2"
+
+  tmux_cmd set-option -wq -t "$window_id" "$WINDOW_TYPE_OPTION" "$type"
+}
+
+find_window_for_type() {
+  local session="$1"
+  local type="$2"
+  local expected_index
+  local fixed_window_id
+  local window_id
+  local marker
+
+  expected_index=$(window_type_index "$type")
+  fixed_window_id=$(window_id_at_index "$session" "$expected_index")
+
+  if [[ -n "$fixed_window_id" && "$(tmux_window_type "$fixed_window_id")" == "$type" ]]; then
+    printf '%s\n' "$fixed_window_id"
+    return 0
+  fi
+
+  while IFS= read -r window_id; do
+    [[ -n "$window_id" ]] || continue
+    if [[ "$(tmux_window_type "$window_id")" == "$type" ]]; then
+      printf '%s\n' "$window_id"
+      return 0
+    fi
+  done < <(window_ids "$session")
+
+  if [[ -n "$fixed_window_id" && -z "$(tmux_window_type "$fixed_window_id")" \
+      && "$(tmux_window_name "$fixed_window_id")" == "$type" ]]; then
+    printf '%s\n' "$fixed_window_id"
+    return 0
+  fi
+
+  while IFS= read -r window_id; do
+    [[ -n "$window_id" ]] || continue
+    marker=$(tmux_window_type "$window_id")
+    if [[ -z "$marker" && "$(tmux_window_name "$window_id")" == "$type" ]]; then
+      printf '%s\n' "$window_id"
+      return 0
+    fi
+  done < <(window_ids "$session")
+
+  # Migrate already-running standard sessions whose canonical window was renamed
+  # before type metadata existed.
+  if allows_legacy_index_migration "$type" \
+      && [[ -n "$fixed_window_id" && -z "$(tmux_window_type "$fixed_window_id")" \
+      && "$(session_template_marker "$session")" == "$TEMPLATE_MARKER_VALUE" ]]; then
+    printf '%s\n' "$fixed_window_id"
+    return 0
+  fi
+
+  return 1
+}
+
+tmux_window_index_exists() {
+  local session="$1"
+  local index="$2"
+
+  tmux_cmd list-windows -t "$(session_target "$session")" -F '#{window_index}' 2>/dev/null \
+    | grep -Fqx -- "$index"
+}
+
+ensure_tmux_window_index() {
+  local session="$1"
+  local window_id="$2"
+  local index="$3"
+  local current_index
+
+  current_index=$(tmux_window_index "$window_id")
+  [[ -n "$current_index" ]] || return 1
+  [[ "$current_index" == "$index" ]] && return 0
+
+  if tmux_window_index_exists "$session" "$index"; then
+    tmux_cmd swap-window -d \
+      -s "$window_id" \
+      -t "$(session_window_target "$session" "$index")" >/dev/null
+  else
+    tmux_cmd move-window -d \
+      -s "$window_id" \
+      -t "$(session_window_target "$session" "$index")" >/dev/null
+  fi
+}
+
+create_tmux_window_with_command() {
+  local session="$1"
+  local window="$2"
+  local directory="$3"
+  local command_text="$4"
+  local window_id
+
+  window_id=$(tmux_cmd new-window -d -P -F '#{window_id}' \
+    -t "$(session_pane_target "$session")" -c "$directory" -n "$window")
+  if [[ -n "$command_text" ]]; then
+    tmux_cmd send-keys -t "$window_id" "$command_text" C-m
+  fi
+  printf '%s\n' "$window_id"
+}
+
+ensure_standard_tmux_window() {
+  local session="$1"
+  local directory="$2"
+  local type="$3"
+  local index="$4"
+  local command_text="$5"
+  local window_id
+
+  window_id=$(find_window_for_type "$session" "$type" || true)
+  if [[ -z "$window_id" ]]; then
+    window_id=$(create_tmux_window_with_command "$session" "$type" "$directory" "$command_text")
+  fi
+
+  mark_tmux_window_type "$window_id" "$type"
+  ensure_tmux_window_index "$session" "$window_id" "$index"
+}
+
+ensure_standard_tmux_windows() {
+  local session="$1"
+  local directory="$2"
+
+  ensure_standard_tmux_window "$session" "$directory" terminal 0 ""
+  ensure_standard_tmux_window "$session" "$directory" codex 1 codex
+  ensure_standard_tmux_window "$session" "$directory" nvim 2 nvim
+  ensure_standard_tmux_window "$session" "$directory" tuxedo 3 todo
+  # Keep the canonical slot lazy. The public Awrit launcher hands tmux calls to
+  # a direct Ghostty surface, so auto-running it here would open a browser for
+  # every new session and scratchpad. Explicit create/duplicate still launches.
+  ensure_standard_tmux_window "$session" "$directory" awrit 4 ""
+}
+
+mark_session_templated() {
+  tmux_cmd set-option -q -t "$1" "$TEMPLATE_MARKER_OPTION" "$TEMPLATE_MARKER_VALUE"
+}
+
+window_ids_for_type() {
+  local session="$1"
+  local type="$2"
+  local expected_index
+  local standard_session=false
+  local allow_index_migration=false
+  local window_id
+  local marker
+  local index
+  local name
+
+  expected_index=$(window_type_index "$type")
+  if [[ "$(session_template_marker "$session")" == "$TEMPLATE_MARKER_VALUE" ]]; then
+    standard_session=true
+  fi
+  if allows_legacy_index_migration "$type"; then
+    allow_index_migration=true
+  fi
+
+  while IFS= read -r window_id; do
+    [[ -n "$window_id" ]] || continue
+    marker=$(tmux_window_type "$window_id")
+    if [[ "$marker" == "$type" ]]; then
+      printf '%s\n' "$window_id"
+      continue
+    fi
+    [[ -z "$marker" ]] || continue
+
+    index=$(tmux_window_index "$window_id")
+    name=$(tmux_window_name "$window_id")
+    if [[ "$name" == "$type" \
+        || ("$standard_session" == true && "$allow_index_migration" == true \
+          && "$index" == "$expected_index") ]]; then
+      mark_tmux_window_type "$window_id" "$type"
+      printf '%s\n' "$window_id"
+    fi
+  done < <(window_ids "$session")
+}
+
+cycle_window_type() {
+  local session="$1"
+  local type="$2"
+  local current_window="${3:-}"
+  local type_windows=()
+  local window_id
+  local target_window=""
+  local index
+
+  validate_window_type "$type"
+  if [[ -z "$current_window" ]]; then
+    current_window=$(tmux_cmd display-message -p -t "$(session_pane_target "$session")" '#{window_id}')
+  fi
+
+  while IFS= read -r window_id; do
+    [[ -n "$window_id" ]] || continue
+    type_windows[${#type_windows[@]}]="$window_id"
+  done < <(window_ids_for_type "$session" "$type")
+
+  if [[ "${#type_windows[@]}" -eq 0 ]]; then
+    tmux_cmd display-message -t "$(session_pane_target "$session")" "No $type windows in this session"
+    return 0
+  fi
+
+  target_window="${type_windows[0]}"
+  for ((index = 0; index < ${#type_windows[@]}; index++)); do
+    if [[ "${type_windows[$index]}" == "$current_window" ]]; then
+      target_window="${type_windows[$(((index + 1) % ${#type_windows[@]}))]}"
+      break
+    fi
+  done
+
+  tmux_cmd select-window -t "$target_window" >/dev/null
+}
+
+new_window_type() {
+  local session="$1"
+  local type="$2"
+  local source_pane="${3:-${TMUX_PANE:-}}"
+  local directory
+  local command_text
+  local window_id
+
+  validate_window_type "$type"
+  if [[ -n "$source_pane" ]]; then
+    directory=$(tmux_cmd display-message -p -t "$source_pane" '#{pane_current_path}')
+  else
+    directory=$(session_directory "$session")
+  fi
+  [[ -d "$directory" ]] || {
+    printf 'tmux-session-template: source directory not found: %s\n' "$directory" >&2
+    return 1
+  }
+
+  command_text=$(window_type_command "$type")
+  window_id=$(create_tmux_window_with_command "$session" "$type" "$directory" "$command_text")
+  mark_tmux_window_type "$window_id" "$type"
+  tmux_cmd select-window -t "$window_id" >/dev/null
+}
+
+next_duplicate_window_name() {
+  local session="$1"
+  local type="$2"
+  local name
+  local suffix
+  local number
+  local highest=1
+
+  while IFS= read -r name; do
+    [[ "$name" == "$type-"* ]] || continue
+    suffix="${name#"$type-"}"
+    [[ "$suffix" =~ ^[0-9]+$ ]] || continue
+    number=$((10#$suffix))
+    if ((number > highest)); then
+      highest="$number"
+    fi
+  done < <(window_names "$session")
+
+  printf '%s-%d\n' "$type" "$((highest + 1))"
+}
+
+duplicate_window_type() {
+  local session="$1"
+  local source_pane="${2:-${TMUX_PANE:-}}"
+  local target_session_id
+  local source_session_id
+  local source_window_id
+  local type
+  local directory
+  local command_text
+  local window_name
+  local window_id
+
+  if [[ -z "$source_pane" ]]; then
+    source_pane=$(tmux_cmd display-message -p -t "$(session_pane_target "$session")" '#{pane_id}')
+  fi
+  if ! tmux_cmd display-message -p -t "$source_pane" '#{pane_id}' >/dev/null 2>&1; then
+    printf 'tmux-session-template: source pane not found: %s\n' "$source_pane" >&2
+    return 1
+  fi
+
+  target_session_id=$(tmux_cmd display-message -p -t "$(session_pane_target "$session")" '#{session_id}')
+  source_session_id=$(tmux_cmd display-message -p -t "$source_pane" '#{session_id}')
+  if [[ "$source_session_id" != "$target_session_id" ]]; then
+    printf 'tmux-session-template: source pane is not in session: %s\n' "$session" >&2
+    return 1
+  fi
+
+  source_window_id=$(tmux_cmd display-message -p -t "$source_pane" '#{window_id}')
+  type=$(tmux_window_type "$source_window_id")
+  validate_window_type "$type"
+
+  directory=$(tmux_cmd display-message -p -t "$source_pane" '#{pane_current_path}')
+  [[ -d "$directory" ]] || {
+    printf 'tmux-session-template: source directory not found: %s\n' "$directory" >&2
+    return 1
+  }
+
+  command_text=$(window_type_command "$type")
+  window_name=$(next_duplicate_window_name "$session" "$type")
+  window_id=$(create_tmux_window_with_command "$session" "$window_name" "$directory" "$command_text")
+  mark_tmux_window_type "$window_id" "$type"
+  tmux_cmd select-window -t "$window_id" >/dev/null
+}
+
+apply_automatic_template() {
+  local session="$1"
+  local directory
+  local initial_window_index
+  local initial_start_command
+
+  [[ "$session" != hs-* ]] || return 0
+  [[ "$(session_template_setting "$session")" != "skip" ]] || return 0
+  [[ "$(session_template_marker "$session")" != "$TEMPLATE_MARKER_VALUE" ]] || return 0
+  ! session_is_grouped "$session" || return 0
+  [[ "$(session_window_count "$session")" == "1" ]] || return 0
+  [[ "$(session_pane_count "$session")" == "1" ]] || return 0
+
+  initial_start_command=$(initial_pane_format "$session" '#{pane_start_command}')
+  [[ -z "$initial_start_command" ]] || return 0
+
+  directory=$(session_directory "$session")
+  [[ -d "$directory" ]] || {
+    printf 'tmux-session-template: session directory not found: %s\n' "$directory" >&2
+    return 1
+  }
+
+  initial_window_index=$(initial_pane_format "$session" '#{window_index}')
+  tmux_cmd rename-window -t "$(session_window_target "$session" "$initial_window_index")" terminal
+  ensure_standard_tmux_windows "$session" "$directory"
+  tmux_cmd select-window -t "$(find_window_for_type "$session" terminal)" >/dev/null
+  mark_session_templated "$session"
+}
+
+ensure_template() {
+  local session="$1"
+  local directory="${2:-}"
+
+  if [[ -z "$directory" ]]; then
+    directory=$(session_directory "$session")
+  fi
+  [[ -d "$directory" ]] || {
+    printf 'tmux-session-template: session directory not found: %s\n' "$directory" >&2
+    return 1
+  }
+
+  ensure_standard_tmux_windows "$session" "$directory"
+  mark_session_templated "$session"
+}
+
+main() {
+  local mode="${1:-}"
+  local session="${2:-}"
+
+  case "$mode" in
+    -h|--help|help)
+      usage
+      return 0
+      ;;
+    auto|ensure|cycle|new|duplicate)
+      ;;
+    *)
+      usage >&2
+      return 2
+      ;;
+  esac
+
+  if [[ -z "$session" ]]; then
+    usage >&2
+    return 2
+  fi
+  if ! command -v tmux >/dev/null 2>&1; then
+    printf 'tmux-session-template: tmux is required.\n' >&2
+    return 1
+  fi
+  if ! session_exists "$session"; then
+    printf 'tmux-session-template: session not found: %s\n' "$session" >&2
+    return 1
+  fi
+
+  trap release_session_lock EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  acquire_session_lock "$session"
+
+  case "$mode" in
+    auto)
+      apply_automatic_template "$session"
+      ;;
+    ensure)
+      ensure_template "$session" "${3:-}"
+      ;;
+    cycle)
+      cycle_window_type "$session" "${3:-}" "${4:-}"
+      ;;
+    new)
+      new_window_type "$session" "${3:-}" "${4:-}"
+      ;;
+    duplicate)
+      duplicate_window_type "$session" "${3:-}"
+      ;;
+  esac
+}
+
+main "$@"

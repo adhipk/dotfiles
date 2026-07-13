@@ -1,0 +1,31 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: macos-default-apps
+version: 1.0.0
+description: Thin chezmoi adapter for the pinned macos-default-apps utility checkout.
+dataKey: modules.macosDefaultApps
+distribution:
+  standalone: false
+requires:
+  executables:
+    - bash
+    - default-apps
+    - osascript
+    - plutil
+optional:
+  executables:
+    - duti
+state:
+  preserved: []
+  ephemeral: []
+commands:
+  - name: default-apps
+    source: targets/default-apps-path.tmpl
+    target: ~/bin/default-apps
+targets:
+  - source: targets/default-apps-path.tmpl
+    destination: ~/bin/default-apps
+    bridge: home/bin/symlink_default-apps.tmpl
+    ownership: exclusive
+tests:
+  - tests/test_module.sh

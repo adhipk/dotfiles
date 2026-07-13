@@ -1,0 +1,4 @@
+# Toggle one Yazi side pane or open Yazi in its own full tmux window. Both start
+# in the active pane's directory; repeated side-pane toggles never duplicate it.
+bind-key -N "Toggle Yazi side pane" b run-shell "$HOME/bin/tmux-yazi-pane toggle '#{pane_id}'"
+bind-key -N "Open Yazi full window" B new-window -S -n yazi -c "#{pane_current_path}" yazi

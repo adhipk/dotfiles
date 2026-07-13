@@ -1,0 +1,64 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: agent-timer
+version: 1.2.3
+description: Global recurring wall-clock timer that checkpoints active terminal agents without terminating open work.
+dataKey: modules.agentTimer
+distribution:
+  standalone: true
+requires:
+  executables:
+    - bash
+    - jq
+    - sesh
+    - tmux
+    - yq
+optional:
+  executables:
+    - afplay
+    - terminal-notifier
+state:
+  preserved:
+    - ~/.local/state/agent-timer
+  ephemeral:
+    - ~/.local/state/agent-timer/*.lock
+commands:
+  - name: agent-timer
+    source: bin/agent-timer
+    target: ~/bin/agent-timer
+targets:
+  - source: bin/agent-timer
+    destination: ~/bin/agent-timer
+    bridge: home/bin/executable_agent-timer.tmpl
+    ownership: exclusive
+  - source: policy/time-boxed-delivery.md
+    destination: ~/.agents/AGENTS.md
+    bridge: home/dot_agents/AGENTS.md.tmpl
+    ownership: contribution
+  - source: hooks/codex-hooks.json
+    destination: ~/.codex/hooks.json
+    bridge: home/dot_codex/hooks.json.tmpl
+    ownership: exclusive
+  - source: config/config.toml.tmpl
+    destination: ~/.config/agent-timer/config.toml
+    bridge: home/dot_config/agent-timer/config.toml.tmpl
+    ownership: exclusive
+  - source: targets/tmux.conf.tmpl
+    destination: ~/.tmux.conf
+    bridge: home/dot_tmux.conf.tmpl
+    ownership: contribution
+  - source: targets/tmux-which-key.yaml.tmpl
+    destination: ~/.config/tmux/which-key.yaml
+    bridge: home/dot_config/tmux/which-key.yaml.tmpl
+    ownership: contribution
+  - source: install/manage-cron.sh.tmpl
+    destination: chezmoi after-apply lifecycle
+    bridge: home/.chezmoiscripts/run_onchange_after_agent-timer-cron.sh.tmpl
+    ownership: exclusive
+  - source: install/prepare-disable.sh.tmpl
+    destination: chezmoi before-apply lifecycle
+    bridge: home/.chezmoiscripts/run_onchange_before_agent-timer-disable.sh.tmpl
+    ownership: exclusive
+tests:
+  - tests/test_agent_timer.sh
+  - tests/test_safety_contracts.sh

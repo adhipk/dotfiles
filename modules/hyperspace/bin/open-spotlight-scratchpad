@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+module_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+open -n -a Ghostty --args \
+  --title="scratchpad:dev_space_prompt" \
+  --working-directory="$HOME" \
+  --background=#000000 \
+  --background-opacity=1 \
+  --background-blur=false \
+  --command="direct:$module_dir/spotlight-zsh"

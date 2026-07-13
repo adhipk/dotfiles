@@ -1,0 +1,6 @@
+# man-me: name=gh-create-repo
+# man-me: category=Development and Repo
+# man-me: usage=gh-create-repo
+# man-me: description=Edit repository creation settings as YAML, then run gh repo create.
+# man-me: tags=github gh repo repository create yaml development
+# man-me: source=home/bin/symlink_gh-create-repo.tmpl

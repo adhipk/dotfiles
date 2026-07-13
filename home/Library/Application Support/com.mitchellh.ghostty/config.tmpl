@@ -1,0 +1,18 @@
+# Ghostty's Command layer stays app-local. Enabled terminal modules contribute
+# their navigation adapters here; broader tmux actions stay behind Control and
+# the Ctrl-a prefix. Hyper is intentionally unbound.
+{{ if .modules.terminalWindowTypes.enabled }}{{ printf "\n%s" (includeTemplate "../modules/terminal-window-types/targets/ghostty.conf.tmpl" .) }}{{ end }}
+{{ if .modules.tmuxYazi.enabled }}{{ printf "\n%s" (includeTemplate "../modules/tmux-yazi/targets/ghostty.conf.tmpl" .) }}{{ end }}
+
+# aesthetics
+# theme = Cyberpunk Scarlet Protocol
+background-blur = false
+background-opacity = 0.86
+background=#000000
+macos-titlebar-style = hidden
+
+# typography
+font-size=16
+font-thicken=true
+font-thicken-strength=1
+adjust-cell-height=1

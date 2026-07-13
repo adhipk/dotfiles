@@ -1,0 +1,31 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: module-lifecycle
+version: 0.3.0
+description: Inventories modules and executes fail-closed, source-preserving lifecycle operations.
+dataKey: modules.moduleLifecycle
+distribution:
+  standalone: false
+requires:
+  executables:
+    - bash
+    - chezmoi
+    - jq
+    - yq
+  libraries:
+    - core.sh
+    - locks.sh
+state:
+  preserved: []
+  ephemeral: []
+commands:
+  - name: dotfiles-module
+    source: bin/dotfiles-module
+    target: ~/bin/dotfiles-module
+targets:
+  - source: bin/dotfiles-module
+    destination: ~/bin/dotfiles-module
+    bridge: home/bin/executable_dotfiles-module.tmpl
+    ownership: exclusive
+tests:
+  - tests/test_module_lifecycle.sh

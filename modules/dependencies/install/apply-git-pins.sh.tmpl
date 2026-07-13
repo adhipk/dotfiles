@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Embedding the declarations makes this run_onchange hook execute whenever a
+# pin moves, while dotfiles-deps remains the single parser and safety boundary.
+{{- range .gitPins }}
+{{- if eq .manager "chezmoi" }}
+# {{ .id }}={{ .revision }}
+{{- end }}
+{{- end }}
+
+deps="$HOME/bin/dotfiles-deps"
+if [[ ! -x "$deps" ]]; then
+    echo "chezmoi: dependency pin controller is missing: $deps" >&2
+    exit 1
+fi
+
+exec "$deps" pins apply --manager chezmoi

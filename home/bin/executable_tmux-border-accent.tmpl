@@ -1,0 +1,3 @@
+{{- if .modules.appearancePip.enabled -}}
+{{ includeTemplate "../modules/appearance-pip/bin/tmux-border-accent" . }}
+{{- end -}}

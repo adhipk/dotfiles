@@ -1,0 +1,29 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: dotfiles-control-center
+version: 0.1.0
+description: Native macOS control center for module lifecycle, dependency health, and safe whole-system uninstall.
+dataKey: modules.dotfilesControlCenter
+distribution:
+  standalone: false
+requires:
+  executables:
+    - bash
+    - swift
+    - dotfiles-module
+    - dotfiles-deps
+    - dotfiles-uninstall
+state:
+  preserved: []
+  ephemeral: []
+commands:
+  - name: dotfiles-control-center
+    source: bin/dotfiles-control-center
+    target: ~/bin/dotfiles-control-center
+targets:
+  - source: bin/dotfiles-control-center
+    destination: ~/bin/dotfiles-control-center
+    bridge: home/bin/executable_dotfiles-control-center.tmpl
+    ownership: exclusive
+tests:
+  - tests/test_module.sh

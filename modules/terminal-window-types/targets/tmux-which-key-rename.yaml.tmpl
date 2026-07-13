@@ -1,0 +1,6 @@
+      - name: Rename
+        key: r
+        command: >-
+          command-prompt -p "Rename window:"
+          -I "#{?#{||:#{==:#{@dotfiles_window_type},codex},#{==:#W,codex}},#T,#W}"
+          { rename-window -- "%%" }

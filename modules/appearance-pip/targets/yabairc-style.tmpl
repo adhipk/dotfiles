@@ -1,0 +1,19 @@
+# Reserve half the four-point border width around each tile so adjacent square
+# overlays do not collide. Inactive borders stay black; focused tmux windows
+# use their session accent through tmux-border-accent.
+BORDER_WIDTH=4.0
+BORDER_COLOR=0xff000000
+BORDER_RESERVE=2
+BORDER_GAP=$((BORDER_RESERVE * 2))
+yabai -m config top_padding                  "$BORDER_RESERVE"
+yabai -m config bottom_padding               "$BORDER_RESERVE"
+yabai -m config left_padding                 "$BORDER_RESERVE"
+yabai -m config right_padding                "$BORDER_RESERVE"
+yabai -m config window_gap                   "$BORDER_GAP"
+
+yabai -m config window_shadow                off
+yabai -m config window_opacity               off
+yabai -m config active_window_opacity        1.0
+yabai -m config normal_window_opacity        1.0
+
+yabai -m rule --add label="tile_pip_windows" title="^Picture in Picture$" manage=on sticky=off sub-layer=auto

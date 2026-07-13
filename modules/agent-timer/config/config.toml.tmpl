@@ -1,0 +1,7 @@
+# Managed defaults for the global agent delivery timer.
+# Environment variables may override these values for one agent session.
+default_seconds = {{ .modules.agentTimer.defaultSeconds }}
+warning_seconds = {{ .modules.agentTimer.warningSeconds }}
+retention_seconds = {{ .modules.agentTimer.retentionSeconds }}
+expiry_sound = "{{ .modules.agentTimer.expirySound }}"
+preferred_agents = [{{ range $index, $agent := .modules.agentTimer.preferredAgents }}{{ if $index }}, {{ end }}"{{ $agent }}"{{ end }}]

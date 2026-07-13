@@ -5,10 +5,12 @@
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOTFILES_DIR="$(dirname "$TEST_DIR")"
 TEMP_HOME="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-install-test.XXXXXX")"
+TEMP_HOME="$(cd "$TEMP_HOME" && pwd -P)"
 FAKE_BIN="$TEMP_HOME/bin"
 ARGS_FILE="$TEMP_HOME/chezmoi-args"
 TMUX_ARGS_FILE="$TEMP_HOME/tmux-args"
 TMUX_PLUGIN_ARGS_FILE="$TEMP_HOME/tmux-plugin-args"
+PIN_ARGS_FILE="$TEMP_HOME/dependency-pin-args"
 SERVICE_ARGS_FILE="$TEMP_HOME/service-args"
 PKILL_ARGS_FILE="$TEMP_HOME/pkill-args"
 
@@ -115,6 +117,14 @@ echo "Installer Tests"
 echo "================================"
 
 mkdir -p "$FAKE_BIN"
+for declared_dependency in jq yq; do
+    dependency_path="$(command -v "$declared_dependency" 2>/dev/null || true)"
+    if [[ -z "$dependency_path" ]]; then
+        echo "Missing declared test dependency: $declared_dependency" >&2
+        exit 1
+    fi
+    ln -s "$dependency_path" "$FAKE_BIN/$declared_dependency"
+done
 printf '#!/usr/bin/env bash\nprintf \"%%s\\\\n\" \"$*\" >> \"$CHEZMOI_ARGS_FILE\"\n' > "$FAKE_BIN/chezmoi"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$FAKE_BIN/brew"
 cat > "$FAKE_BIN/tmux" <<'EOF'
@@ -140,7 +150,11 @@ cat > "$FAKE_BIN/pkill" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$PKILL_ARGS_FILE"
 EOF
-chmod +x "$FAKE_BIN/chezmoi" "$FAKE_BIN/brew" "$FAKE_BIN/tmux" "$FAKE_BIN/yabai" "$FAKE_BIN/skhd" "$FAKE_BIN/pkill"
+cat > "$FAKE_BIN/dotfiles-deps" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$PIN_ARGS_FILE"
+EOF
+chmod +x "$FAKE_BIN/chezmoi" "$FAKE_BIN/brew" "$FAKE_BIN/tmux" "$FAKE_BIN/yabai" "$FAKE_BIN/skhd" "$FAKE_BIN/pkill" "$FAKE_BIN/dotfiles-deps"
 
 echo ""
 echo "Testing install wrapper..."
@@ -159,7 +173,11 @@ mkdir -p \
     "$TEMP_HOME/.tmux/plugins/tpm/bin" \
     "$TEMP_HOME/.tmux/plugins/tmux-which-key" \
     "$TEMP_HOME/.config/tmux"
-cp "$DOTFILES_DIR/home/dot_config/tmux/which-key.yaml" "$TEMP_HOME/.config/tmux/which-key.yaml"
+chezmoi \
+    -S "$DOTFILES_DIR" \
+    -D "$TEMP_HOME" \
+    cat "$TEMP_HOME/.config/tmux/which-key.yaml" \
+    > "$TEMP_HOME/.config/tmux/which-key.yaml"
 cat > "$TEMP_HOME/.tmux/plugins/tpm/bin/install_plugins" <<'EOF'
 #!/usr/bin/env bash
 printf '%s|%s\n' "$HOME" "$TMUX_PLUGIN_MANAGER_PATH" >> "$TMUX_PLUGIN_ARGS_FILE"
@@ -170,6 +188,8 @@ if HOME="$TEMP_HOME" \
     CHEZMOI_ARGS_FILE="$ARGS_FILE" \
     TMUX_ARGS_FILE="$TMUX_ARGS_FILE" \
     TMUX_PLUGIN_ARGS_FILE="$TMUX_PLUGIN_ARGS_FILE" \
+    PIN_ARGS_FILE="$PIN_ARGS_FILE" \
+    DOTFILES_DEPS_BIN="$FAKE_BIN/dotfiles-deps" \
     SERVICE_ARGS_FILE="$SERVICE_ARGS_FILE" \
     PKILL_ARGS_FILE="$PKILL_ARGS_FILE" \
     DOTFILES_DIR="$DOTFILES_DIR" \
@@ -184,6 +204,7 @@ assert_contains "$ARGS_FILE" "^-S $DOTFILES_DIR apply$" "bootstrap applies the c
 assert_contains "$TMUX_ARGS_FILE" "^source-file $TEMP_HOME/.tmux.conf$" "bootstrap reloads a running tmux server"
 assert_contains "$PKILL_ARGS_FILE" "^-USR2 -f /Ghostty" "bootstrap reloads every running Ghostty process with SIGUSR2"
 assert_contains "$TMUX_PLUGIN_ARGS_FILE" "^$TEMP_HOME|$TEMP_HOME/.tmux/plugins/$" "bootstrap installs tmux plugins into the destination home"
+assert_contains "$PIN_ARGS_FILE" '^pins apply --manager tpm$' "bootstrap enforces immutable TPM pins after plugin installation"
 assert_symlink_target \
     "$TEMP_HOME/.tmux/plugins/tmux-which-key/config.yaml" \
     "$TEMP_HOME/.config/tmux/which-key.yaml" \
@@ -199,7 +220,7 @@ echo ""
 echo "Testing a clean destination apply..."
 COLD_HOME="$TEMP_HOME/cold-home"
 mkdir -p "$COLD_HOME"
-if chezmoi \
+if HOME="$COLD_HOME" chezmoi \
     -S "$DOTFILES_DIR" \
     -D "$COLD_HOME" \
     --persistent-state "$COLD_HOME/state.db" \
@@ -211,14 +232,35 @@ else
     ((FAILED++))
 fi
 assert_contains "$COLD_HOME/.agents/AGENTS.md" "Canonical Task Tracking" "clean apply installs shared agent guidance"
-assert_symlink_target "$COLD_HOME/.codex/AGENTS.md" "$HOME/.agents/AGENTS.md" "clean apply links Codex to shared agent guidance"
-assert_symlink_target "$COLD_HOME/.claude/CLAUDE.md" "$HOME/.agents/AGENTS.md" "clean apply links Claude to shared agent guidance"
-assert_symlink_target "$COLD_HOME/.config/opencode/AGENTS.md" "$HOME/.agents/AGENTS.md" "clean apply links OpenCode to shared agent guidance"
+assert_contains "$COLD_HOME/.agents/AGENTS.md" "Time-boxed Delivery" "clean apply installs global checkpoint behavior"
+assert_contains "$COLD_HOME/.agents/AGENTS.md" "Checkpoint expiry is never a termination condition" "clean apply installs recurring checkpoint behavior"
+assert_symlink_target "$COLD_HOME/.codex/AGENTS.md" "$COLD_HOME/.agents/AGENTS.md" "clean apply links Codex to shared agent guidance"
+assert_symlink_target "$COLD_HOME/.claude/CLAUDE.md" "$COLD_HOME/.agents/AGENTS.md" "clean apply links Claude to shared agent guidance"
+assert_symlink_target "$COLD_HOME/.config/opencode/AGENTS.md" "$COLD_HOME/.agents/AGENTS.md" "clean apply links OpenCode to shared agent guidance"
 assert_contains "$COLD_HOME/.config/opencode/opencode.json" "active project's todo\\.txt" "clean apply configures the OpenCode personal agent for project-local todo.txt"
 assert_not_contains "$COLD_HOME/.config/opencode/opencode.json" 'Todoist' "clean apply removes OpenCode's Todoist task guidance"
-assert_executable "$COLD_HOME/bin/todo" "clean apply installs the canonical todo wrapper"
-assert_contains "$COLD_HOME/bin/todo" 'TODO_AGENT_LOCK=' "clean apply installs serialized agent writes"
-assert_contains "$COLD_HOME/bin/todo" 'TODO_DIR="[$]PWD"' "clean apply keeps todo.txt in the caller's working directory"
+assert_symlink_target "$COLD_HOME/bin/todo" "$COLD_HOME/projects/tuxedo-project-todo/bin/todo" "clean apply links the canonical todo wrapper to its pinned project"
+assert_symlink_target "$COLD_HOME/bin/chezmoi-todo" "$COLD_HOME/projects/tuxedo-project-todo/bin/todo" "clean apply links chezmoi plugin dispatch to the pinned todo project"
+assert_symlink_target "$COLD_HOME/bin/kit" "$COLD_HOME/projects/kittentts-cli/kit" "clean apply links kit to its pinned project"
+assert_symlink_target "$COLD_HOME/bin/kit-watch" "$COLD_HOME/projects/kittentts-cli/kit-watch" "clean apply links kit-watch to its pinned project"
+assert_symlink_target "$COLD_HOME/bin/gh-create-repo" "$COLD_HOME/projects/gh-create-repo/bin/gh-create-repo" "clean apply links gh-create-repo to its pinned project"
+assert_symlink_target "$COLD_HOME/bin/default-apps" "$COLD_HOME/projects/macos-default-apps/bin/default-apps" "clean apply links default-apps to its pinned project"
+assert_symlink_target "$COLD_HOME/bin/unescape-buffer" "$COLD_HOME/projects/unescape-cli/bin/unescape-buffer" "clean apply links unescape-buffer to its pinned project"
+assert_symlink_target "$COLD_HOME/bin/unescape-string" "$COLD_HOME/projects/unescape-cli/bin/unescape-string" "clean apply links unescape-string to its pinned project"
+assert_executable "$COLD_HOME/bin/agent-timer" "clean apply installs the global agent timer"
+assert_executable "$COLD_HOME/bin/dotfiles-module" "clean apply installs the module lifecycle controller"
+assert_executable "$COLD_HOME/bin/dotfiles-deps" "clean apply installs the dependency inventory command"
+assert_executable "$COLD_HOME/bin/dotfiles-control-center" "clean apply installs the native control-center launcher"
+assert_executable "$COLD_HOME/bin/shortcut-catalog" "clean apply installs the generated shortcut catalog command"
+assert_executable "$COLD_HOME/.config/skhd/show_keys.sh" "clean apply installs the module-owned shortcut launcher"
+assert_contains "$COLD_HOME/.config/agent-timer/config.toml" '^default_seconds = 600$' "clean apply installs the 600-second default budget"
+assert_contains "$COLD_HOME/.config/agent-timer/config.toml" '^expiry_sound = "Ping"$' "clean apply installs the expiry beep"
+assert_contains "$COLD_HOME/.config/agent-timer/config.toml" '^preferred_agents = \["codex", "claude", "opencode"\]$' "clean apply prefers Codex as the default terminal agent"
+assert_contains "$COLD_HOME/.config/agent-timer/config.toml" '^warning_seconds = 60$' "clean apply installs the timer warning lead time"
+assert_contains "$COLD_HOME/.config/agent-timer/config.toml" '^retention_seconds = 604800$' "clean apply installs timer record retention"
+assert_contains "$COLD_HOME/.codex/hooks.json" 'UserPromptSubmit' "clean apply installs the Codex timer hook"
+assert_contains "$COLD_HOME/.codex/hooks.json" 'PreToolUse' "clean apply installs checkpoint re-arming at tool boundaries"
+assert_contains "$COLD_HOME/.codex/hooks.json" 'Arming recurring task checkpoint' "clean apply installs recurring timer hook status"
 assert_executable "$COLD_HOME/bin/tmux-session-template" "clean apply installs the tmux session helper"
 assert_executable "$COLD_HOME/bin/tmux-session-picker" "clean apply installs the sesh tmux-session picker"
 assert_executable "$COLD_HOME/bin/tmux-sessionizer" "clean apply installs the general sesh sessionizer"
@@ -231,6 +273,7 @@ assert_contains "$COLD_HOME/.tmux.conf" "tmux-session-template cycle" "clean app
 assert_contains "$COLD_HOME/.tmux.conf" "C-3.*tmux-session-template cycle.*tuxedo" "clean apply installs Tuxedo type cycling"
 assert_contains "$COLD_HOME/.tmux.conf" "C-S-3.*tmux-session-template new.*tuxedo" "clean apply installs Tuxedo type creation"
 assert_contains "$COLD_HOME/bin/tmux-session-template" "ensure_standard_tmux_window.*tuxedo 3 todo" "clean apply installs the canonical Tuxedo window"
+assert_contains "$COLD_HOME/bin/tmux-session-template" 'ensure_standard_tmux_window.*awrit 4 ""' "clean apply installs a lazy canonical Awrit window"
 assert_contains "$COLD_HOME/bin/tmux-session-template" "duplicate_window_type" "clean apply installs typed tmux duplication"
 assert_contains "$COLD_HOME/.tmux.conf" 'S-F4.*tmux-session-template duplicate' "clean apply installs the Right Command duplicate bridge"
 assert_contains "$COLD_HOME/.tmux.conf" '^set-option -g detach-on-destroy off$' "clean apply keeps tmux attached across session destruction"
@@ -240,11 +283,15 @@ assert_contains "$COLD_HOME/.tmux.conf" 'command-prompt -F -l' "clean apply inst
 assert_contains "$COLD_HOME/.tmux.conf" 'rename-session -t "#{session_id}" -- "%%%"' "clean apply installs punctuation-safe session rename forwarding"
 assert_contains "$COLD_HOME/.tmux.conf" "tmux-plugins/tmux-resurrect" "clean apply installs tmux persistence config"
 assert_contains "$COLD_HOME/.tmux.conf" "@resurrect-processes 'codex tuxedo yazi'" "clean apply restores Tuxedo sessions"
+assert_contains "$COLD_HOME/.tmux.conf" 'agent-timer manage' "clean apply exposes timer/session management in tmux"
+assert_contains "$COLD_HOME/.config/tmux/which-key.yaml" 'Agent timers and durable sessions' "clean apply exposes sesh-backed timer inventory in the command center"
 assert_contains "$COLD_HOME/.config/tmux/layouts/project.tmux.tsx" "<Session root=\"\$PROJECT_ROOT\">" "clean apply installs the React-like project layout"
 assert_contains "$COLD_HOME/.config/tmux/which-key.yaml" "tmux-workspace pick" "clean apply installs the tmux command-center layout action"
 assert_contains "$COLD_HOME/.config/tmux/which-key.yaml" "tmux-session-template duplicate" "clean apply installs command-center window duplication"
 assert_contains "$COLD_HOME/.config/tmux/which-key.yaml" "cycle.*tuxedo" "clean apply installs command-center Tuxedo cycling"
 assert_contains "$COLD_HOME/.config/tmux/which-key.yaml" "new.*tuxedo" "clean apply installs command-center Tuxedo creation"
+assert_contains "$COLD_HOME/.config/tmux/which-key.yaml" "cycle.*awrit" "clean apply installs command-center Awrit cycling"
+assert_contains "$COLD_HOME/.config/tmux/which-key.yaml" "new.*awrit" "clean apply installs command-center Awrit creation"
 assert_contains "$COLD_HOME/.config/tmux/which-key.yaml" "tmux-sessionizer-zoxide" "clean apply points the command center at the built-in sesh picker"
 assert_contains "$COLD_HOME/.config/sesh/sesh.toml" '^\[tui\]$' "clean apply installs the managed sesh picker config"
 assert_contains "$COLD_HOME/.config/sesh/sesh.toml" '^strict_mode = true$' "clean apply installs strict sesh config validation"
@@ -266,6 +313,33 @@ assert_contains "$COLD_HOME/Library/Application Support/com.mitchellh.ghostty/co
 assert_not_contains "$COLD_HOME/Library/Application Support/com.mitchellh.ghostty/config" '^keybind = ctrl+alt+cmd' "clean apply reserves Hyper in Ghostty"
 assert_not_contains "$COLD_HOME/.config/karabiner/karabiner.json" 'nvim_caps_lock_control' "clean apply installs no Neovim-specific Karabiner state"
 assert_not_contains "$COLD_HOME/.config/nvim/init.lua" 'karabiner_cli' "clean apply leaves Neovim independent of Karabiner"
+
+echo ""
+echo "Testing agent-timer disable lifecycle..."
+TIMER_DISABLE_HOME="$TEMP_HOME/timer-disable-home"
+TIMER_DISABLE_SCRIPT="$TEMP_HOME/timer-disable.sh"
+mkdir -p "$TIMER_DISABLE_HOME/bin" "$TIMER_DISABLE_HOME/.local/state/agent-timer"
+cat > "$TIMER_DISABLE_HOME/bin/agent-timer" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$HOME/shutdown-args"
+EOF
+chmod +x "$TIMER_DISABLE_HOME/bin/agent-timer"
+printf '%s\n' preserved > "$TIMER_DISABLE_HOME/.local/state/agent-timer/sentinel"
+chezmoi \
+    -S "$DOTFILES_DIR" \
+    --override-data '{"modules":{"agentTimer":{"enabled":false}}}' \
+    execute-template \
+    < "$DOTFILES_DIR/home/.chezmoiscripts/run_onchange_before_agent-timer-disable.sh.tmpl" \
+    > "$TIMER_DISABLE_SCRIPT"
+if HOME="$TIMER_DISABLE_HOME" /bin/sh "$TIMER_DISABLE_SCRIPT"; then
+    echo "  ✓ disabled module shuts down the installed timer before removal"
+    ((PASSED++))
+else
+    echo "  ✗ disabled module lifecycle failed"
+    ((FAILED++))
+fi
+assert_contains "$TIMER_DISABLE_HOME/shutdown-args" '^shutdown --reason module-disabled$' "disable lifecycle records the module-disabled reason"
+assert_contains "$TIMER_DISABLE_HOME/.local/state/agent-timer/sentinel" '^preserved$' "disable lifecycle preserves timer state"
 
 if jq -e '
     .profiles[] | select(.selected == true)

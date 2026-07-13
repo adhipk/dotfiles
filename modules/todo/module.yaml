@@ -1,0 +1,39 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: todo
+version: 1.1.0
+description: Conditional adapters for the independently distributed Tuxedo project todo command.
+dataKey: modules.todo
+distribution:
+  standalone: false
+  chezmoiCommand: todo
+requires:
+  executables:
+    - bash
+    - chezmoi-todo
+    - todo
+    - tuxedo
+state:
+  preserved:
+    - ./todo.txt
+    - ./done.txt
+  ephemeral:
+    - ./.agent-write-lock
+commands:
+  - name: todo
+    source: targets/todo-path.tmpl
+    target: ~/bin/todo
+  - name: chezmoi-todo
+    source: targets/todo-path.tmpl
+    target: ~/bin/chezmoi-todo
+targets:
+  - source: targets/todo-path.tmpl
+    destination: ~/bin/todo
+    bridge: home/bin/symlink_todo.tmpl
+    ownership: exclusive
+  - source: targets/todo-path.tmpl
+    destination: ~/bin/chezmoi-todo
+    bridge: home/bin/symlink_chezmoi-todo.tmpl
+    ownership: exclusive
+tests:
+  - tests/test_todo.sh

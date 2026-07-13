@@ -1,0 +1,737 @@
+{
+  "complete": true,
+  "dependencies": {
+    "chezmoi-git:.local/share/chrome-extensions/gemma-gem": {
+      "installedPath": null,
+      "installedVersion": "6d7fde3f6ef811d76837923a6c489b61d8721625",
+      "resolvedVersion": "6d7fde3f6ef811d76837923a6c489b61d8721625"
+    },
+    "chezmoi-git:.local/share/raycast-extensions/raycast-lucide-excalidraw": {
+      "installedPath": null,
+      "installedVersion": "f6704782dd514c5c72e5d03a2c651a31523f167c",
+      "resolvedVersion": "f6704782dd514c5c72e5d03a2c651a31523f167c"
+    },
+    "chezmoi-git:.tmux/plugins/tpm": {
+      "installedPath": null,
+      "installedVersion": "e261deb1b47614eed3400089ce7197dc68acc4eb",
+      "resolvedVersion": "e261deb1b47614eed3400089ce7197dc68acc4eb"
+    },
+    "chezmoi-git:awrit": {
+      "installedPath": null,
+      "installedVersion": "5136e4987b6b54b2ac7c5220755ecb6ade503c0c",
+      "resolvedVersion": "5136e4987b6b54b2ac7c5220755ecb6ade503c0c"
+    },
+    "chezmoi-git:projects/gh-create-repo": {
+      "installedPath": null,
+      "installedVersion": "ad85879fe7d91e10362da14f6d3f69840bce478d",
+      "resolvedVersion": "ad85879fe7d91e10362da14f6d3f69840bce478d"
+    },
+    "chezmoi-git:projects/kittentts-cli": {
+      "installedPath": null,
+      "installedVersion": "f6142dcc697e3c8c760855dd4af2a22bfd1161a7",
+      "resolvedVersion": "f6142dcc697e3c8c760855dd4af2a22bfd1161a7"
+    },
+    "chezmoi-git:projects/macos-default-apps": {
+      "installedPath": null,
+      "installedVersion": "d74118ca4802f75c17d991fb11128aad3fc39b14",
+      "resolvedVersion": "d74118ca4802f75c17d991fb11128aad3fc39b14"
+    },
+    "chezmoi-git:projects/tuxedo-project-todo": {
+      "installedPath": null,
+      "installedVersion": "11928c7c05b2dd9faab57466b2d0ee0739461268",
+      "resolvedVersion": "11928c7c05b2dd9faab57466b2d0ee0739461268"
+    },
+    "chezmoi-git:projects/unescape-cli": {
+      "installedPath": null,
+      "installedVersion": "c6e028f7fa219a6a506f4e2cca4c62b8a6760e0f",
+      "resolvedVersion": "c6e028f7fa219a6a506f4e2cca4c62b8a6760e0f"
+    },
+    "homebrew:cask:codex": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "0.144.3"
+    },
+    "homebrew:cask:codex-app": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "26.623.141536"
+    },
+    "homebrew:cask:ghostty": {
+      "installedPath": null,
+      "installedVersion": "1.1.3",
+      "resolvedVersion": "1.3.1"
+    },
+    "homebrew:cask:google-chrome": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "150.0.7871.115"
+    },
+    "homebrew:cask:karabiner-elements": {
+      "installedPath": null,
+      "installedVersion": "16.0.0",
+      "resolvedVersion": "16.1.0"
+    },
+    "homebrew:cask:microsoft-teams": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "26163.407.4839.8659"
+    },
+    "homebrew:cask:raycast": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "1.104.22"
+    },
+    "homebrew:cask:slack": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "4.50.143"
+    },
+    "homebrew:cask:vscodium": {
+      "installedPath": null,
+      "installedVersion": "1.121.03429",
+      "resolvedVersion": "1.126.04524"
+    },
+    "homebrew:formula:antigen": {
+      "installedPath": null,
+      "installedVersion": "2.2.3",
+      "resolvedVersion": "2.2.3"
+    },
+    "homebrew:formula:asmvik/formulae/skhd": {
+      "installedPath": null,
+      "installedVersion": "0.3.9",
+      "resolvedVersion": "0.3.9"
+    },
+    "homebrew:formula:asmvik/formulae/yabai": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "7.1.25"
+    },
+    "homebrew:formula:borders": {
+      "installedPath": null,
+      "installedVersion": "1.8.4",
+      "resolvedVersion": null
+    },
+    "homebrew:formula:bun": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "1.3.14"
+    },
+    "homebrew:formula:chezmoi": {
+      "installedPath": null,
+      "installedVersion": "2.70.4",
+      "resolvedVersion": "2.71.0"
+    },
+    "homebrew:formula:clipboard": {
+      "installedPath": null,
+      "installedVersion": "0.10.0",
+      "resolvedVersion": "0.10.0"
+    },
+    "homebrew:formula:duti": {
+      "installedPath": null,
+      "installedVersion": "1.5.4_1",
+      "resolvedVersion": "1.5.4_1"
+    },
+    "homebrew:formula:fswatch": {
+      "installedPath": null,
+      "installedVersion": "1.21.0",
+      "resolvedVersion": "1.21.0"
+    },
+    "homebrew:formula:fzf": {
+      "installedPath": null,
+      "installedVersion": "0.73.1",
+      "resolvedVersion": "0.74.0"
+    },
+    "homebrew:formula:gh": {
+      "installedPath": null,
+      "installedVersion": "2.83.0",
+      "resolvedVersion": "2.96.0"
+    },
+    "homebrew:formula:jq": {
+      "installedPath": null,
+      "installedVersion": "1.8.1",
+      "resolvedVersion": "1.8.2"
+    },
+    "homebrew:formula:marksman": {
+      "installedPath": null,
+      "installedVersion": "2026-02-08",
+      "resolvedVersion": "2026-02-08"
+    },
+    "homebrew:formula:mise": {
+      "installedPath": null,
+      "installedVersion": "2026.5.18",
+      "resolvedVersion": "2026.7.5"
+    },
+    "homebrew:formula:neovim": {
+      "installedPath": null,
+      "installedVersion": "0.12.3",
+      "resolvedVersion": "0.12.4"
+    },
+    "homebrew:formula:node": {
+      "installedPath": null,
+      "installedVersion": "25.1.0_2",
+      "resolvedVersion": "26.5.0"
+    },
+    "homebrew:formula:pnpm": {
+      "installedPath": null,
+      "installedVersion": "10.22.0",
+      "resolvedVersion": "11.12.0"
+    },
+    "homebrew:formula:python": {
+      "installedPath": null,
+      "installedVersion": "3.14.0_1",
+      "resolvedVersion": "3.14.6"
+    },
+    "homebrew:formula:ripgrep": {
+      "installedPath": null,
+      "installedVersion": "15.1.0",
+      "resolvedVersion": "15.1.0"
+    },
+    "homebrew:formula:sesh": {
+      "installedPath": null,
+      "installedVersion": "2.26.2",
+      "resolvedVersion": "2.26.2"
+    },
+    "homebrew:formula:starship": {
+      "installedPath": null,
+      "installedVersion": "1.26.0",
+      "resolvedVersion": "1.26.0"
+    },
+    "homebrew:formula:terminal-notifier": {
+      "installedPath": null,
+      "installedVersion": "2.0.0",
+      "resolvedVersion": "2.0.0"
+    },
+    "homebrew:formula:tmux": {
+      "installedPath": null,
+      "installedVersion": "3.6b",
+      "resolvedVersion": "3.7b"
+    },
+    "homebrew:formula:tree-sitter": {
+      "installedPath": null,
+      "installedVersion": "0.26.9",
+      "resolvedVersion": "0.26.11"
+    },
+    "homebrew:formula:tuxedo": {
+      "installedPath": null,
+      "installedVersion": "2026.6.3",
+      "resolvedVersion": "2026.6.3"
+    },
+    "homebrew:formula:uv": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "0.11.28"
+    },
+    "homebrew:formula:yazi": {
+      "installedPath": null,
+      "installedVersion": "26.5.6",
+      "resolvedVersion": "26.5.6"
+    },
+    "homebrew:formula:yq": {
+      "installedPath": null,
+      "installedVersion": "4.53.3",
+      "resolvedVersion": "4.53.3"
+    },
+    "homebrew:formula:zoxide": {
+      "installedPath": null,
+      "installedVersion": "0.9.9",
+      "resolvedVersion": "0.10.0"
+    },
+    "homebrew:tap:FelixKratz/formulae": {
+      "installedPath": null,
+      "installedVersion": "present",
+      "resolvedVersion": null
+    },
+    "homebrew:tap:asmvik/formulae": {
+      "installedPath": null,
+      "installedVersion": "present",
+      "resolvedVersion": null
+    },
+    "local-git:awrit": {
+      "installedPath": "/Users/adhipkashyap/awrit",
+      "installedVersion": "5136e4987b6b54b2ac7c5220755ecb6ade503c0c",
+      "resolvedVersion": "5136e4987b6b54b2ac7c5220755ecb6ade503c0c"
+    },
+    "local-git:gh-create-repo": {
+      "installedPath": "/Users/adhipkashyap/projects/gh-create-repo",
+      "installedVersion": "ad85879fe7d91e10362da14f6d3f69840bce478d",
+      "resolvedVersion": "ad85879fe7d91e10362da14f6d3f69840bce478d"
+    },
+    "local-git:kittentts-cli": {
+      "installedPath": "/Users/adhipkashyap/projects/kittentts-cli",
+      "installedVersion": "f6142dcc697e3c8c760855dd4af2a22bfd1161a7",
+      "resolvedVersion": "f6142dcc697e3c8c760855dd4af2a22bfd1161a7"
+    },
+    "local-git:macos-default-apps": {
+      "installedPath": "/Users/adhipkashyap/projects/macos-default-apps",
+      "installedVersion": "d74118ca4802f75c17d991fb11128aad3fc39b14",
+      "resolvedVersion": "d74118ca4802f75c17d991fb11128aad3fc39b14"
+    },
+    "local-git:tuxedo-project-todo": {
+      "installedPath": "/Users/adhipkashyap/projects/tuxedo-project-todo",
+      "installedVersion": "11928c7c05b2dd9faab57466b2d0ee0739461268",
+      "resolvedVersion": "11928c7c05b2dd9faab57466b2d0ee0739461268"
+    },
+    "local-git:unescape-cli": {
+      "installedPath": "/Users/adhipkashyap/projects/unescape-cli",
+      "installedVersion": "c6e028f7fa219a6a506f4e2cca4c62b8a6760e0f",
+      "resolvedVersion": "c6e028f7fa219a6a506f4e2cca4c62b8a6760e0f"
+    },
+    "module-executable:afplay": {
+      "installedPath": "/usr/bin/afplay",
+      "installedVersion": null,
+      "resolvedVersion": null
+    },
+    "module-executable:bash": {
+      "installedPath": "/bin/bash",
+      "installedVersion": null,
+      "resolvedVersion": null
+    },
+    "module-executable:bc": {
+      "installedPath": "/usr/bin/bc",
+      "installedVersion": null,
+      "resolvedVersion": null
+    },
+    "module-executable:brew": {
+      "installedPath": "/opt/homebrew/bin/brew",
+      "installedVersion": null,
+      "resolvedVersion": null
+    },
+    "module-executable:cksum": {
+      "installedPath": "/usr/bin/cksum",
+      "installedVersion": null,
+      "resolvedVersion": null
+    },
+    "module-executable:codium": {
+      "installedPath": "/Users/adhipkashyap/.local/bin/codium",
+      "installedVersion": null,
+      "resolvedVersion": null
+    },
+    "module-executable:dotfiles-deps": {
+      "installedPath": "/Users/adhipkashyap/bin/dotfiles-deps",
+      "installedVersion": null,
+      "resolvedVersion": "7dca2cb30f73231a2cffce92d1da774a63ae4388ad4d055d86d2ed13775335df"
+    },
+    "module-executable:dotfiles-module": {
+      "installedPath": "/Users/adhipkashyap/bin/dotfiles-module",
+      "installedVersion": null,
+      "resolvedVersion": "f557bbf443467056336aaa47e22fc82e8fe4a9131b2292b86ec65ab47ee9e079"
+    },
+    "module-executable:dotfiles-uninstall": {
+      "installedPath": "/Users/adhipkashyap/bin/dotfiles-uninstall",
+      "installedVersion": null,
+      "resolvedVersion": "b2fc750bde24f6866c08934a1f356043b2407af422545fbf5560ad869b0f6386"
+    },
+    "module-executable:git": {
+      "installedPath": "/opt/homebrew/bin/git",
+      "installedVersion": null,
+      "resolvedVersion": null
+    },
+    "module-executable:open": {
+      "installedPath": "/usr/bin/open",
+      "installedVersion": null,
+      "resolvedVersion": null
+    },
+    "module-executable:osascript": {
+      "installedPath": "/usr/bin/osascript",
+      "installedVersion": null,
+      "resolvedVersion": null
+    },
+    "module-executable:plutil": {
+      "installedPath": "/usr/bin/plutil",
+      "installedVersion": null,
+      "resolvedVersion": null
+    },
+    "module-executable:sed": {
+      "installedPath": "/usr/bin/sed",
+      "installedVersion": null,
+      "resolvedVersion": null
+    },
+    "module-executable:swift": {
+      "installedPath": "/usr/bin/swift",
+      "installedVersion": null,
+      "resolvedVersion": null
+    },
+    "module-executable:swiftc": {
+      "installedPath": "/usr/bin/swiftc",
+      "installedVersion": null,
+      "resolvedVersion": null
+    },
+    "module-executable:tmux-border-accent": {
+      "installedPath": "/Users/adhipkashyap/bin/tmux-border-accent",
+      "installedVersion": null,
+      "resolvedVersion": "7a55697bccf9b134cae9b88a228de7fd6f717073ccefb771d847a2a9b0319092"
+    },
+    "module-executable:tmux-session-template": {
+      "installedPath": "/Users/adhipkashyap/bin/tmux-session-template",
+      "installedVersion": null,
+      "resolvedVersion": "853af39bc34bf494027a66e1651d376997fc21adcc10dca679f7c267e0939a78"
+    },
+    "module-executable:zsh": {
+      "installedPath": "/bin/zsh",
+      "installedVersion": null,
+      "resolvedVersion": null
+    },
+    "module-library:core.sh": {
+      "installedPath": null,
+      "installedVersion": "c1263e17c0e5d2eca71b759bd6c9f20ae49c700ccaeef1c0a229e63d544d4097",
+      "resolvedVersion": "c1263e17c0e5d2eca71b759bd6c9f20ae49c700ccaeef1c0a229e63d544d4097"
+    },
+    "module-library:locks.sh": {
+      "installedPath": null,
+      "installedVersion": "16f78c335e6d9f11d1f870af98d6fe50a6445c90127b5b5d2135715764f86881",
+      "resolvedVersion": "16f78c335e6d9f11d1f870af98d6fe50a6445c90127b5b5d2135715764f86881"
+    },
+    "module-library:tmux.sh": {
+      "installedPath": null,
+      "installedVersion": "037e13fc3aee29050834efd103bc922b398edb8524f0258b083d1475c7d85b56",
+      "resolvedVersion": "037e13fc3aee29050834efd103bc922b398edb8524f0258b083d1475c7d85b56"
+    },
+    "neovim:LuaSnip": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "642b0c595e11608b4c18219e93b88d7637af27bc"
+    },
+    "neovim:blink.cmp": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "78336bc89ee5365633bcf754d93df01678b5c08f"
+    },
+    "neovim:catppuccin": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "e068ab5f8261f23f6f71ffd8791ae40315b77b9c"
+    },
+    "neovim:conform.nvim": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "619363c30309d29ffa631e67c8183f2a72caa373"
+    },
+    "neovim:fidget.nvim": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "6f793b2bcd2d35e201c09520f698bb763220908a"
+    },
+    "neovim:gitsigns.nvim": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "2038c666bd9d8a0b7349a0b6ee00dc83104b9ecf"
+    },
+    "neovim:guess-indent.nvim": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "84a4987ff36798c2fc1169cbaff67960aed9776f"
+    },
+    "neovim:indent-blankline.nvim": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "d28a3f70721c79e3c5f6693057ae929f3d9c0a03"
+    },
+    "neovim:mason-lspconfig.nvim": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "21c5b3ebeaa0412e28096bb0701434c51c1fbf76"
+    },
+    "neovim:mason-nvim-dap.nvim": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "9a10e096703966335bd5c46c8c875d5b0690dade"
+    },
+    "neovim:mason-tool-installer.nvim": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "443f1ef8b5e6bf47045cb2217b6f748a223cf7dc"
+    },
+    "neovim:mason.nvim": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "2a6940af80375532e5e9e7c1f2fc6319a1b7a69d"
+    },
+    "neovim:mini.icons": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "e56797f90192d81f1fda02e662fc3e8e3d775027"
+    },
+    "neovim:mini.nvim": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "1345d191bb3da9c7b0e977f4387c5761f9bff68d"
+    },
+    "neovim:neo-tree.nvim": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "83e7a2982fd12b9c3d35bc39dd5877cd91a02a61"
+    },
+    "neovim:nui.nvim": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "de740991c12411b663994b2860f1a4fd0937c130"
+    },
+    "neovim:nvim-autopairs": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "7b9923abad60b903ece7c52940e1321d39eccc79"
+    },
+    "neovim:nvim-dap": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "9e848e09a697ee95302a3ef2dd43fd6eb709e570"
+    },
+    "neovim:nvim-dap-go": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "b4421153ead5d726603b02743ea40cf26a51ed5f"
+    },
+    "neovim:nvim-dap-ui": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "1a66cabaa4a4da0be107d5eda6d57242f0fe7e49"
+    },
+    "neovim:nvim-lint": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "01c9842c089069ab497430159312b2c8868a4590"
+    },
+    "neovim:nvim-lspconfig": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "bfcc0171a43f22afa61d927ffe9fcb6cb85dc99e"
+    },
+    "neovim:nvim-nio": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "21f5324bfac14e22ba26553caf69ec76ae8a7662"
+    },
+    "neovim:nvim-treesitter": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "4916d6592ede8c07973490d9322f187e07dfefac"
+    },
+    "neovim:nvim-web-devicons": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "dfbfaa967a6f7ec50789bead7ef87e336c1fa63c"
+    },
+    "neovim:plenary.nvim": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "74b06c6c75e4eeb3108ec01852001636d85a932b"
+    },
+    "neovim:render-markdown.nvim": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "f422cb5c6855f150e2ddcfaf44e7157b98b34f6a"
+    },
+    "neovim:telescope-fzf-native.nvim": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "b25b749b9db64d375d782094e2b9dce53ad53a40"
+    },
+    "neovim:telescope-ui-select.nvim": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "6e51d7da30bd139a6950adf2a47fda6df9fa06d2"
+    },
+    "neovim:telescope.nvim": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "9377230aa5305d9e9aca4ed8dadf1070fb4aa9fc"
+    },
+    "neovim:todo-comments.nvim": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "31e3c38ce9b29781e4422fc0322eb0a21f4e8668"
+    },
+    "neovim:tokyonight.nvim": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "cdc07ac78467a233fd62c493de29a17e0cf2b2b6"
+    },
+    "neovim:which-key.nvim": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "3aab2147e74890957785941f0c1ad87d0a44c15a"
+    },
+    "tpm:alexwforsythe/tmux-which-key": {
+      "installedPath": null,
+      "installedVersion": "85fb9756447b989f3b94e515d1e6ee7fec76cba2",
+      "resolvedVersion": "85fb9756447b989f3b94e515d1e6ee7fec76cba2"
+    },
+    "tpm:catppuccin/tmux": {
+      "installedPath": null,
+      "installedVersion": "d2d25bd3393fe43f19eb4fff6cdd2bdf5578e622",
+      "resolvedVersion": "d2d25bd3393fe43f19eb4fff6cdd2bdf5578e622"
+    },
+    "tpm:tmux-plugins/tmux-continuum": {
+      "installedPath": null,
+      "installedVersion": "46e0e0023476018ddb4cc0d44783eede27e5a8ec",
+      "resolvedVersion": "46e0e0023476018ddb4cc0d44783eede27e5a8ec"
+    },
+    "tpm:tmux-plugins/tmux-resurrect": {
+      "installedPath": null,
+      "installedVersion": "e87d7d592cac97fa38c12395ebec042c154a1844",
+      "resolvedVersion": "e87d7d592cac97fa38c12395ebec042c154a1844"
+    },
+    "tpm:tmux-plugins/tmux-sensible": {
+      "installedPath": null,
+      "installedVersion": "25cb91f42d020f675bb0a2ce3fbd3a5d96119efa",
+      "resolvedVersion": "25cb91f42d020f675bb0a2ce3fbd3a5d96119efa"
+    },
+    "vscodium:anthropic.claude-code": {
+      "installedPath": null,
+      "installedVersion": "2.1.207",
+      "resolvedVersion": null
+    },
+    "vscodium:biomejs.biome": {
+      "installedPath": null,
+      "installedVersion": "3.7.1",
+      "resolvedVersion": null
+    },
+    "vscodium:bradlc.vscode-tailwindcss": {
+      "installedPath": null,
+      "installedVersion": "0.14.28",
+      "resolvedVersion": null
+    },
+    "vscodium:catppuccin.catppuccin-vsc": {
+      "installedPath": null,
+      "installedVersion": "3.19.0",
+      "resolvedVersion": null
+    },
+    "vscodium:dbaeumer.vscode-eslint": {
+      "installedPath": null,
+      "installedVersion": "3.0.24",
+      "resolvedVersion": null
+    },
+    "vscodium:detachhead.basedpyright": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": null
+    },
+    "vscodium:dotjoshjohnson.xml": {
+      "installedPath": null,
+      "installedVersion": "2.5.1",
+      "resolvedVersion": null
+    },
+    "vscodium:eamodio.gitlens": {
+      "installedPath": null,
+      "installedVersion": "18.2.0",
+      "resolvedVersion": null
+    },
+    "vscodium:echoapi.echoapi-for-vscode": {
+      "installedPath": null,
+      "installedVersion": "1.7.13",
+      "resolvedVersion": null
+    },
+    "vscodium:esbenp.prettier-vscode": {
+      "installedPath": null,
+      "installedVersion": "12.4.0",
+      "resolvedVersion": null
+    },
+    "vscodium:fwcd.kotlin": {
+      "installedPath": null,
+      "installedVersion": "0.2.36",
+      "resolvedVersion": null
+    },
+    "vscodium:github.vscode-github-actions": {
+      "installedPath": null,
+      "installedVersion": "0.32.1",
+      "resolvedVersion": null
+    },
+    "vscodium:hashicorp.terraform": {
+      "installedPath": null,
+      "installedVersion": "2.39.4",
+      "resolvedVersion": null
+    },
+    "vscodium:jdinhlife.gruvbox": {
+      "installedPath": null,
+      "installedVersion": "1.29.1",
+      "resolvedVersion": null
+    },
+    "vscodium:jeanp413.open-remote-ssh": {
+      "installedPath": null,
+      "installedVersion": "0.2.0",
+      "resolvedVersion": null
+    },
+    "vscodium:mechatroner.rainbow-csv": {
+      "installedPath": null,
+      "installedVersion": "3.24.1",
+      "resolvedVersion": null
+    },
+    "vscodium:mermaidchart.vscode-mermaid-chart": {
+      "installedPath": null,
+      "installedVersion": "2.7.2",
+      "resolvedVersion": null
+    },
+    "vscodium:ms-python.black-formatter": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": null
+    },
+    "vscodium:ms-python.debugpy": {
+      "installedPath": null,
+      "installedVersion": "2026.6.0",
+      "resolvedVersion": null
+    },
+    "vscodium:ms-python.python": {
+      "installedPath": null,
+      "installedVersion": "2026.4.0",
+      "resolvedVersion": null
+    },
+    "vscodium:ms-toolsai.jupyter": {
+      "installedPath": null,
+      "installedVersion": "2025.9.1",
+      "resolvedVersion": null
+    },
+    "vscodium:ms-toolsai.jupyter-renderers": {
+      "installedPath": null,
+      "installedVersion": "1.3.0",
+      "resolvedVersion": null
+    },
+    "vscodium:ms-toolsai.vscode-jupyter-cell-tags": {
+      "installedPath": null,
+      "installedVersion": "0.1.9",
+      "resolvedVersion": null
+    },
+    "vscodium:ms-toolsai.vscode-jupyter-slideshow": {
+      "installedPath": null,
+      "installedVersion": "0.1.6",
+      "resolvedVersion": null
+    },
+    "vscodium:pomdtr.excalidraw-editor": {
+      "installedPath": null,
+      "installedVersion": "3.9.0",
+      "resolvedVersion": null
+    },
+    "vscodium:qwtel.sqlite-viewer": {
+      "installedPath": null,
+      "installedVersion": "26.2.5",
+      "resolvedVersion": null
+    },
+    "vscodium:redhat.vscode-yaml": {
+      "installedPath": null,
+      "installedVersion": "1.24.0",
+      "resolvedVersion": null
+    },
+    "vscodium:ryuta46.multi-command": {
+      "installedPath": null,
+      "installedVersion": "1.6.0",
+      "resolvedVersion": null
+    },
+    "vscodium:shd101wyy.markdown-preview-enhanced": {
+      "installedPath": null,
+      "installedVersion": "0.8.30",
+      "resolvedVersion": null
+    },
+    "yazi:orhnk/system-clipboard": {
+      "installedPath": null,
+      "installedVersion": null,
+      "resolvedVersion": "2eca70f99d25c661e0a92000843d001e"
+    }
+  },
+  "errors": [],
+  "managerStatus": {
+    "git": "complete",
+    "homebrew": "complete",
+    "vscodium": "complete"
+  },
+  "schemaVersion": 1
+}

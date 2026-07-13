@@ -1,0 +1,51 @@
+schema_version = 1
+
+[sources]
+brewfile = "Brewfile"
+modules = "modules"
+chezmoi_data = "home/.chezmoidata.toml"
+chezmoi_externals = "home/.chezmoiexternal.toml.tmpl"
+tmux = "home/dot_tmux.conf.tmpl"
+tmux_installer = "install.sh"
+yazi = "home/dot_config/yazi/package.toml"
+neovim = "nvim/nvim-pack-lock.json"
+
+[runtime]
+shared_library_dir = "home/dot_local/lib/dotfiles"
+tmux_plugin_dir = ".tmux/plugins"
+
+[[local_git_plugins]]
+id = "awrit"
+path = "awrit"
+commit = "5136e4987b6b54b2ac7c5220755ecb6ade503c0c"
+provides = ["awrit"]
+
+[[local_git_plugins]]
+id = "kittentts-cli"
+path = "projects/kittentts-cli"
+commit = "f6142dcc697e3c8c760855dd4af2a22bfd1161a7"
+provides = ["kit", "kit-watch"]
+
+[[local_git_plugins]]
+id = "tuxedo-project-todo"
+path = "projects/tuxedo-project-todo"
+commit = "11928c7c05b2dd9faab57466b2d0ee0739461268"
+provides = ["todo", "chezmoi-todo"]
+
+[[local_git_plugins]]
+id = "gh-create-repo"
+path = "projects/gh-create-repo"
+commit = "ad85879fe7d91e10362da14f6d3f69840bce478d"
+provides = ["gh-create-repo"]
+
+[[local_git_plugins]]
+id = "macos-default-apps"
+path = "projects/macos-default-apps"
+commit = "d74118ca4802f75c17d991fb11128aad3fc39b14"
+provides = ["default-apps"]
+
+[[local_git_plugins]]
+id = "unescape-cli"
+path = "projects/unescape-cli"
+commit = "c6e028f7fa219a6a506f4e2cca4c62b8a6760e0f"
+provides = ["unescape-buffer", "unescape-string"]

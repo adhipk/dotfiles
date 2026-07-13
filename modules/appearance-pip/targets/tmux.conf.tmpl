@@ -1,0 +1,10 @@
+# Keep normal focused Ghostty borders in sync with the active session. The
+# helper reapplies transparent per-window overrides after each update so
+# scratchpads stay borderless without affecting ordinary Ghostty windows.
+set -g focus-events on
+set-hook -g client-attached[60] 'run-shell -b "$HOME/bin/tmux-border-accent update"'
+set-hook -g client-detached[60] 'run-shell -b "$HOME/bin/tmux-border-accent update"'
+set-hook -g client-focus-in[60] 'run-shell -b "$HOME/bin/tmux-border-accent update"'
+set-hook -g client-focus-out[60] 'run-shell -b "$HOME/bin/tmux-border-accent update"'
+set-hook -g client-session-changed[60] 'run-shell -b "$HOME/bin/tmux-border-accent update"'
+set-hook -g after-rename-session[60] 'run-shell -b "$HOME/bin/tmux-border-accent update"'

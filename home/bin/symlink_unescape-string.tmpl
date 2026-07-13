@@ -1,0 +1,3 @@
+{{- if .modules.unescapeCli.enabled -}}
+{{ includeTemplate "../../modules/unescape-cli/targets/unescape-string-path.tmpl" . }}
+{{- end -}}

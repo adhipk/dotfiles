@@ -1,0 +1,83 @@
+# man-me: name=skhdrc
+# man-me: category=Hotkeys and Keybindings
+# man-me: usage=alt+/; Alt+1..4; Fn+Comma; Fn+1; Right Cmd+D/R/S/Space in Ghostty
+# man-me: description=Primary skhd keyboard shortcut map.
+# man-me: tags=hotkeys hotkey keyboard shortcut shortcuts keybinding keybindings keys skhd option fn caps lock karabiner
+# man-me: name=caps lock key
+# man-me: source=home/dot_config/private_karabiner/karabiner.json
+# man-me: category=Hotkeys and Keybindings
+# man-me: usage=hold Caps Lock for reserved Hyper; tap Caps Lock for Escape
+# man-me: description=Karabiner emits ctrl+opt+cmd on hold, but the Hyper layer is intentionally unbound.
+# man-me: tags=hotkeys hotkey keyboard shortcut shortcuts keybinding keybindings hyper caps lock karabiner
+# ============================================================
+# Global Option layer — app focus, spaces, windows, and HUD controls.
+# Hyper (ctrl+opt+cmd) is deliberately reserved and has no active bindings.
+# ============================================================
+
+{{ if .modules.windowLayout.enabled }}# dotfiles-owner: window-layout
+{{ includeTemplate "../modules/window-layout/targets/skhdrc.tmpl" . | trim }}
+# dotfiles-owner: root
+{{ end }}
+
+{{ if .modules.spaceDisplay.enabled }}# dotfiles-owner: space-display
+{{ includeTemplate "../modules/space-display/targets/skhdrc.tmpl" . | trim }}
+# dotfiles-owner: root
+{{ end }}
+
+# ProjectDeck and system-wide project-context shortcuts are intentionally
+# dormant. The source CLI and manual ProjectDeck build remain available from
+# modules/projects without installing global project-context commands.
+
+# ============================================================
+# App Focus (alt)
+# ============================================================
+
+{{ if .modules.appFocus.enabled }}# dotfiles-owner: app-focus
+{{ includeTemplate "../modules/app-focus/targets/skhd-apps.conf.tmpl" . | trim }}
+# dotfiles-owner: root
+{{ end }}
+
+{{ if .modules.scratchpads.enabled }}# dotfiles-owner: scratchpads
+{{ includeTemplate "../modules/scratchpads/targets/skhdrc.tmpl" . | trim }}
+# dotfiles-owner: root
+{{ end }}
+{{ if .modules.appFocus.enabled }}# dotfiles-owner: app-focus
+{{ includeTemplate "../modules/app-focus/targets/skhd-modes.conf.tmpl" . | trim }}
+# dotfiles-owner: root
+{{ end }}
+
+# -- Ghostty management (right Command) --
+# Keep left Command application-local. These right-Command chords only emit
+# synthetic function keys while Ghostty is focused; every other app receives
+# the original chord unchanged.
+{{ if .modules.terminalWindowTypes.enabled }}# dotfiles-owner: terminal-window-types
+{{ includeTemplate "../modules/terminal-window-types/targets/skhdrc.tmpl" . }}
+# dotfiles-owner: root
+{{ end }}
+rcmd - s [
+    "Ghostty" : skhd -k "f18"  # Open tmux session picker
+    * ~
+]
+
+rcmd - space [
+    "Ghostty" : skhd -k "f19"  # Open tmux command center
+    * ~
+]
+
+# ============================================================
+# Fn is reserved for transient scratchpads. Use native Cmd+Shift+3/4 for
+# screenshots rather than duplicating them on this layer.
+# ============================================================
+
+# ============================================================
+# Restart yabai + skhd
+# ============================================================
+
+alt - r : yabai --restart-service; skhd --restart-service
+
+# ============================================================
+
+{{ if .modules.shortcutGuide.enabled }}# dotfiles-owner: shortcut-guide
+{{ includeTemplate "../modules/shortcut-guide/targets/skhdrc.tmpl" . | trim }}
+# dotfiles-owner: root
+{{ end }}

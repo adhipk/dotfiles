@@ -1,1 +1,3 @@
-{{ .chezmoi.sourceDir }}/../scripts/default-apps.sh
+{{- if .modules.macosDefaultApps.enabled -}}
+{{ includeTemplate "../../modules/macos-default-apps/targets/default-apps-path.tmpl" . }}
+{{- end -}}

@@ -1,0 +1,1219 @@
+#!/usr/bin/env python3
+"""Offline dependency inventory and manager-backed drift checks."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import tomllib
+from typing import Any
+
+SCHEMA_VERSION = 1
+
+EXECUTABLE_BREW_ALIASES = {
+    "nvim": "neovim",
+    "python3": "python",
+    "rg": "ripgrep",
+}
+PLATFORM_EXECUTABLES = {
+    "afplay",
+    "bash",
+    "bc",
+    "cksum",
+    "open",
+    "osascript",
+    "sed",
+    "swift",
+    "swiftc",
+    "zsh",
+}
+MANAGER_EXECUTABLES = {"brew", "codium", "git"}
+
+
+class InventoryError(RuntimeError):
+    pass
+
+
+def fail(message: str) -> "NoReturn":
+    print(f"dotfiles-deps: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def source_root() -> Path:
+    if value := os.environ.get("DOTFILES_DIR"):
+        root = Path(value).expanduser().resolve()
+    else:
+        candidate = Path(__file__).resolve().parents[3]
+        if (candidate / "modules").is_dir() and (candidate / "Brewfile").is_file():
+            root = candidate
+        else:
+            chezmoi = shutil.which("chezmoi")
+            if not chezmoi:
+                fail("DOTFILES_DIR is unset and chezmoi is unavailable")
+            result = subprocess.run(
+                [chezmoi, "source-path"], text=True, capture_output=True, check=False
+            )
+            if result.returncode != 0:
+                fail(f"cannot resolve chezmoi source path: {result.stderr.strip()}")
+            source = Path(result.stdout.strip()).resolve()
+            root = source.parent if source.name == "home" else source
+    if not (root / "Brewfile").is_file() or not (root / "modules").is_dir():
+        fail(f"invalid dotfiles source root: {root}")
+    return root
+
+
+def load_config(root: Path) -> dict[str, Any]:
+    path = root / "modules/dependencies/config/sources.toml"
+    try:
+        with path.open("rb") as handle:
+            config = tomllib.load(handle)
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        fail(f"cannot read dependency source config: {error}")
+    if config.get("schema_version") != SCHEMA_VERSION:
+        fail("unsupported dependency source config schema")
+    sources = config.get("sources")
+    runtime = config.get("runtime")
+    required_sources = {
+        "brewfile", "modules", "chezmoi_data", "chezmoi_externals",
+        "tmux", "tmux_installer", "yazi", "neovim",
+    }
+    if not isinstance(sources, dict) or set(sources) != required_sources:
+        fail("dependency source config must declare exactly the supported sources")
+    if not isinstance(runtime, dict) or set(runtime) != {"shared_library_dir", "tmux_plugin_dir"}:
+        fail("dependency source config runtime section is invalid")
+    for name, value in {**sources, **runtime}.items():
+        if not isinstance(value, str) or not value or Path(value).is_absolute() or ".." in Path(value).parts:
+            fail(f"dependency source config has unsafe path for {name}")
+    plugins = config.get("local_git_plugins", [])
+    if not isinstance(plugins, list) or not all(isinstance(item, dict) for item in plugins):
+        fail("dependency source config local_git_plugins must be an array of tables")
+    plugin_ids: set[str] = set()
+    provided_executables: set[str] = set()
+    for item in plugins:
+        if set(item) != {"id", "path", "commit", "provides"}:
+            fail("every local Git plugin requires exactly id, path, commit, and provides")
+        identifier = item["id"]
+        path = item["path"]
+        commit = item["commit"]
+        provides = item["provides"]
+        if not isinstance(identifier, str) or not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", identifier):
+            fail("local Git plugin id is invalid")
+        if identifier in plugin_ids:
+            fail(f"duplicate local Git plugin id: {identifier}")
+        plugin_ids.add(identifier)
+        if (
+            not isinstance(path, str)
+            or not path
+            or Path(path).is_absolute()
+            or path.startswith("~")
+            or ".." in Path(path).parts
+        ):
+            fail(f"local Git plugin has unsafe HOME-relative path: {identifier}")
+        if not isinstance(commit, str) or not re.fullmatch(r"[0-9a-f]{40}", commit):
+            fail(f"local Git plugin has invalid commit: {identifier}")
+        if (
+            not isinstance(provides, list)
+            or not provides
+            or not all(isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9._+-]+", value) for value in provides)
+            or len(set(provides)) != len(provides)
+        ):
+            fail(f"local Git plugin provides must be unique executable names: {identifier}")
+        duplicate = provided_executables.intersection(provides)
+        if duplicate:
+            fail(f"local Git plugin executable has multiple authorities: {sorted(duplicate)[0]}")
+        provided_executables.update(provides)
+    return config
+
+
+def sha256(path: Path) -> str | None:
+    if not path.is_file():
+        return None
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def run(command: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(command, text=True, capture_output=True, check=False)
+
+
+def dependency(
+    identifier: str,
+    manager: str,
+    kind: str,
+    name: str,
+    source: str,
+    *,
+    owners: list[str] | None = None,
+    pin_status: str = "unpinned",
+    declared_version: str | None = None,
+    resolved_version: str | None = None,
+    required: bool = True,
+    target: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "id": identifier,
+        "manager": manager,
+        "kind": kind,
+        "name": name,
+        "owners": sorted(set(owners or ["root"])),
+        "required": required,
+        "source": source,
+        "sources": [source],
+        "target": target,
+        "pinStatus": pin_status,
+        "declaredVersion": declared_version,
+        "resolvedVersion": resolved_version,
+        "installedVersion": None,
+        "installedPath": None,
+        "state": "unknown",
+        "outdated": False,
+        "drifted": False,
+        "updateStatus": "unchecked",
+    }
+
+
+def parse_brewfile(root: Path, source: str) -> list[dict[str, Any]]:
+    records = []
+    pattern = re.compile(r'^\s*(tap|brew|cask)\s+"([^"]+)"')
+    try:
+        lines = (root / source).read_text().splitlines()
+    except OSError as error:
+        fail(f"cannot read Brewfile: {error}")
+    for line in lines:
+        match = pattern.match(line)
+        if not match:
+            continue
+        command, name = match.groups()
+        kind = {"tap": "tap", "brew": "formula", "cask": "cask"}[command]
+        records.append(
+            dependency(
+                f"homebrew:{kind}:{name}",
+                "homebrew",
+                kind,
+                name,
+                source,
+                pin_status="rolling",
+            )
+        )
+    if not records:
+        fail("Brewfile contains no supported dependency declarations")
+    return records
+
+
+def yq_json(path: Path) -> dict[str, Any]:
+    yq = shutil.which("yq")
+    if not yq:
+        fail("yq is required to read module manifests")
+    result = run([yq, "-o=json", ".", str(path)])
+    if result.returncode != 0:
+        fail(f"invalid module manifest {path}: {result.stderr.strip()}")
+    try:
+        value = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        fail(f"invalid JSON from yq for {path}: {error}")
+    if not isinstance(value, dict):
+        fail(f"module manifest is not an object: {path}")
+    return value
+
+
+def parse_modules(root: Path, source: str, brew_names: set[str], library_dir: str) -> list[dict[str, Any]]:
+    combined: dict[str, dict[str, Any]] = {}
+    manifests = sorted((root / source).glob("*/module.yaml"))
+    if not manifests:
+        fail("no module manifests found")
+    loaded: list[tuple[Path, dict[str, Any], str, str]] = []
+    command_providers: dict[str, tuple[str, str, Path, str]] = {}
+    for manifest_path in manifests:
+        manifest = yq_json(manifest_path)
+        owner = manifest.get("id")
+        if not isinstance(owner, str) or owner != manifest_path.parent.name:
+            fail(f"module manifest id must match its directory: {manifest_path}")
+        relative_source = str(manifest_path.relative_to(root))
+        commands = manifest.get("commands", []) or []
+        if not isinstance(commands, list) or not all(isinstance(value, dict) for value in commands):
+            fail(f"module commands must be an array of objects: {manifest_path}")
+        for command in commands:
+            name = command.get("name")
+            command_source = command.get("source")
+            if not isinstance(name, str) or not name or not isinstance(command_source, str) or not command_source:
+                fail(f"module commands require string name and source: {manifest_path}")
+            relative_path = Path(command_source)
+            if relative_path.is_absolute() or ".." in relative_path.parts:
+                fail(f"module command source must stay inside its module: {manifest_path}: {command_source}")
+            command_path = manifest_path.parent / relative_path
+            resolved = sha256(command_path)
+            if resolved is None:
+                fail(f"module command source is missing: {command_path}")
+            if name in command_providers:
+                fail(f"module command is provided more than once: {name}")
+            command_providers[name] = (owner, relative_source, command_path, resolved)
+        loaded.append((manifest_path, manifest, owner, relative_source))
+
+    for manifest_path, manifest, owner, relative_source in loaded:
+        for requirement, is_required in ((manifest.get("requires", {}), True), (manifest.get("optional", {}), False)):
+            if requirement is None:
+                requirement = {}
+            if not isinstance(requirement, dict):
+                fail(f"module requirements must be an object: {manifest_path}")
+            for key in requirement:
+                if key not in {"executables", "libraries"}:
+                    continue
+                values = requirement[key]
+                if not isinstance(values, list) or not all(isinstance(value, str) and value for value in values):
+                    fail(f"module {key} must be an array of strings: {manifest_path}")
+            for executable in requirement.get("executables", []) or []:
+                name = str(executable)
+                identifier = f"module-executable:{name}"
+                record = combined.get(identifier)
+                if record:
+                    record["owners"] = sorted(set(record["owners"] + [owner]))
+                    record["required"] = bool(record["required"] or is_required)
+                    continue
+                brew_alias = EXECUTABLE_BREW_ALIASES.get(name, name)
+                inherited = brew_alias in brew_names or any(value.rsplit("/", 1)[-1] == brew_alias for value in brew_names)
+                provider = command_providers.get(name)
+                resolved = None
+                target = None
+                owners = [owner]
+                sources = [relative_source]
+                if provider:
+                    provider_owner, provider_source, provider_path, resolved = provider
+                    pin_status = "source-hash"
+                    target = str(provider_path)
+                    owners.append(provider_owner)
+                    sources.append(provider_source)
+                elif inherited:
+                    pin_status = "manager-owned"
+                elif name in PLATFORM_EXECUTABLES:
+                    pin_status = "platform-owned"
+                elif name in MANAGER_EXECUTABLES:
+                    pin_status = "manager-tool"
+                else:
+                    pin_status = "unversioned"
+                record = dependency(
+                    identifier,
+                    "module",
+                    "executable",
+                    name,
+                    relative_source,
+                    owners=owners,
+                    required=is_required,
+                    pin_status=pin_status,
+                    resolved_version=resolved,
+                    target=target,
+                )
+                record["sources"] = sorted(set(sources))
+                executable_path = shutil.which(name)
+                record["installedPath"] = executable_path
+                record["state"] = "installed" if executable_path else ("missing" if is_required else "optional-missing")
+                combined[identifier] = record
+            for library in requirement.get("libraries", []) or []:
+                name = str(library)
+                identifier = f"module-library:{name}"
+                path = root / library_dir / name
+                record = combined.get(identifier)
+                if record:
+                    record["owners"] = sorted(set(record["owners"] + [owner]))
+                    continue
+                resolved = sha256(path)
+                record = dependency(
+                    identifier,
+                    "module",
+                    "library",
+                    name,
+                    relative_source,
+                    owners=[owner],
+                    required=is_required,
+                    pin_status="source-hash",
+                    resolved_version=resolved,
+                    target=str(path),
+                )
+                record["state"] = "installed" if resolved else "missing"
+                combined[identifier] = record
+    return list(combined.values())
+
+
+def load_chezmoi_data(root: Path, source: str) -> dict[str, Any]:
+    try:
+        with (root / source).open("rb") as handle:
+            data = tomllib.load(handle)
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        fail(f"cannot read chezmoi data: {error}")
+    if not isinstance(data, dict):
+        fail("chezmoi data must be a TOML object")
+    extensions = data.get("vscodeExtensions", [])
+    if not isinstance(extensions, list) or not all(isinstance(value, str) and value for value in extensions):
+        fail("vscodeExtensions must be an array of strings")
+    for collection in ("chromeExtensions", "externalProjects"):
+        values = data.get(collection, [])
+        if not isinstance(values, list) or not all(isinstance(value, dict) for value in values):
+            fail(f"{collection} must be an array of TOML tables")
+        for item in values:
+            if not isinstance(item.get("name"), str) or not isinstance(item.get("url"), str):
+                fail(f"{collection} entries require string name and url")
+            if collection == "externalProjects" and not isinstance(item.get("path"), str):
+                fail("externalProjects entries require a string path")
+    pins = data.get("gitPins", [])
+    if not isinstance(pins, list) or not all(isinstance(value, dict) for value in pins):
+        fail("gitPins must be an array of tables")
+    pin_ids: set[str] = set()
+    pin_paths: set[str] = set()
+    for item in pins:
+        if set(item) != {"id", "manager", "path", "revision"}:
+            fail("every git pin requires exactly id, manager, path, and revision")
+        identifier = item["id"]
+        manager = item["manager"]
+        path = item["path"]
+        revision = item["revision"]
+        if not isinstance(identifier, str) or not re.fullmatch(r"(?:chezmoi-git|tpm):.+", identifier):
+            fail("git pin id must identify a ChezMoi or TPM declaration")
+        if manager not in {"chezmoi", "tpm"}:
+            fail(f"git pin manager is invalid: {identifier}")
+        if (
+            not isinstance(path, str)
+            or not path
+            or Path(path).is_absolute()
+            or path.startswith("~")
+            or ".." in Path(path).parts
+        ):
+            fail(f"git pin has unsafe HOME-relative path: {identifier}")
+        if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision):
+            fail(f"git pin has invalid revision: {identifier}")
+        if identifier in pin_ids:
+            fail(f"duplicate git pin id: {identifier}")
+        if path in pin_paths:
+            fail(f"multiple git pins target the same checkout: {path}")
+        pin_ids.add(identifier)
+        pin_paths.add(path)
+    return data
+
+
+def apply_git_pin_declarations(
+    records: list[dict[str, Any]], data: dict[str, Any], source: str
+) -> None:
+    by_id = {record["id"]: record for record in records}
+    for pin in data.get("gitPins", []) or []:
+        identifier = str(pin["id"])
+        record = by_id.get(identifier)
+        if record is None:
+            fail(f"git pin has no matching dependency declaration: {identifier}")
+        manager = str(pin["manager"])
+        if record["manager"] != manager:
+            fail(f"git pin manager does not match its declaration: {identifier}")
+        target = f"~/{pin['path']}"
+        if record.get("target") != target:
+            fail(f"git pin path does not match its declaration: {identifier}")
+        revision = str(pin["revision"])
+        record["pinStatus"] = "commit"
+        record["declaredVersion"] = revision
+        record["resolvedVersion"] = revision
+        record["sources"] = sorted(set(record["sources"] + [source]))
+        record["pinSource"] = source
+
+
+def parse_chezmoi_externals(root: Path, data: dict[str, Any], source: str) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    text = (root / source).read_text()
+    static: list[tuple[str, str]] = []
+    current_target: str | None = None
+    current_url: str | None = None
+
+    def finish_static_section() -> None:
+        nonlocal current_target, current_url
+        if current_target is not None:
+            if current_url is None:
+                fail(f"static ChezMoi external is missing a section-local URL: {current_target}")
+            static.append((current_target, current_url))
+        current_target = None
+        current_url = None
+
+    for line in text.splitlines():
+        header = re.match(r'^\["([^"{]+)"\]\s*$', line)
+        any_header = re.match(r'^\[', line)
+        if header:
+            finish_static_section()
+            current_target = header.group(1)
+            continue
+        if any_header:
+            finish_static_section()
+            continue
+        if current_target is not None:
+            url_match = re.match(r'^\s*url\s*=\s*"([^"{]+)"\s*$', line)
+            if url_match:
+                current_url = url_match.group(1)
+    finish_static_section()
+
+    for target, url in static:
+        if Path(target).is_absolute() or ".." in Path(target).parts or target.startswith("~"):
+            fail(f"ChezMoi external has an unsafe target: {target}")
+        records.append(
+            dependency(
+                f"chezmoi-git:{target}", "chezmoi", "git-external", target, source,
+                target=f"~/{target}", pin_status="unpinned", declared_version=url
+            )
+        )
+    for collection, prefix in (("chromeExtensions", ".local/share/chrome-extensions"), ("externalProjects", None)):
+        for item in data.get(collection, []) or []:
+            target = str(item.get("path") or f"{prefix}/{item.get('name')}")
+            if Path(target).is_absolute() or ".." in Path(target).parts or target.startswith("~"):
+                fail(f"ChezMoi data has an unsafe external target: {target}")
+            records.append(
+                dependency(
+                    f"chezmoi-git:{target}", "chezmoi", "git-external", str(item.get("name") or target),
+                    "home/.chezmoidata.toml", target=f"~/{target}", pin_status="unpinned",
+                    declared_version=str(item.get("url") or "") or None,
+                )
+            )
+    unique = {record["id"]: record for record in records}
+    return list(unique.values())
+
+
+def parse_tmux(root: Path, source: str, installer_source: str, plugin_dir_path: str, module_source: str) -> list[dict[str, Any]]:
+    plugin_sources: list[tuple[str, str, str]] = [
+        (source, (root / source).read_text(), "root")
+    ]
+    for fragment in sorted((root / module_source).glob("*/targets/*.tmpl")):
+        text = fragment.read_text()
+        if "@plugin" not in text:
+            continue
+        relative_source = str(fragment.relative_to(root))
+        plugin_sources.append((relative_source, text, fragment.parent.parent.name))
+    installer = (root / installer_source).read_text()
+    override: dict[str, str] = {}
+    revision = re.search(r'expected_revision="([0-9a-f]{40})"', installer)
+    plugin_dir = re.search(r'plugin_dir="\$CHEZMOI_DESTINATION/\.tmux/plugins/([^"/]+)"', installer)
+    if revision and plugin_dir:
+        override[plugin_dir.group(1)] = revision.group(1)
+    records: dict[str, dict[str, Any]] = {}
+    for declaration_source, text, owner in plugin_sources:
+        for spec in re.findall(r"^\s*set\s+-g\s+@plugin\s+'([^']+)'", text, re.MULTILINE):
+            repository, separator, version = spec.partition("#")
+            name = repository.rstrip("/").rsplit("/", 1)[-1]
+            resolved = override.get(name) or (version if separator else None)
+            pin_status = "commit" if name in override else ("version-tag" if separator else "unpinned")
+            identifier = f"tpm:{repository}"
+            if existing := records.get(identifier):
+                existing["owners"] = sorted(set(existing["owners"] + [owner]))
+                existing["sources"] = sorted(set(existing["sources"] + [declaration_source]))
+                continue
+            records[identifier] = dependency(
+                identifier, "tpm", "plugin", repository, declaration_source,
+                owners=[owner], pin_status=pin_status, declared_version=resolved,
+                target=f"~/{plugin_dir_path}/{name}",
+            )
+    return list(records.values())
+
+
+def parse_yazi(root: Path, source: str) -> list[dict[str, Any]]:
+    try:
+        with (root / source).open("rb") as handle:
+            data = tomllib.load(handle)
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        fail(f"cannot read Yazi package data: {error}")
+    plugins = data.get("plugin", {}).get("deps", []) if isinstance(data, dict) else []
+    if not isinstance(plugins, list):
+        fail("Yazi plugin.deps must be an array of tables")
+    records = []
+    for item in plugins:
+        if not isinstance(item, dict) or not all(isinstance(item.get(key), str) and item.get(key) for key in ("use", "rev", "hash")):
+            fail("every Yazi plugin requires string use, rev, and hash values")
+        name = item["use"]
+        revision = item["rev"]
+        integrity = item["hash"]
+        record = dependency(
+            f"yazi:{name}", "yazi", "plugin", name, source,
+            pin_status="revision+hash" if revision and integrity else "unpinned",
+            declared_version=revision, resolved_version=integrity,
+        )
+        record["state"] = "resolved" if revision and integrity else "unresolved"
+        records.append(record)
+    return records
+
+
+def parse_neovim(root: Path, source: str) -> list[dict[str, Any]]:
+    try:
+        data = json.loads((root / source).read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        fail(f"cannot read Neovim lock: {error}")
+    plugins = data.get("plugins") if isinstance(data, dict) else None
+    if not isinstance(plugins, dict):
+        fail("Neovim lock must contain a plugins object")
+    records = []
+    for name, item in sorted(plugins.items()):
+        if not isinstance(name, str) or not isinstance(item, dict):
+            fail("Neovim lock plugin entries must be objects")
+        revision = item.get("rev")
+        if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision):
+            fail(f"Neovim plugin {name} has an invalid revision")
+        records.append(
+            dependency(
+                f"neovim:{name}", "neovim", "plugin", name, source,
+                pin_status="commit" if revision else "unpinned",
+                declared_version=item.get("version") if isinstance(item, dict) else None,
+                resolved_version=revision,
+            )
+        )
+    return records
+
+
+def parse_vscodium(data: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        dependency(
+            f"vscodium:{name}", "vscodium", "extension", str(name), "home/.chezmoidata.toml",
+            pin_status="rolling"
+        )
+        for name in data.get("vscodeExtensions", []) or []
+    ]
+
+
+def parse_local_git_plugins(config: dict[str, Any]) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for item in config.get("local_git_plugins", []):
+        relative_path = str(item["path"])
+        record = dependency(
+            f"local-git:{item['id']}",
+            "local-git",
+            "plugin",
+            str(item["id"]),
+            "modules/dependencies/config/sources.toml",
+            pin_status="commit",
+            declared_version=str(item["commit"]),
+            resolved_version=str(item["commit"]),
+            target=f"~/{relative_path}",
+        )
+        record["installedPath"] = str(Path.home() / relative_path)
+        record["providedExecutables"] = sorted(str(value) for value in item["provides"])
+        record["remoteStatus"] = "unchecked"
+        records.append(record)
+    return records
+
+
+def dedupe_authorities(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    external_by_target = {
+        record["target"]: record
+        for record in records
+        if record["manager"] == "chezmoi" and record["kind"] == "git-external"
+    }
+    local_by_executable = {
+        executable: record
+        for record in records
+        if record["manager"] == "local-git"
+        for executable in record.get("providedExecutables", [])
+    }
+    homebrew_by_name: dict[str, dict[str, Any]] = {}
+    for record in records:
+        if record["manager"] != "homebrew" or record["kind"] == "tap":
+            continue
+        homebrew_by_name.setdefault(record["name"], record)
+        homebrew_by_name.setdefault(record["name"].rsplit("/", 1)[-1], record)
+    result: list[dict[str, Any]] = []
+    for record in records:
+        authority = external_by_target.get(record.get("target"))
+        if record["manager"] == "tpm" and authority:
+            authority["owners"] = sorted(set(authority["owners"] + ["tpm"]))
+            authority["sources"] = sorted(set(authority["sources"] + record["sources"]))
+            continue
+        if record["manager"] == "module" and record["kind"] == "executable":
+            authority = local_by_executable.get(record["name"])
+            if authority:
+                authority["owners"] = sorted(set(authority["owners"] + record["owners"]))
+                authority["sources"] = sorted(set(authority["sources"] + record["sources"]))
+                authority["required"] = bool(authority["required"] or record["required"])
+                continue
+            if record["pinStatus"] == "manager-owned":
+                authority = homebrew_by_name.get(EXECUTABLE_BREW_ALIASES.get(record["name"], record["name"]))
+                if authority:
+                    authority["owners"] = sorted(set(authority["owners"] + record["owners"]))
+                    authority["sources"] = sorted(set(authority["sources"] + record["sources"]))
+                    authority["required"] = bool(authority["required"] or record["required"])
+                    continue
+        result.append(record)
+    return result
+
+
+def load_lock(root: Path) -> dict[str, Any]:
+    path = root / "modules/dependencies/dependencies.lock.json"
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        fail(f"cannot read dependency snapshot: {error}")
+    if (
+        not isinstance(data, dict)
+        or data.get("schemaVersion") != SCHEMA_VERSION
+        or data.get("complete") is not True
+        or not isinstance(data.get("managerStatus"), dict)
+        or not isinstance(data.get("errors"), list)
+        or not all(isinstance(value, str) for value in data["errors"])
+        or not isinstance(data.get("dependencies"), dict)
+    ):
+        fail("unsupported dependency snapshot schema")
+    manager_status = data["managerStatus"]
+    if (
+        set(manager_status) != {"homebrew", "git", "vscodium"}
+        or not all(value in {"complete", "not-required", "unavailable", "error"} for value in manager_status.values())
+        or manager_status["homebrew"] != "complete"
+        or manager_status["git"] != "complete"
+        or (any(value in {"unavailable", "error"} for value in manager_status.values()) and not data["errors"])
+    ):
+        fail("dependency snapshot manager coverage is invalid")
+    for identifier, value in data["dependencies"].items():
+        if not isinstance(identifier, str) or not isinstance(value, dict):
+            fail("dependency snapshot entries must be objects")
+        if set(value) != {"installedVersion", "installedPath", "resolvedVersion"}:
+            fail(f"dependency snapshot entry has invalid fields: {identifier}")
+        if not all(value[key] is None or isinstance(value[key], str) for key in value):
+            fail(f"dependency snapshot entry has invalid values: {identifier}")
+    return data
+
+
+def build_inventory(root: Path, use_lock: bool = True) -> tuple[list[dict[str, Any]], dict[str, list[str]]]:
+    config = load_config(root)
+    sources = config["sources"]
+    runtime = config["runtime"]
+    records = parse_brewfile(root, sources["brewfile"])
+    brew_names = {record["name"] for record in records if record["kind"] in {"formula", "cask"}}
+    data = load_chezmoi_data(root, sources["chezmoi_data"])
+    records += parse_modules(root, sources["modules"], brew_names, runtime["shared_library_dir"])
+    records += parse_chezmoi_externals(root, data, sources["chezmoi_externals"])
+    records += parse_tmux(
+        root,
+        sources["tmux"],
+        sources["tmux_installer"],
+        runtime["tmux_plugin_dir"],
+        sources["modules"],
+    )
+    records += parse_yazi(root, sources["yazi"])
+    records += parse_neovim(root, sources["neovim"])
+    records += parse_vscodium(data)
+    records += parse_local_git_plugins(config)
+    apply_git_pin_declarations(records, data, sources["chezmoi_data"])
+    records = dedupe_authorities(records)
+    lock_drift = {"missingIds": [], "staleIds": []}
+    if use_lock:
+        locked = load_lock(root)["dependencies"]
+        declaration_ids = {record["id"] for record in records}
+        lock_ids = set(locked)
+        lock_drift = {
+            "missingIds": sorted(declaration_ids - lock_ids),
+            "staleIds": sorted(lock_ids - declaration_ids),
+        }
+        for record in records:
+            has_snapshot = record["id"] in locked
+            snapshot = locked.get(record["id"], {})
+            record["snapshotState"] = "present" if has_snapshot else "missing"
+            installed = snapshot.get("installedVersion")
+            locked_resolution = snapshot.get("resolvedVersion")
+            declared_resolution = record["resolvedVersion"]
+            record["installedVersion"] = installed
+            record["installedPath"] = record["installedPath"] or snapshot.get("installedPath")
+            record["lockedVersion"] = locked_resolution
+            record["resolvedVersion"] = declared_resolution or locked_resolution
+            if record["manager"] in {"homebrew", "chezmoi", "tpm", "vscodium"}:
+                record["state"] = "installed" if installed else "missing"
+            elif record["manager"] != "module":
+                record["state"] = "resolved" if record["resolvedVersion"] or locked_resolution else "unresolved"
+            if record["manager"] == "homebrew" and installed and locked_resolution and installed != locked_resolution:
+                record["outdated"] = True
+                record["updateStatus"] = "snapshot-outdated"
+            if declared_resolution and locked_resolution and declared_resolution != locked_resolution:
+                record["drifted"] = True
+                record["updateStatus"] = "declaration-drift"
+            if (
+                record["manager"] == "tpm"
+                and record["pinStatus"] == "commit"
+                and record["declaredVersion"]
+                and locked_resolution
+                and record["declaredVersion"] != locked_resolution
+            ):
+                record["drifted"] = True
+                record["updateStatus"] = "declaration-drift"
+    return sorted(records, key=lambda item: (item["manager"], item["kind"], item["name"], item["id"])), lock_drift
+
+
+def git_probe(path: Path) -> tuple[str | None, str | None]:
+    git = shutil.which("git")
+    if not path.is_dir():
+        return None, None
+    if not git:
+        return None, "git is unavailable"
+    result = run([git, "-C", str(path), "rev-parse", "HEAD"])
+    value = result.stdout.strip()
+    if result.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}", value):
+        return None, f"git rev-parse failed for {path}: {result.stderr.strip() or 'invalid revision'}"
+    return value, None
+
+
+def git_worktree_probe(path: Path) -> tuple[str | None, bool, str | None]:
+    current, error = git_probe(path)
+    if error or not current:
+        return current, False, error
+    git = shutil.which("git")
+    if not git:
+        return None, False, "git is unavailable"
+    result = run([git, "-C", str(path), "status", "--porcelain=v1"])
+    if result.returncode != 0:
+        return current, False, f"git status failed for {path}: {result.stderr.strip()}"
+    return current, bool(result.stdout.strip()), None
+
+
+def git_tracked_worktree_probe(path: Path) -> tuple[str | None, bool, str | None]:
+    current, error = git_probe(path)
+    if error or not current:
+        return current, False, error
+    git = shutil.which("git")
+    if not git:
+        return None, False, "git is unavailable"
+    result = run([git, "-C", str(path), "status", "--porcelain=v1", "--untracked-files=no"])
+    if result.returncode != 0:
+        return current, False, f"git status failed for {path}: {result.stderr.strip()}"
+    return current, bool(result.stdout.strip()), None
+
+
+def reconcile_git_pins(
+    data: dict[str, Any], action: str, manager_filter: str
+) -> tuple[dict[str, Any], bool]:
+    git = shutil.which("git")
+    selected = [
+        item
+        for item in data.get("gitPins", []) or []
+        if manager_filter == "all" or item["manager"] == manager_filter
+    ]
+    results: list[dict[str, Any]] = []
+    changed = 0
+    errors: list[str] = []
+    if not git:
+        errors.append("git is unavailable")
+    for item in selected:
+        path = Path.home() / str(item["path"])
+        expected = str(item["revision"])
+        current: str | None = None
+        modified = False
+        error: str | None = None
+        state = "missing"
+        if git:
+            current, modified, error = git_tracked_worktree_probe(path)
+            if error:
+                state = "error"
+            elif modified and current == expected and action == "apply":
+                # Applying a pin is a revision operation, not a demand for a
+                # pristine checkout. If HEAD is already correct there is
+                # nothing to mutate, so preserve tracked local work and let
+                # the automatic manager lifecycle continue. `pins check`
+                # still reports the same checkout as local-modified.
+                state = "current-local-modified"
+            elif modified:
+                state = "local-modified"
+                error = f"tracked files are modified in {path}"
+            elif current == expected:
+                state = "current"
+            elif action == "check":
+                state = "drifted"
+            else:
+                commit_object = expected + "^{" + "commit}"
+                object_result = run([git, "-C", str(path), "cat-file", "-e", commit_object])
+                if object_result.returncode != 0:
+                    state = "unavailable"
+                    error = (
+                        f"pinned commit is unavailable in {path}: {expected}; "
+                        "fetch it explicitly before applying pins"
+                    )
+                else:
+                    checkout = run([git, "-C", str(path), "checkout", "--quiet", "--detach", expected])
+                    if checkout.returncode != 0:
+                        state = "error"
+                        error = f"git checkout failed for {path}: {checkout.stderr.strip()}"
+                    else:
+                        verified, verify_error = git_probe(path)
+                        if verify_error or verified != expected:
+                            state = "error"
+                            error = verify_error or f"git checkout did not reach {expected} in {path}"
+                        else:
+                            current = verified
+                            state = "applied"
+                            changed += 1
+        if error:
+            errors.append(f"{item['id']}: {error}")
+        results.append(
+            {
+                "id": item["id"],
+                "manager": item["manager"],
+                "path": str(path),
+                "expectedRevision": expected,
+                "installedRevision": current,
+                "state": state,
+            }
+        )
+    ok = not errors and all(
+        item["state"] in {"current", "current-local-modified", "applied"}
+        for item in results
+    )
+    return (
+        {
+            "schemaVersion": SCHEMA_VERSION,
+            "action": action,
+            "manager": manager_filter,
+            "ok": ok,
+            "changed": changed,
+            "errors": sorted(errors),
+            "pins": results,
+        },
+        ok,
+    )
+
+
+def print_git_pins_human(value: dict[str, Any]) -> None:
+    print("MANAGER\tID\tSTATE\tINSTALLED\tEXPECTED\tPATH")
+    for item in value["pins"]:
+        print(
+            f"{item['manager']}\t{item['id']}\t{item['state']}\t"
+            f"{item['installedRevision'] or '-'}\t{item['expectedRevision']}\t{item['path']}"
+        )
+    print(f"\nChanged: {value['changed']}  OK: {'yes' if value['ok'] else 'no'}")
+    for error in value["errors"]:
+        print(f"error: {error}", file=sys.stderr)
+
+
+def brew_info(record: dict[str, Any]) -> tuple[str | None, str | None, str | None]:
+    brew = shutil.which("brew")
+    if not brew or record["kind"] == "tap":
+        return None, None, "brew is unavailable" if not brew else None
+    result = run([brew, "info", "--json=v2", f"--{record['kind']}", record["name"]])
+    if result.returncode != 0:
+        if record["kind"] == "formula":
+            fallback = run([brew, "list", "--versions", record["name"]])
+            if fallback.returncode == 0 and fallback.stdout.strip():
+                values = fallback.stdout.strip().split()
+                return ",".join(values[1:]) or None, None, None
+        return None, None, f"brew info failed for {record['name']}: {result.stderr.strip()}"
+    try:
+        data = json.loads(result.stdout)
+        if record["kind"] == "formula":
+            item = data["formulae"][0]
+            installed = ",".join(value["version"] for value in item.get("installed", [])) or None
+            stable = item.get("versions", {}).get("stable")
+            revision = item.get("revision") or 0
+            if stable and revision:
+                stable = f"{stable}_{revision}"
+            return installed, stable, None
+        item = data["casks"][0]
+        installed = item.get("installed")
+        if isinstance(installed, list):
+            installed = ",".join(str(value) for value in installed) or None
+        return str(installed) if installed else None, item.get("version"), None
+    except (KeyError, IndexError, TypeError, json.JSONDecodeError) as error:
+        return None, None, f"brew info returned invalid JSON for {record['name']}: {error}"
+
+
+def snapshot(root: Path) -> dict[str, Any]:
+    records, _ = build_inventory(root, use_lock=False)
+    required_errors: list[str] = []
+    manager_status = {"homebrew": "complete", "git": "complete", "vscodium": "complete"}
+    extension_versions: dict[str, str] = {}
+    vscodium_records = [record for record in records if record["manager"] == "vscodium"]
+    if codium := shutil.which("codium"):
+        result = run([codium, "--list-extensions", "--show-versions"])
+        if result.returncode == 0:
+            try:
+                extension_versions = dict(line.rsplit("@", 1) for line in result.stdout.splitlines() if "@" in line)
+            except ValueError as error:
+                required_errors.append(f"optional codium inventory is invalid; refusing snapshot replacement: {error}")
+                manager_status["vscodium"] = "error"
+        else:
+            required_errors.append(f"optional codium inventory failed; refusing snapshot replacement: {result.stderr.strip()}")
+            manager_status["vscodium"] = "error"
+    elif vscodium_records:
+        required_errors.append("optional codium manager is unavailable; refusing to erase captured extension versions")
+        manager_status["vscodium"] = "unavailable"
+    else:
+        manager_status["vscodium"] = "not-required"
+    dependencies: dict[str, Any] = {}
+    home = Path.home()
+    installed_taps: set[str] = set()
+    tap_inventory_ok = False
+    brew = shutil.which("brew")
+    if brew:
+        tap_result = run([brew, "tap"])
+        if tap_result.returncode == 0:
+            installed_taps = {value.lower() for value in tap_result.stdout.splitlines()}
+            tap_inventory_ok = True
+        else:
+            required_errors.append(f"brew tap inventory failed: {tap_result.stderr.strip()}")
+            manager_status["homebrew"] = "error"
+    else:
+        required_errors.append("brew is unavailable")
+        manager_status["homebrew"] = "unavailable"
+    if not shutil.which("git"):
+        required_errors.append("git is unavailable")
+        manager_status["git"] = "unavailable"
+    for record in records:
+        installed = None
+        resolved = record["resolvedVersion"]
+        installed_path = record["installedPath"]
+        if record["manager"] == "homebrew":
+            if record["kind"] == "tap":
+                installed = "present" if record["name"].lower() in installed_taps else None
+            else:
+                installed, resolved, error = brew_info(record)
+                if error:
+                    required_errors.append(error)
+                    manager_status["homebrew"] = "error"
+        elif record["manager"] in {"chezmoi", "tpm"}:
+            target = str(record.get("target") or "").replace("~/", "", 1)
+            resolved, error = git_probe(home / target)
+            if error:
+                required_errors.append(error)
+                manager_status["git"] = "error"
+            installed = resolved
+        elif record["manager"] == "local-git":
+            target = str(record.get("target") or "").replace("~/", "", 1)
+            path = home / target
+            installed, _, error = git_worktree_probe(path)
+            installed_path = str(path)
+            if error:
+                required_errors.append(error)
+                manager_status["git"] = "error"
+        elif record["manager"] == "vscodium":
+            installed = extension_versions.get(record["name"])
+        elif record["manager"] == "module" and record["kind"] == "library":
+            installed = resolved
+        dependencies[record["id"]] = {
+            "installedVersion": installed,
+            "installedPath": installed_path,
+            "resolvedVersion": resolved,
+        }
+    if required_errors:
+        raise InventoryError("snapshot incomplete: " + "; ".join(sorted(set(required_errors))))
+    return {
+        "schemaVersion": SCHEMA_VERSION,
+        "complete": True,
+        "managerStatus": manager_status,
+        "errors": [],
+        "dependencies": dict(sorted(dependencies.items())),
+    }
+
+
+def apply_checks(records: list[dict[str, Any]]) -> list[str]:
+    errors: list[str] = []
+    brew = shutil.which("brew")
+    installed_taps: set[str] = set()
+    tap_inventory_ok = False
+    outdated: set[tuple[str, str]] = set()
+    outdated_inventory_ok = False
+    if brew:
+        tap_result = run([brew, "tap"])
+        if tap_result.returncode == 0:
+            installed_taps = {value.lower() for value in tap_result.stdout.splitlines()}
+            tap_inventory_ok = True
+        else:
+            errors.append(f"brew tap inventory failed: {tap_result.stderr.strip()}")
+        result = run([brew, "outdated", "--json=v2"])
+        if result.returncode == 0:
+            try:
+                data = json.loads(result.stdout)
+                outdated = {
+                    (kind, str(item["name"]).lower())
+                    for key, kind in (("formulae", "formula"), ("casks", "cask"))
+                    for item in data.get(key, [])
+                }
+                outdated_inventory_ok = True
+            except (KeyError, TypeError, json.JSONDecodeError) as error:
+                errors.append(f"brew outdated returned invalid JSON: {error}")
+        else:
+            errors.append(f"brew outdated failed: {result.stderr.strip()}")
+    else:
+        errors.append("brew is unavailable")
+    for record in records:
+        if record["manager"] != "homebrew":
+            continue
+        installed = None
+        resolved = record.get("resolvedVersion")
+        error = None
+        if not brew:
+            error = "brew is unavailable"
+        elif record["kind"] == "tap":
+            if not tap_inventory_ok:
+                error = "brew tap inventory is unavailable"
+            else:
+                installed = "present" if record["name"].lower() in installed_taps else None
+        else:
+            installed, resolved, error = brew_info(record)
+        if error:
+            errors.append(error)
+            record["state"] = "unknown"
+            record["updateStatus"] = "error"
+            continue
+        record["installedVersion"] = installed
+        record["resolvedVersion"] = resolved
+        record["outdated"] = (record["kind"], record["name"].lower()) in outdated
+        if not installed:
+            record["state"] = "missing"
+            record["updateStatus"] = "missing"
+            record["outdated"] = False
+        elif record["kind"] == "tap":
+            record["state"] = "installed"
+            record["updateStatus"] = "remote-unchecked"
+        elif not outdated_inventory_ok:
+            record["state"] = "installed"
+            record["updateStatus"] = "error"
+        elif record["outdated"]:
+            record["state"] = "available"
+            record["updateStatus"] = "available"
+        else:
+            record["state"] = "current"
+            record["updateStatus"] = "current"
+    home = Path.home()
+    for record in records:
+        if record["manager"] not in {"chezmoi", "tpm"}:
+            continue
+        target = str(record.get("target") or "").replace("~/", "", 1)
+        modified = False
+        if record.get("pinStatus") == "commit":
+            current, modified, error = git_tracked_worktree_probe(home / target)
+        else:
+            current, error = git_probe(home / target)
+        locked = record.get("lockedVersion")
+        if error:
+            errors.append(error)
+            record["state"] = "unknown"
+            record["updateStatus"] = "error"
+        elif current:
+            record["installedVersion"] = current
+            record["state"] = "installed"
+            record["drifted"] = bool(modified or (locked and current != locked))
+            if modified:
+                record["updateStatus"] = "local-modified"
+            else:
+                record["updateStatus"] = "local-drift" if record["drifted"] else "remote-unchecked"
+        elif record["required"]:
+            record["state"] = "missing"
+            record["updateStatus"] = "remote-unchecked"
+    for record in records:
+        if record["manager"] != "local-git":
+            continue
+        target = str(record.get("target") or "").replace("~/", "", 1)
+        path = home / target
+        current, modified, error = git_worktree_probe(path)
+        expected = record.get("declaredVersion") or record.get("lockedVersion")
+        record["installedPath"] = str(path)
+        record["remoteStatus"] = "unchecked"
+        if error:
+            errors.append(error)
+            record["state"] = "unknown"
+            record["updateStatus"] = "error"
+        elif current:
+            record["installedVersion"] = current
+            record["state"] = "installed"
+            record["drifted"] = bool(modified or (expected and current != expected))
+            if modified:
+                record["updateStatus"] = "local-modified"
+            elif expected and current != expected:
+                record["updateStatus"] = "local-drift"
+            else:
+                record["updateStatus"] = "remote-unchecked"
+        elif record["required"]:
+            record["state"] = "missing"
+            record["updateStatus"] = "remote-unchecked"
+    return sorted(set(errors))
+
+
+def report(
+    records: list[dict[str, Any]],
+    offline: bool,
+    lock_drift: dict[str, list[str]],
+    manager_errors: list[str] | None = None,
+) -> dict[str, Any]:
+    errors = manager_errors or []
+    summary = {
+        "total": len(records),
+        "missing": sum(record["state"] == "missing" for record in records),
+        "unpinned": sum(record["pinStatus"] in {"unpinned", "unversioned"} for record in records),
+        "outdated": sum(bool(record["outdated"]) for record in records),
+        "drifted": sum(bool(record["drifted"]) for record in records),
+        "managerErrors": len(errors),
+        "missingLockIds": len(lock_drift["missingIds"]),
+        "staleLockIds": len(lock_drift["staleIds"]),
+    }
+    return {
+        "schemaVersion": SCHEMA_VERSION,
+        "offline": offline,
+        "summary": summary,
+        "managerErrors": errors,
+        "lockDrift": lock_drift,
+        "dependencies": records,
+    }
+
+
+def print_human(value: dict[str, Any]) -> None:
+    print("MANAGER\tKIND\tNAME\tSTATE\tPIN\tUPDATE\tINSTALLED/RESOLVED\tOWNERS")
+    for item in value["dependencies"]:
+        version = item.get("installedVersion") or item.get("resolvedVersion") or "-"
+        print(
+            f"{item['manager']}\t{item['kind']}\t{item['name']}\t{item['state']}\t"
+            f"{item['pinStatus']}\t{item['updateStatus']}\t{version}\t{','.join(item['owners'])}"
+        )
+    summary = value["summary"]
+    print(
+        f"\nTotal: {summary['total']}  Missing: {summary['missing']}  Unpinned: {summary['unpinned']}  "
+        f"Outdated: {summary['outdated']}  Drifted: {summary['drifted']}  "
+        f"Missing lock: {summary['missingLockIds']}  Stale lock: {summary['staleLockIds']}"
+    )
+    for error in value["managerErrors"]:
+        print(f"warning: {error}", file=sys.stderr)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(prog="dotfiles-deps")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    for name in ("status", "check", "snapshot"):
+        command = subparsers.add_parser(name)
+        command.add_argument("--json", action="store_true")
+    pins = subparsers.add_parser("pins")
+    pins.add_argument("action", choices=("check", "apply"))
+    pins.add_argument("--manager", choices=("all", "chezmoi", "tpm"), default="all")
+    pins.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+    root = source_root()
+    exit_status = 0
+    try:
+        if args.command == "pins":
+            config = load_config(root)
+            data = load_chezmoi_data(root, config["sources"]["chezmoi_data"])
+            value, ok = reconcile_git_pins(data, args.action, args.manager)
+            exit_status = 0 if ok else 1
+        elif args.command == "snapshot":
+            value = snapshot(root)
+        else:
+            records, lock_drift = build_inventory(root)
+            errors = apply_checks(records) if args.command == "check" else []
+            value = report(
+                records,
+                offline=args.command == "status",
+                lock_drift=lock_drift,
+                manager_errors=errors,
+            )
+            if args.command == "check" and errors:
+                exit_status = 1
+    except InventoryError as error:
+        print(f"dotfiles-deps: {error}", file=sys.stderr)
+        raise SystemExit(1)
+    if args.json or args.command == "snapshot":
+        print(json.dumps(value, indent=2, sort_keys=True))
+    elif args.command == "pins":
+        print_git_pins_human(value)
+    else:
+        print_human(value)
+    raise SystemExit(exit_status)
+
+
+if __name__ == "__main__":
+    main()

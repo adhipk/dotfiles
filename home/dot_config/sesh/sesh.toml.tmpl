@@ -1,0 +1,3 @@
+{{- if .modules.tmuxSessions.enabled -}}
+{{ includeTemplate "../modules/tmux-sessions/config/sesh.toml" . }}
+{{- end -}}

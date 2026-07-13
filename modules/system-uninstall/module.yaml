@@ -1,0 +1,49 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: system-uninstall
+version: 1.1.0
+description: Safely backs up, removes, and restores the complete applied dotfiles target state.
+dataKey: modules.systemUninstall
+distribution:
+  standalone: false
+requires:
+  executables:
+    - bash
+    - chezmoi
+    - cksum
+    - jq
+    - yq
+  libraries:
+    - core.sh
+    - locks.sh
+state:
+  preserved:
+    - ~/.local/state
+  ephemeral: []
+commands:
+  - name: dotfiles-uninstall
+    source: bin/dotfiles-uninstall
+    target: ~/bin/dotfiles-uninstall
+targets:
+  - source: bin/dotfiles-uninstall
+    destination: ~/bin/dotfiles-uninstall
+    bridge: home/bin/executable_dotfiles-uninstall.tmpl
+    ownership: exclusive
+systemRemoval:
+  inventory: chezmoi-managed
+  deletePolicy: managed-leaves-and-empty-managed-directories-only
+  preserved:
+    - source-repository
+    - ~/projects
+    - ~/.local/state
+    - shared-homebrew-packages
+    - ambiguous-installer-side-effects
+  quiesce:
+    - agent-timer
+  ambiguousInstallerSideEffects:
+    - ~/.tmux/plugins
+    - tmux-which-key checkout and config symlink
+    - native shortcut-guide build
+    - running yabai and skhd services
+tests:
+  - tests/test_system_uninstall.sh

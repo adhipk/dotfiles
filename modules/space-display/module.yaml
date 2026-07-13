@@ -1,0 +1,86 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: space-display
+version: 1.0.0
+description: Provides fixed yabai space policy, adjacent-display movement, safe space creation/removal, legacy bookmarks, and scripting-addition setup and repair.
+dataKey: modules.spaceDisplay
+distribution:
+  standalone: true
+  platform: macos
+requires:
+  executables:
+    - bash
+    - brew
+    - jq
+    - yabai
+    - zsh
+state:
+  preserved:
+    - ~/.config/yabai/space-bookmarks.json
+  ephemeral: []
+commands:
+  - name: bookmarks
+    source: bin/bookmarks
+    target: ~/bin/bookmarks
+    bridge: home/bin/executable_bookmarks.tmpl
+  - name: setup-yabai-sa
+    source: bin/setup-yabai-sa
+    target: ~/bin/setup-yabai-sa
+    bridge: home/bin/executable_setup-yabai-sa.tmpl
+  - name: reset-yabai
+    source: bin/reset-yabai
+    target: ~/bin/reset-yabai
+    bridge: home/bin/executable_reset-yabai.tmpl
+targets:
+  - service: command
+    source: bin/bookmarks
+    destination: ~/bin/bookmarks
+    bridge: home/bin/executable_bookmarks.tmpl
+    ownership: exclusive
+  - service: yabai-helper
+    source: bin/bookmarks-store
+    destination: ~/.config/yabai/bookmarks
+    bridge: home/dot_config/yabai/executable_bookmarks.tmpl
+    ownership: exclusive
+  - service: yabai-helper
+    source: bin/create-space
+    destination: ~/.config/yabai/create-space
+    bridge: home/dot_config/yabai/executable_create-space.tmpl
+    ownership: exclusive
+  - service: yabai-helper
+    source: bin/close-empty-spaces
+    destination: ~/.config/yabai/close_empty_spaces.sh
+    bridge: home/dot_config/yabai/executable_close_empty_spaces.sh.tmpl
+    ownership: exclusive
+  - service: yabai-helper
+    source: bin/display-move
+    destination: ~/.config/yabai/display-move
+    bridge: home/dot_config/yabai/executable_display-move.tmpl
+    ownership: exclusive
+  - service: command
+    source: bin/setup-yabai-sa
+    destination: ~/bin/setup-yabai-sa
+    bridge: home/bin/executable_setup-yabai-sa.tmpl
+    ownership: exclusive
+  - service: command
+    source: bin/reset-yabai
+    destination: ~/bin/reset-yabai
+    bridge: home/bin/executable_reset-yabai.tmpl
+    ownership: exclusive
+  - service: skhd
+    source: targets/skhdrc.tmpl
+    destination: ~/.skhdrc
+    bridge: home/dot_skhdrc.tmpl
+    ownership: contribution
+  - service: yabai
+    source: targets/yabairc-scripting-addition.tmpl
+    destination: ~/.yabairc
+    bridge: home/dot_yabairc.tmpl
+    ownership: contribution
+  - service: yabai
+    source: targets/yabairc-spaces.tmpl
+    destination: ~/.yabairc
+    bridge: home/dot_yabairc.tmpl
+    ownership: contribution
+tests:
+  - tests/test_module.sh

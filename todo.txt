@@ -4,3 +4,34 @@ x 2026-07-10 2026-07-10 Add a typed Tuxedo tmux window and shortcuts +dotfiles @
 x 2026-07-10 2026-07-10 Apply todo.txt instructions to all agents and Codex +dotfiles @agent id:13b525bd-202b-45f8-841a-d872eb6fa533 owner:codex
 x 2026-07-10 2026-07-10 Verify bootstrap, tests, and live workflow +dotfiles @test id:0e84d1df-752a-46f1-8d70-d3f38833a23d owner:codex
 x 2026-07-10 2026-07-10 Make Tuxedo and tmux-accessible apps use the session working directory +dotfiles @agent id:5d76698f-0f2b-48f2-89e7-a195db055901 owner:codex
+x 2026-07-11 2026-07-11 Establish chezmoi-native module/profile composition and thin target entrypoints +dotfiles @architecture id:14df24e0-c788-4301-8795-0db1b4e5255e owner:codex
+x 2026-07-11 2026-07-11 Build and test the shared runtime standard library for common procedures +dotfiles @runtime id:8222c15c-75b4-48cf-85d4-d95a5461d060 owner:codex
+x 2026-07-11 2026-07-11 Extract tmux-yazi as a portable vertical module +dotfiles @tmux id:80b72605-ef65-4036-839e-51efc0ea4e1a owner:codex
+x 2026-07-11 2026-07-11 Package todo as a standalone and chezmoi-dispatched plugin +dotfiles @plugin id:e4980109-e985-4dbb-b089-058969785f60 owner:codex
+x 2026-07-13 2026-07-11 Integrate modular lifecycle with install bootstrap watch and validation +dotfiles @test id:26d5acd3-ce0b-40fd-a368-3fc144b488da owner:codex
+x 2026-07-13 2026-07-11 Extract app focus and runtime modes as a vertical module +dotfiles @desktop id:7629bf3e-3f98-4040-9931-43e194359d88 owner:codex
+x 2026-07-13 2026-07-11 Extract window layout as a vertical module +dotfiles @desktop id:77a6e523-0e4c-4674-84af-de1a9d449a2f owner:codex
+x 2026-07-13 2026-07-11 Extract space and display management as a vertical module +dotfiles @desktop id:e7c83f6d-9c68-49e7-8cda-e937f4042cd7 owner:codex
+x 2026-07-13 2026-07-11 Extract terminal window types as a vertical module +dotfiles @tmux id:252eab6b-5d36-4eb1-bfb7-c73c29606a17 owner:codex
+x 2026-07-13 2026-07-11 Extract tmux sessions workspaces and persistence as vertical modules +dotfiles @tmux id:cca04ddd-4d04-4ef5-9ae5-17144f2c9e59 owner:codex
+x 2026-07-13 2026-07-11 Extract scratchpads as a vertical module with behavior parity +dotfiles @desktop id:21da8a0e-e259-4d0f-b4dd-b0477d2f0198 owner:codex
+x 2026-07-13 2026-07-11 Build the frontend module and plugin management UI on chezmoi commands +dotfiles @ui id:9dc6e323-4067-4238-a40b-f035b4c9a5f7 owner:codex
+x 2026-07-13 2026-07-11 Extract appearance borders and PiP as vertical modules +dotfiles @desktop id:b4c53532-6278-48a4-b774-6a4fbc248666 owner:codex
+x 2026-07-13 2026-07-11 Rehouse projects and hyperspace as explicitly disabled modules +dotfiles @modules id:5eac8989-8a3d-45d6-a9e4-cddf9a1ea653 owner:codex
+x 2026-07-13 2026-07-11 Package remaining standalone utilities as chezmoi plugins +dotfiles @plugin id:722c8067-41a3-426a-82f4-9ef33bf22567 owner:codex
+x 2026-07-13 2026-07-11 Generate shortcut guide and documentation from module data +dotfiles @docs id:175e32c9-d7db-40ef-8211-6019118257ff owner:codex
+x 2026-07-13 2026-07-11 Inventory pin and automate update checks for every managed dependency +dotfiles @dependencies id:8b8bcb80-f19c-493b-921e-655738f7a72a owner:codex
+x 2026-07-13 2026-07-11 Implement safe module disable uninstall purge and whole-system removal +dotfiles @lifecycle id:ece96204-dce8-45dd-9bb4-89c290450cf1 owner:codex
+x 2026-07-11 2026-07-11 Install a global agent task timer and deadline behavior +dotfiles @agent id:692c2f2b-7b8c-4c46-b51d-e630708c5cdb owner:codex
+x 2026-07-11 2026-07-11 Add a configurable expiry beep and set the default timer to ten minutes +dotfiles @agent id:7ad7308b-28d9-4462-afcf-62a2d7e0dea2 owner:codex
+x 2026-07-13 2026-07-13 Make timer expiry checkpoint rearm and continue active goals +dotfiles @agent id:f2b0c52c-8e6f-4326-a69e-e64276fee867 owner:codex
+x 2026-07-13 2026-07-13 Fix recurring agent-timer worker death after warning +dotfiles @agent id:9d7e1b77-10b6-47ce-bd1e-b8503dd2b881 owner:codex
+x 2026-07-13 2026-07-13 Make intentional agent-timer worker shutdown exit cleanly under tmux +dotfiles @agent id:95b071d8-d636-47e4-b581-c4347cd3209a owner:codex
+x 2026-07-13 2026-07-13 Make recurring timer checkpoints non-blocking through subagent status delegation +dotfiles @agent id:ea4ecb51-57b0-46a0-89ce-d62d220be538 owner:codex
+x 2026-07-13 2026-07-13 Make agent-timer reliably submit each tmux steer instead of leaving text in the Codex composer +dotfiles @agent id:748c9060-44f6-46ae-bae7-ac9bd9546cb9 owner:codex
+x 2026-07-13 2026-07-13 Flush Codex paste-burst state before submitting long agent-timer nudges id:0004db13-8221-4ab2-957a-f90389fe48d1 owner:codex +dotfiles @agent due:2026-07-13
+x 2026-07-13 2026-07-13 Reconcile dependency lock after module extraction +dotfiles @dependencies id:3fcb8044-b55e-41a2-a96c-a68f053a0127 owner:codex
+x 2026-07-13 2026-07-13 Extract reusable utility modules into independent ~/projects repositories and bootstrap them from pinned GitHub sources +dotfiles @distribution id:77f42945-6cf8-4b5b-ac01-f4b461bf520d owner:codex
+(D) 2026-07-13 Curate resume-reloaded with completed showcaseable projects after the modular migration +portfolio @docs id:d3a63dc2-b4be-4db0-8d29-50c85c415405 owner:codex
+x 2026-07-13 2026-07-13 Fix Awrit rendering/input compatibility inside tmux using the Ghostty discussion 5924 workaround +dotfiles @tmux id:a77d4180-02a2-4a43-85eb-a26081db7ccf owner:codex
+x 2026-07-13 2026-07-13 Restore Shift+Enter in Codex through the Ghostty and tmux keyboard boundary +dotfiles @tmux id:e440d6a8-453c-43ee-a495-f389108c007b owner:codex

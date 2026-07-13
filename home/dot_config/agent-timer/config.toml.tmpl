@@ -1,0 +1,3 @@
+{{- if .modules.agentTimer.enabled -}}
+{{ includeTemplate "../modules/agent-timer/config/config.toml.tmpl" . }}
+{{- end -}}

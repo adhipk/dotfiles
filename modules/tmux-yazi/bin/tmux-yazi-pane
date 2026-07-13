@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+# man-me: name=tmux-yazi-pane
+# man-me: category=Terminal and Sessions
+# man-me: usage=tmux-yazi-pane toggle [PANE]
+# man-me: description=Toggle one full-height Yazi side pane in the current tmux window.
+# man-me: tags=tmux yazi pane sidebar toggle terminal
+
+set -euo pipefail
+
+DOTFILES_LIB_DIR="${DOTFILES_LIB_DIR:-$HOME/.local/lib/dotfiles}"
+for library in core.sh tmux.sh; do
+  if [[ ! -r "$DOTFILES_LIB_DIR/$library" ]]; then
+    printf 'tmux-yazi-pane: required dotfiles library not found: %s\n' "$DOTFILES_LIB_DIR/$library" >&2
+    exit 1
+  fi
+  # shellcheck source=/dev/null
+  source "$DOTFILES_LIB_DIR/$library"
+done
+
+# Preserve the helper's original test/automation override while routing new
+# integrations through the standard tmux library contract.
+if [[ -n "${TMUX_YAZI_PANE_SOCKET:-}" && -z "${DOTFILES_TMUX_SOCKET_NAME:-}" ]]; then
+  export DOTFILES_TMUX_SOCKET_NAME="$TMUX_YAZI_PANE_SOCKET"
+fi
+
+MARKER_OPTION="@dotfiles_yazi_side"
+MARKER_VALUE="1"
+LOCK_CHANNEL=""
+LOCK_HELD=false
+
+usage() {
+  cat <<'EOF'
+Usage:
+  tmux-yazi-pane toggle [PANE]
+
+Toggle one 40%-wide, full-height Yazi pane in PANE's tmux window.
+EOF
+}
+
+release_window_lock() {
+  if [[ "$LOCK_HELD" == true && -n "$LOCK_CHANNEL" ]]; then
+    dotfiles_tmux_wait_lock_release "$LOCK_CHANNEL" >/dev/null 2>&1 || true
+    LOCK_HELD=false
+  fi
+}
+
+acquire_window_lock() {
+  local window_id="$1"
+
+  LOCK_CHANNEL="dotfiles-yazi-pane-${window_id#@}"
+  dotfiles_tmux_wait_lock_acquire "$LOCK_CHANNEL"
+  LOCK_HELD=true
+}
+
+pane_exists() {
+  dotfiles_tmux_cmd display-message -p -t "$1" '#{pane_id}' >/dev/null 2>&1
+}
+
+managed_panes() {
+  dotfiles_tmux_cmd list-panes -t "$1" -F '#{pane_id}|#{@dotfiles_yazi_side}' \
+    | awk -F '|' -v marker="$MARKER_VALUE" '$2 == marker { print $1 }'
+}
+
+toggle_side_pane() {
+  local source_pane="$1"
+  local window_id
+  local existing_panes
+  local pane
+  local source_command
+  local pane_count
+  local directory
+  local new_pane
+
+  pane_exists "$source_pane" || {
+    printf 'tmux-yazi-pane: pane not found: %s\n' "$source_pane" >&2
+    return 1
+  }
+
+  window_id=$(dotfiles_tmux_cmd display-message -p -t "$source_pane" '#{window_id}')
+  acquire_window_lock "$window_id"
+
+  existing_panes=$(managed_panes "$window_id")
+  pane_count=$(dotfiles_tmux_cmd list-panes -t "$window_id" -F '#{pane_id}' | awk 'NF { count++ } END { print count + 0 }')
+  source_command=$(dotfiles_tmux_cmd display-message -p -t "$source_pane" '#{pane_current_command}')
+
+  # Never kill the final pane in a window. This also covers a managed Yazi
+  # side pane whose original pane was closed after the split was created.
+  if [[ "$pane_count" == "1" && (-n "$existing_panes" || "$source_command" == "yazi") ]]; then
+    return 0
+  fi
+
+  if [[ -n "$existing_panes" ]]; then
+    while IFS= read -r pane; do
+      [[ -n "$pane" ]] || continue
+      dotfiles_tmux_cmd kill-pane -t "$pane" >/dev/null 2>&1 || true
+    done <<<"$existing_panes"
+    return 0
+  fi
+
+  # Hyper+B inside the dedicated full-window Yazi view should not split Yazi
+  # beside itself. Hyper+Shift+B remains responsible for that window.
+  directory=$(dotfiles_tmux_cmd display-message -p -t "$source_pane" '#{pane_current_path}')
+  new_pane=$(
+    dotfiles_tmux_cmd split-window \
+      -h -f -l 40% \
+      -c "$directory" \
+      -t "$source_pane" \
+      -P -F '#{pane_id}' \
+      yazi "$directory"
+  )
+  [[ -n "$new_pane" ]] || {
+    printf 'tmux-yazi-pane: tmux did not return the new pane id.\n' >&2
+    return 1
+  }
+  dotfiles_tmux_cmd set-option -p -q -t "$new_pane" "$MARKER_OPTION" "$MARKER_VALUE"
+}
+
+main() {
+  local mode="${1:-}"
+  local source_pane="${2:-${TMUX_PANE:-}}"
+
+  case "$mode" in
+    -h|--help|help)
+      usage
+      return 0
+      ;;
+    toggle)
+      ;;
+    *)
+      usage >&2
+      return 2
+      ;;
+  esac
+
+  [[ -n "$source_pane" ]] || {
+    printf 'tmux-yazi-pane: a target pane is required.\n' >&2
+    return 2
+  }
+  dotfiles_require_command "${DOTFILES_TMUX_BIN:-tmux}" || return
+  dotfiles_require_command yazi || return
+
+  trap release_window_lock EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  toggle_side_pane "$source_pane"
+}
+
+main "$@"

@@ -1,0 +1,25 @@
+# ============================================================
+# Fixed Space Order (1-4)
+# 1: Ghostty, Browser
+# 2: Editor
+# 3: Slack, Teams, Outlook
+# 4: Empty (no default apps)
+# ============================================================
+
+# Ensure at least 4 spaces exist on display 1.
+SPACE_COUNT=$(yabai -m query --spaces --display 1 | jq 'length')
+if [ "$SA_LOADED" = true ] && [ "$SPACE_COUNT" -lt 4 ]; then
+  i=$SPACE_COUNT
+  while [ "$i" -lt 4 ]; do
+    yabai -m space --create
+    i=$((i + 1))
+  done
+fi
+
+# Label spaces consistently.
+[ "$SPACE_COUNT" -ge 1 ] && yabai -m space 1 --label "browser"
+[ "$SPACE_COUNT" -ge 2 ] && yabai -m space 2 --label "editor"
+[ "$SPACE_COUNT" -ge 3 ] && yabai -m space 3 --label "comms"
+[ "$SPACE_COUNT" -ge 4 ] && yabai -m space 4 --label "empty"
+
+# No space assignments - windows open in current space by default.

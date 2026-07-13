@@ -1,0 +1,12 @@
+# man-me: name=kit
+# man-me: category=Text, Speech, and Clipboard
+# man-me: usage=kit [OPTIONS] TEXT; printf TEXT | kit
+# man-me: description=Speak text with KittenTTS or Chatterbox and optionally write WAV output.
+# man-me: tags=kit tts speech text audio wav uv
+# man-me: source=home/bin/symlink_kit.tmpl
+# man-me: name=kit-watch
+# man-me: category=Text, Speech, and Clipboard
+# man-me: usage=kit-watch [OPTIONS] FILE [-- KIT_ARGS ...]
+# man-me: description=Watch a text file and send its content or appended text to kit.
+# man-me: tags=kit tts speech text watch fswatch
+# man-me: source=home/bin/symlink_kit-watch.tmpl

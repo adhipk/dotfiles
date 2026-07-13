@@ -1,0 +1,6 @@
+{{ if .modules.dependencies.enabled -}}
+{{ includeTemplate "../modules/dependencies/install/apply-git-pins.sh.tmpl" . }}
+{{ else -}}
+#!/usr/bin/env bash
+exit 0
+{{ end -}}

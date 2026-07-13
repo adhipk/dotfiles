@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+pid=""
+args=("$@")
+for ((index = 0; index < ${#args[@]}; index++)); do
+    if [[ "${args[$index]}" == "-p" && $((index + 1)) -lt ${#args[@]} ]]; then
+        pid="${args[$((index + 1))]}"
+        break
+    fi
+done
+
+# Keep the test agent deterministic, but fingerprint real detached workers
+# with the host ps so cancellation cannot mistake them for the agent process.
+if [[ -n "$pid" && "$pid" != "${AGENT_TIMER_TEST_AGENT_PID:-}" ]]; then
+    exec /bin/ps "$@"
+fi
+
+case "$*" in
+    *"-o command="*) printf '%s\n' "${FAKE_PS_COMMAND:-codex}" ;;
+    *"-o lstart="*) printf '%s\n' "${FAKE_PS_STARTED:-Sat Jul 11 12:00:00 2026}" ;;
+    *"-o etime="*) printf '%s\n' "${FAKE_PS_ELAPSED:-00:42}" ;;
+    *"-axo pid=,ppid="*) printf '%s %s\n' "${AGENT_TIMER_TEST_AGENT_PID:?}" "${FAKE_PANE_PID:-111}" ;;
+    *) printf 'unexpected fake ps command: %s\n' "$*" >&2; exit 2 ;;
+esac

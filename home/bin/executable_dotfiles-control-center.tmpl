@@ -1,0 +1,5 @@
+{{- if .modules.dotfilesControlCenter.enabled -}}
+#!/usr/bin/env bash
+export DOTFILES_DIR={{ .chezmoi.sourceDir | dir | quote }}
+{{ includeTemplate "../modules/dotfiles-control-center/bin/dotfiles-control-center" . }}
+{{- end -}}

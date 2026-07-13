@@ -1,0 +1,12 @@
+schema_version = 1
+
+[apps]
+editor = "VSCodium"
+terminal = "Ghostty"
+
+[modes]
+state_directory = ".config/skhd"
+zen_blocked_slots = [3, 4, 5]
+
+[integrations]
+notification_command = ".config/skhd/notify.sh"

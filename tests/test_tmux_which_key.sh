@@ -4,10 +4,17 @@
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOTFILES_DIR="$(dirname "$TEST_DIR")"
-CONFIG="$DOTFILES_DIR/home/dot_config/tmux/which-key.yaml"
-TMUX_CONFIG="$DOTFILES_DIR/home/dot_tmux.conf"
 PLUGIN_DIR="${HOME}/.tmux/plugins/tmux-which-key"
 TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-tmux-which-key-test.XXXXXX")"
+RENDER_HOME="$TEMP_DIR/home"
+mkdir -p "$RENDER_HOME"
+chezmoi \
+    -S "$DOTFILES_DIR" \
+    -D "$RENDER_HOME" \
+    --persistent-state "$TEMP_DIR/state.db" \
+    apply --exclude=scripts,externals --force >/dev/null
+CONFIG="$RENDER_HOME/.config/tmux/which-key.yaml"
+TMUX_CONFIG="$RENDER_HOME/.tmux.conf"
 GENERATED="$TEMP_DIR/init.tmux"
 SOCKET_NAME="dotfiles-which-key-test-$$"
 
@@ -192,6 +199,8 @@ assert_contains "window menu uses typed cycling" "tmux-session-template cycle" "
 assert_contains "window menu creates typed windows" "tmux-session-template new" "$NEW_WINDOWS"
 assert_contains "window menu cycles Tuxedo windows" "cycle #{session_id} tuxedo" "$WINDOWS"
 assert_contains "window menu creates Tuxedo windows" "new #{session_id} tuxedo" "$NEW_WINDOWS"
+assert_contains "window menu cycles Awrit windows" "cycle #{session_id} awrit" "$WINDOWS"
+assert_contains "window menu creates Awrit windows" "new #{session_id} awrit" "$NEW_WINDOWS"
 assert_contains "window menu duplicates the current typed window" "tmux-session-template duplicate" "$WINDOWS"
 assert_contains "window menu renames windows" "rename-window" "$WINDOWS"
 assert_contains "window close is confirmed" "Close window" "$WINDOWS"
@@ -201,6 +210,8 @@ assert_contains "pane menu preserves cwd when splitting" "pane_current_path" "$P
 assert_contains "pane menu includes navigation" "select-pane -L" "$PANES"
 assert_contains "pane menu includes resizing" "@wk_menu_resize" "$PANES"
 assert_contains "pane menu includes Yazi" "tmux-yazi-pane" "$PANES"
+assert_contains "session menu exposes agent timers" "Agent timers and durable sessions" "$SESSIONS"
+assert_contains "session timer action opens sesh-backed manager" "agent-timer manage" "$SESSIONS"
 assert_contains "pane close is confirmed" "Close pane" "$PANES"
 
 LAYOUTS=$(tmux -L "$SOCKET_NAME" show-options -gv @wk_menu_layouts 2>/dev/null || true)
@@ -242,9 +253,9 @@ assert_contains \
     "tmux-resurrect#v4.0.0" \
     "$(cat "$TMUX_CONFIG")"
 assert_contains \
-    "installer pins the tested command-center revision" \
+    "dependency data pins the tested command-center revision" \
     "85fb9756447b989f3b94e515d1e6ee7fec76cba2" \
-    "$(cat "$DOTFILES_DIR/install.sh")"
+    "$(cat "$DOTFILES_DIR/home/.chezmoidata.toml")"
 assert_contains \
     "tmux config keeps stock-macOS-compatible command-center ownership" \
     "install.sh links the repo-owned" \

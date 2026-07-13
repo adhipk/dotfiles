@@ -1,0 +1,9 @@
+# Durable server state. Continuum stays last so its periodic save hook sees
+# every earlier plugin and workspace metadata is restored before pane commands.
+set -g @plugin 'tmux-plugins/tmux-resurrect#v4.0.0'
+set -g @plugin 'tmux-plugins/tmux-continuum#v3.1.0'
+set -g @continuum-restore 'on'
+set -g @continuum-save-interval '15'
+set -g @resurrect-capture-pane-contents 'on'
+set -g @resurrect-hook-post-save-all '$HOME/bin/tmux-workspace snapshot save'
+set -g @resurrect-hook-pre-restore-pane-processes '$HOME/bin/tmux-workspace snapshot restore'

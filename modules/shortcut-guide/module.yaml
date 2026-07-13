@@ -1,0 +1,42 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: shortcut-guide
+version: 1.0.0
+description: Builds the searchable native skhd guide and derives deterministic shortcut data and documentation from rendered desired state.
+dataKey: modules.shortcutGuide
+distribution:
+  standalone: true
+  platform: macos
+requires:
+  executables:
+    - bash
+    - chezmoi
+    - python3
+    - swiftc
+state:
+  preserved: []
+  ephemeral:
+    - ~/.config/skhd/whichkey
+commands:
+  - name: shortcut-catalog
+    source: bin/shortcut-catalog
+    target: ~/bin/shortcut-catalog
+    bridge: home/bin/executable_shortcut-catalog.tmpl
+targets:
+  - service: command
+    source: bin/shortcut-catalog
+    destination: ~/bin/shortcut-catalog
+    bridge: home/bin/executable_shortcut-catalog.tmpl
+    ownership: exclusive
+  - service: skhd-helper
+    source: bin/show_keys.sh
+    destination: ~/.config/skhd/show_keys.sh
+    bridge: home/dot_config/skhd/executable_show_keys.sh.tmpl
+    ownership: exclusive
+  - service: skhd
+    source: targets/skhdrc.tmpl
+    destination: ~/.skhdrc
+    bridge: home/dot_skhdrc.tmpl
+    ownership: contribution
+tests:
+  - tests/test_module.sh

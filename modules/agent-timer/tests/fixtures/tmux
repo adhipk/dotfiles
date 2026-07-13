@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+case "${1:-}" in
+    display-message)
+        printf '%s\n' "${FAKE_TMUX_SNAPSHOT:?FAKE_TMUX_SNAPSHOT is required}"
+        ;;
+    list-panes)
+        printf '%s\n' "${FAKE_TMUX_PANES:-\$9|work|@1|codex|%9|111|/dev/ttys999|node|/tmp/work|1|0}"
+        ;;
+    run-shell)
+        shift
+        command=""
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                -b) shift ;;
+                -t) shift 2 ;;
+                *) command="$1"; shift ;;
+            esac
+        done
+        [[ -n "$command" ]] || exit 2
+        if [[ -n "${FAKE_TMUX_RUN_SHELL_LOG:-}" ]]; then
+            printf '%s\n' "$command" >>"$FAKE_TMUX_RUN_SHELL_LOG"
+        fi
+        if [[ "${FAKE_TMUX_DROP_RUN_SHELL:-0}" != "1" ]]; then
+            if [[ -n "${FAKE_TMUX_RUN_SHELL_STATUS_LOG:-}" ]]; then
+                (
+                    if /bin/sh -c "$command" </dev/null >/dev/null 2>&1; then
+                        status=0
+                    else
+                        status=$?
+                    fi
+                    printf '%s\n' "$status" >>"$FAKE_TMUX_RUN_SHELL_STATUS_LOG"
+                ) </dev/null >/dev/null 2>&1 &
+            else
+                /bin/sh -c "$command" </dev/null >/dev/null 2>&1 &
+            fi
+        fi
+        ;;
+    send-keys|kill-session)
+        if [[ "${1:-}" == "send-keys" && -n "${FAKE_TMUX_STATE_FILE:-}" && -n "${FAKE_TMUX_STATE_LOG:-}" ]]; then
+            jq -r '[.status, (.deadlineAt | tostring), (.checkpointCount // 0 | tostring)] | join(":")' \
+                "$FAKE_TMUX_STATE_FILE" >>"$FAKE_TMUX_STATE_LOG"
+        fi
+        if [[ "${1:-}" == "send-keys" && "${FAKE_TMUX_FAIL_SEND:-0}" == "1" ]]; then
+            exit 1
+        fi
+        printf '%s\n' "$*" >>"${FAKE_TMUX_LOG:?FAKE_TMUX_LOG is required}"
+        ;;
+    *)
+        printf 'unexpected fake tmux command: %s\n' "$*" >&2
+        exit 2
+        ;;
+esac

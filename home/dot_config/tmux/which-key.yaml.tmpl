@@ -1,0 +1,214 @@
+# yaml-language-server: $schema=../../.tmux/plugins/tmux-which-key/config.schema.yaml
+command_alias_start_index: 200
+keybindings:
+  prefix_table: Space
+title:
+  style: align=centre,bold
+  prefix: '#S · #W'
+  prefix_style: fg=green,align=centre,bold
+position:
+  x: R
+  y: P
+custom_variables:
+  - name: log_info
+    value: '#[fg=green,italics] [info]#[default]#[italics]'
+macros:
+  - name: reload-config
+    commands:
+      - display "#{log_info} Reloading tmux"
+      - source-file $HOME/.tmux.conf
+{{ if .modules.tmuxSessions.enabled }}{{ includeTemplate "../modules/tmux-sessions/targets/tmux-which-key-macros.yaml.tmpl" . }}{{ end }}
+items:
+  - name: Run command
+    key: space
+    command: command-prompt
+  - name: Last window
+    key: tab
+    command: last-window
+  - separator: true
+{{ if or .modules.tmuxSessions.enabled .modules.agentTimer.enabled }}  - name: +Sessions
+    key: s
+    menu:
+{{ if .modules.tmuxSessions.enabled }}{{ includeTemplate "../modules/tmux-sessions/targets/tmux-which-key-sessions.yaml.tmpl" . }}{{ end }}
+{{ if .modules.agentTimer.enabled }}{{ includeTemplate "../modules/agent-timer/targets/tmux-which-key.yaml.tmpl" . }}{{ end }}
+{{ end }}
+  - name: +Windows
+    key: w
+    menu:
+      - name: Choose
+        key: w
+        command: choose-tree -Zw
+      - name: Last
+        key: tab
+        command: last-window
+      - name: Previous
+        key: h
+        command: previous-window
+      - name: Next
+        key: l
+        command: next-window
+      - separator: true
+{{ if .modules.terminalWindowTypes.enabled }}{{ includeTemplate "../modules/terminal-window-types/targets/tmux-which-key-cycle.yaml.tmpl" . }}{{ end }}
+      - name: +New
+        key: n
+        menu:
+{{ if .modules.terminalWindowTypes.enabled }}{{ includeTemplate "../modules/terminal-window-types/targets/tmux-which-key-new.yaml.tmpl" . }}{{ end }}
+          - name: Shell
+            key: s
+            command: 'new-window -c "#{pane_current_path}"'
+{{ if .modules.tmuxYazi.enabled }}{{ includeTemplate "../modules/tmux-yazi/targets/tmux-which-key-new-window.yaml.tmpl" . }}{{ end }}{{ if .modules.terminalWindowTypes.enabled }}{{ includeTemplate "../modules/terminal-window-types/targets/tmux-which-key-duplicate.yaml.tmpl" . }}{{ end }}
+      - name: Move left
+        key: H
+        command: swap-window -d -t :-1
+        transient: true
+      - name: Move right
+        key: L
+        command: swap-window -d -t :+1
+        transient: true
+      - separator: true
+      - name: +Layout
+        key: e
+        menu:
+          - name: Next
+            key: e
+            command: next-layout
+            transient: true
+          - name: Tiled
+            key: t
+            command: select-layout tiled
+          - name: Even columns
+            key: c
+            command: select-layout even-horizontal
+          - name: Even rows
+            key: r
+            command: select-layout even-vertical
+          - name: Main left
+            key: h
+            command: select-layout main-vertical
+          - name: Main top
+            key: j
+            command: select-layout main-horizontal
+{{ if .modules.terminalWindowTypes.enabled }}{{ includeTemplate "../modules/terminal-window-types/targets/tmux-which-key-rename.yaml.tmpl" . }}{{ end }}
+      - name: Close
+        key: x
+        command: 'confirm-before -p "Close window #W? (y/n)" kill-window'
+  - name: +Panes
+    key: p
+    menu:
+      - name: Choose
+        key: p
+        command: display-panes -d 0
+      - name: Last
+        key: tab
+        command: last-pane
+      - separator: true
+      - name: Left
+        key: h
+        command: select-pane -L
+      - name: Down
+        key: j
+        command: select-pane -D
+      - name: Up
+        key: k
+        command: select-pane -U
+      - name: Right
+        key: l
+        command: select-pane -R
+      - name: Split right
+        key: '/'
+        command: 'split-window -h -c "#{pane_current_path}"'
+      - name: Split down
+        key: '-'
+        command: 'split-window -v -c "#{pane_current_path}"'
+      - name: Zoom
+        key: z
+        command: resize-pane -Z
+      - name: +Resize
+        key: r
+        menu:
+          - name: Left
+            key: h
+            command: resize-pane -L
+            transient: true
+          - name: Down
+            key: j
+            command: resize-pane -D
+            transient: true
+          - name: Up
+            key: k
+            command: resize-pane -U
+            transient: true
+          - name: Right
+            key: l
+            command: resize-pane -R
+            transient: true
+          - name: Left more
+            key: H
+            command: resize-pane -L 10
+            transient: true
+          - name: Down more
+            key: J
+            command: resize-pane -D 10
+            transient: true
+          - name: Up more
+            key: K
+            command: resize-pane -U 10
+            transient: true
+          - name: Right more
+            key: L
+            command: resize-pane -R 10
+            transient: true
+      - name: Swap left
+        key: H
+        command: 'swap-pane -t "{left-of}"'
+      - name: Swap down
+        key: J
+        command: 'swap-pane -t "{down-of}"'
+      - name: Swap up
+        key: K
+        command: 'swap-pane -t "{up-of}"'
+      - name: Swap right
+        key: L
+        command: 'swap-pane -t "{right-of}"'
+      - name: Break into window
+        key: b
+        command: break-pane
+{{ if .modules.tmuxYazi.enabled }}{{ includeTemplate "../modules/tmux-yazi/targets/tmux-which-key-pane.yaml.tmpl" . }}{{ end }}      - name: Close
+        key: x
+        command: 'confirm-before -p "Close pane #P? (y/n)" kill-pane'
+{{ if .modules.tmuxSessions.enabled }}{{ includeTemplate "../modules/tmux-sessions/targets/tmux-which-key-layouts.yaml.tmpl" . }}{{ end }}
+  - name: +Copy
+    key: c
+    menu:
+      - name: Copy / search mode
+        key: c
+        command: copy-mode
+      - name: Search forward
+        key: '/'
+        command: >-
+          copy-mode ; command-prompt -p "Search forward:"
+          { send-keys -X search-forward "%%" }
+      - name: Search backward
+        key: '?'
+        command: >-
+          copy-mode ; command-prompt -p "Search backward:"
+          { send-keys -X search-backward "%%" }
+      - name: Choose buffer
+        key: b
+        command: choose-buffer -Z
+      - name: Paste buffer
+        key: p
+        command: paste-buffer
+  - separator: true
+  - name: Detach
+    key: d
+    command: detach-client
+  - name: Reload config
+    key: r
+    macro: reload-config
+  - name: Show messages
+    key: m
+    command: show-messages
+  - name: Show bindings
+    key: '?'
+    command: list-keys -N

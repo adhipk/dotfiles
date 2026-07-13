@@ -24,7 +24,7 @@ home/
 │   ├── karabiner/                     # Caps Lock Hyper/Escape remap configuration
 │   ├── sesh/                          # Session picker configuration
 │   ├── skhd/                         # skhd helper scripts
-│   ├── yabai/                        # yabai helper scripts
+│   ├── yabai/                        # stable bridges to modular yabai helpers
 │   ├── yazi/                         # Yazi configuration
 │   ├── tmux/                         # tmux configuration
 │   └── zsh/                          # zsh support files
@@ -46,9 +46,9 @@ On this checkout:
 
 `bootstrap.sh` installs Homebrew dependencies from `Brewfile`, including Bun,
 Python, Tuxedo, the Codex CLI, and the desktop app; applies this repository with
-`./install.sh`; installs the declared tmux plugins and command center; builds
-the shortcut guide; creates `~/projects`; and starts the yabai
-and skhd launch services.
+`./install.sh`; clones and pins the declared utility projects below
+`~/projects`; installs the declared tmux plugins and command center; builds the
+shortcut guide; and starts the yabai and skhd launch services.
 
 A real `./install.sh` or `make install` reloads the active tmux server and sends
 Ghostty's configuration-reload signal to every running Ghostty process,
@@ -89,7 +89,7 @@ normal update command is:
 chezmoi update -v
 ```
 
-## Extensions
+## Extensions and External Projects
 
 Declare VSCodium extension IDs, Chrome extension repositories, and reusable
 external project repositories in
@@ -116,11 +116,71 @@ as `externalProjects`. Chezmoi clones each project to its declared path as a
 required executables, runs the declared setup commands when the Git revision
 changes, and reruns setup if declared generated paths are missing.
 
+Five reusable command projects are pinned to immutable Git commits and cloned
+under `~/projects`:
+
+- [`kittentts-cli`](https://github.com/adhipk/kittentts-cli) provides `kit` and
+  `kit-watch`.
+- [`tuxedo-project-todo`](https://github.com/adhipk/tuxedo-project-todo)
+  provides `todo` and ChezMoi's `chezmoi-todo` dispatch command.
+- [`macos-default-apps`](https://github.com/adhipk/macos-default-apps) provides
+  `default-apps`.
+- [`gh-create-repo`](https://github.com/adhipk/gh-create-repo) provides
+  `gh-create-repo`.
+- [`unescape-cli`](https://github.com/adhipk/unescape-cli) provides
+  `unescape-buffer` and `unescape-string`.
+
+Those repositories own command behavior, tests, releases, and standalone
+install/uninstall scripts. The dotfiles modules own only the conditional
+`~/bin` symlinks, catalog metadata, and parent lifecycle tests. Bootstrap does
+not run the utility installers or create a second installed copy. Disabling a
+module or removing the whole dotfiles application unlinks the managed commands
+while preserving the useful project checkouts.
+
 The Lucide Excalidraw Raycast project is expected at:
 
 ```text
 ~/.local/share/raycast-extensions/raycast-lucide-excalidraw
 ```
+
+## Modules and Control Center
+
+Feature slices live under `modules/<id>/` with one manifest, configuration
+contributions, state/removal contract, and focused tests. Most modules own their
+implementation directly; external utility modules instead own only a narrow
+path adapter to a pinned project checkout. Thin templates under `home/` are the
+only parent adapters. `dotfiles-module` is the public lifecycle API for status,
+plans, enable, disable, uninstall, and purge; `dotfiles-uninstall` plans and
+executes backed-up whole-system removal.
+
+The native macOS manager is launched with:
+
+```bash
+dotfiles-control-center
+```
+
+It invokes those existing JSON CLIs with explicit argument arrays. It does not
+edit YAML directly or run a separate web server. Its Modules view previews and
+executes lifecycle plans, Dependencies centralizes status/update checks and
+snapshot previews, and System Uninstall exposes the backup ledger and restore
+command behind exact confirmation.
+
+Dependency declarations remain with Homebrew, ChezMoi, TPM, Yazi, Neovim, and
+VSCodium. `dotfiles-deps` aggregates them centrally; immutable Git pins live in
+standard ChezMoi TOML data and are enforced only through the explicit safe pin
+action:
+
+```bash
+dotfiles-deps status
+dotfiles-deps check
+dotfiles-deps pins check
+dotfiles-deps pins apply
+```
+
+The generated shortcut catalog is checked in at
+[`modules/shortcut-guide/generated/shortcuts.md`](modules/shortcut-guide/generated/shortcuts.md).
+Run `make shortcuts-update` after shortcut changes and `make shortcuts-check`
+in validation.
 
 ## One-Time Setup
 
@@ -147,9 +207,10 @@ and removes the former Todoist-specific task prompt.
 ## Canonical Tasks
 
 Todo.txt is the task system of record. Each project or tmux session working
-directory owns its `./todo.txt` and `./done.txt`. The repo-owned `todo` command
-resolves those paths from the caller's current directory and serializes agent
-CLI operations; running it without arguments opens Tuxedo there.
+directory owns its `./todo.txt` and `./done.txt`. The managed `todo` command
+from the pinned `tuxedo-project-todo` checkout resolves those paths from the
+caller's current directory and serializes agent CLI operations; running it
+without arguments opens Tuxedo there.
 
 ```bash
 todo
@@ -181,6 +242,10 @@ make apply
 make apply-debug
 make watch
 make reload
+dotfiles-control-center
+dotfiles-module status
+dotfiles-deps status
+shortcut-catalog check
 man-me
 man-me hotkeys
 default-apps
@@ -192,10 +257,11 @@ default-apps --help
 ```
 
 `man-me` prints a generated, categorized reference from `man-me:` comments in
-the command and helper sources; pass a query such as `man-me hotkeys` to search
-across related commands, paths, usage, and tags. `default-apps` prints macOS
-handlers and changes extension or URL-scheme defaults. The app argument may be
-an application name, application path, or bundle ID.
+command sources and parent-owned adapter catalogs; pass a query such as
+`man-me hotkeys` to search across related commands, paths, usage, and tags.
+`default-apps` prints macOS handlers and changes extension or URL-scheme
+defaults. The app argument may be an application name, application path, or
+bundle ID.
 
 ## Keyboard Shortcuts
 
@@ -208,25 +274,26 @@ an application name, application path, or bundle ID.
 - Fn is reserved for transient scratchpads; native macOS screenshot chords remain on `cmd + shift + 3/4`
 - `alt + n`: create and focus a space, moving the focused non-scratchpad window there only when the current space has another non-scratchpad window
 - `alt + backtick`: focus non-scratchpad Ghostty windows, skipping task windows titled like `nvim`, `vim`, `codex`, `claude`, or Codex's `Action Required` status
-- `alt + 1..5`: focus browser, Codex, editor, Teams, or Slack
+- `alt + 1..4`: focus browser, editor, Teams, or Slack
 - normal Ghostty windows use a transparent background and keep their tmux-colored JankyBorder; scratchpads are borderless, opaque black panels with balanced terminal padding, rounded corners, and a native shadow
-- ordinary new tmux sessions start with `terminal` at `0`, `codex` at `1`, `nvim` at `2`, and `tuxedo` at `3`; command sessions and managed `hs-*` sessions are left unchanged
-- `ctrl + 0/1/2/3` in tmux cycles windows by `terminal`/`codex`/`nvim`/`tuxedo` type; `ctrl + shift + 0/1/2/3` creates that type in the current pane's directory and switches to it, while `ctrl + 4..9` remains direct index switching
+- ordinary new tmux sessions start with `terminal` at `0`, `codex` at `1`, `nvim` at `2`, `tuxedo` at `3`, and a lazy `awrit` shell at `4`; only explicit Awrit create/duplicate actions hand off to a direct Ghostty graphics session, while command sessions and managed `hs-*` sessions are left unchanged
+- `ctrl + 0/1/2/3` in tmux cycles windows by `terminal`/`codex`/`nvim`/`tuxedo` type; `ctrl + shift + 0/1/2/3` creates that type in the current pane's directory and switches to it. `ctrl + 4..9` remains direct index switching, so `ctrl + 4` selects canonical Awrit; typed Awrit cycle/create actions live in the command center
 - `ctrl + a`, then `space`, opens the repo-owned command center for session/window/pane lifecycle, saved state, and React-like workspace layouts
 - `ctrl + a`, then `L`, and the command center's Sessions > Last action use tmux's per-client history; closing a session keeps the client inside tmux and selects a surviving session instead of detaching
 - `tmux-workspace open project --root DIR` builds the managed `.tmux.tsx` project layout; applying it again preserves running panes, while `repair --yes` rebuilds only drifted managed windows and `--adopt` is required before taking over a same-named unmanaged session
-- the minimal tmux bar stays at the bottom and centers `~ · codex · nvim · tuxedo`; its left label substitutes the active folder for generated numeric sessions and omits redundant `session · folder` pairs; the foreground-only active label and normal focused Ghostty borders share each session's accent, while scratchpads suppress their border; `Ctrl-a ,` renames a tab and starts Codex renames from its pane title
-- `right cmd + d` or Command Center > Windows > Duplicate creates another typed terminal/Codex/Neovim/Tuxedo window in the active pane's directory, gives it a readable numeric suffix, and keeps type cycling intact
-- `fn + comma`: open the black terminal scratchpad and switch to the `dotfiles` tmux session with `terminal`, `codex`, `nvim`, and `tuxedo` windows
-- `fn + 1`: open the same black terminal scratchpad and switch to the `projects` tmux session with `terminal`, `codex`, `nvim`, and `tuxedo` windows
+- the minimal tmux bar stays at the bottom and centers `~ · codex · nvim · tuxedo · awrit`; its left label substitutes the active folder for generated numeric sessions and omits redundant `session · folder` pairs; the foreground-only active label and normal focused Ghostty borders share each session's accent, while scratchpads suppress their border; `Ctrl-a ,` renames a tab and starts Codex renames from its pane title
+- `right cmd + d` or Command Center > Windows > Duplicate creates another typed terminal/Codex/Neovim/Tuxedo/Awrit window in the active pane's directory, gives it a readable numeric suffix, and keeps type cycling intact
+- `fn + comma`: open the black terminal scratchpad and switch to the `dotfiles` tmux session with `terminal`, `codex`, `nvim`, `tuxedo`, and `awrit` windows
+- `fn + 1`: open the same black terminal scratchpad and switch to the `projects` tmux session with `terminal`, `codex`, `nvim`, `tuxedo`, and `awrit` windows
 - `option + shift + arrows` or `option + shift + h/j/k/u` resizes the current macOS window; `option + shift + [` / `]` moves it between displays
-- ProjectDeck and its system-wide project-context bindings are dormant; `make build-projectdeck` remains available for explicit experiments
+- The disabled Projects module owns ProjectDeck and the project-context CLI; `modules/projects/bin/projects` and `make build-projectdeck` remain available for explicit experiments without installing global commands
 - broader tmux lifecycle actions stay discoverable under `ctrl + a` and `ctrl + a`, then `space`, rather than occupying Hyper
 - shell and tmux session selectors now open sesh's built-in picker instead of maintaining separate `fzf` pipelines; chezmoi installs the shared picker configuration at `~/.config/sesh/sesh.toml`
+- `modules/tmux-sessions` owns those selectors, declarative layouts, per-client session lifecycle, and Resurrect/Continuum persistence as one disable-safe and physically removable feature slice
 - `alt + shift + backtick`: create a new Ghostty window on the focused space
 - `alt + r`: restart yabai and skhd
 - `alt + /`: open the interactive shortcut guide without activating away from the current app; press a bare key to find every shortcut ending in it. Use `Option+Up/Down` to browse, `Option+Left/Right` for categories, `Option+F/P` for text/key search, `Option+C` to clear, and `Esc` to close
 
 Experimental hyper bindings, including hyperspace session slots and the
 Spotlight scratchpad shortcut, are parked in
-`home/dot_config/skhd/modules/hyperspace.skhdrc` and are not loaded by default.
+`modules/hyperspace/targets/hyperspace.skhdrc` and are not loaded by default.

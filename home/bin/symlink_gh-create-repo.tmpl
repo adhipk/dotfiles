@@ -1,0 +1,3 @@
+{{- if .modules.ghCreateRepo.enabled -}}
+{{ includeTemplate "../../modules/gh-create-repo/targets/gh-create-repo-path.tmpl" . }}
+{{- end -}}

@@ -1,0 +1,6 @@
+# The built-in display has an odd-height work area. Add its one-pixel tiling
+# remainder to the reserved top edge instead of leaving it between windows.
+yabai -m query --spaces --display 1 | jq -r '.[].index' | while read -r space; do
+  yabai -m config --space "$space" top_padding "$((BORDER_RESERVE + 1))"
+  yabai -m config --space "$space" bottom_padding "$BORDER_RESERVE"
+done

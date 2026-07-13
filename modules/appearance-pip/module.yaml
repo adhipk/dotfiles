@@ -1,0 +1,67 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: appearance-pip
+version: 1.0.0
+description: Provides tiled-window spacing, session-colored JankyBorders with scratchpad suppression, and managed Picture-in-Picture windows.
+dataKey: modules.appearancePip
+distribution:
+  standalone: true
+  platform: macos
+requires:
+  executables:
+    - bash
+    - borders
+    - jq
+    - tmux
+    - yabai
+state:
+  preserved: []
+  ephemeral: []
+commands:
+  - name: tmux-border-accent
+    source: bin/tmux-border-accent
+    target: ~/bin/tmux-border-accent
+    bridge: home/bin/executable_tmux-border-accent.tmpl
+  - name: tile-pip-window
+    source: bin/tile-pip-window
+    target: ~/.config/yabai/tile-pip-window
+    bridge: home/dot_config/yabai/executable_tile-pip-window.tmpl
+targets:
+  - service: command
+    source: bin/tmux-border-accent
+    destination: ~/bin/tmux-border-accent
+    bridge: home/bin/executable_tmux-border-accent.tmpl
+    ownership: exclusive
+  - service: yabai-helper
+    source: bin/tile-pip-window
+    destination: ~/.config/yabai/tile-pip-window
+    bridge: home/dot_config/yabai/executable_tile-pip-window.tmpl
+    ownership: exclusive
+  - service: yabai
+    source: targets/yabairc-signals.tmpl
+    destination: ~/.yabairc
+    bridge: home/dot_yabairc.tmpl
+    ownership: contribution
+  - service: yabai
+    source: targets/yabairc-style.tmpl
+    destination: ~/.yabairc
+    bridge: home/dot_yabairc.tmpl
+    ownership: contribution
+  - service: yabai
+    source: targets/yabairc-display-padding.tmpl
+    destination: ~/.yabairc
+    bridge: home/dot_yabairc.tmpl
+    ownership: contribution
+  - service: yabai
+    source: targets/yabairc-launch.tmpl
+    destination: ~/.yabairc
+    bridge: home/dot_yabairc.tmpl
+    ownership: contribution
+  - service: tmux
+    source: targets/tmux.conf.tmpl
+    destination: ~/.tmux.conf
+    bridge: home/dot_tmux.conf.tmpl
+    ownership: contribution
+tests:
+  - tests/test_module.sh
+  - tests/test_tmux_border_accent.sh

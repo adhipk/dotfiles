@@ -105,7 +105,7 @@ if [ -x "$DOTFILES_DIR/install.sh" ]; then
     fi
 
     # Check the source state declares core configs.
-    if [ -f "$DOTFILES_DIR/home/dot_config/skhd/executable_focus_app.sh" ] && [ -f "$DOTFILES_DIR/home/dot_config/yabai/executable_close_empty_spaces.sh" ]; then
+    if [ -f "$DOTFILES_DIR/modules/app-focus/bin/focus_app.sh" ] && [ -f "$DOTFILES_DIR/modules/space-display/bin/close-empty-spaces" ]; then
         echo "  ✓ source state declares core config directories"
         ((PASSED++))
     else
@@ -209,7 +209,7 @@ fi
 
 echo ""
 echo "Testing no legacy manual border integration remains..."
-if ! grep -R "config/borders\\|mark_window.sh\\|update_border.sh" "$DOTFILES_DIR/install.sh" "$DOTFILES_DIR/home/dot_skhdrc" "$DOTFILES_DIR/home/dot_yabairc" "$DOTFILES_DIR/README.md" > /dev/null 2>&1; then
+if ! grep -R "config/borders\\|mark_window.sh\\|update_border.sh" "$DOTFILES_DIR/install.sh" "$DOTFILES_DIR/home/dot_skhdrc.tmpl" "$DOTFILES_DIR/home/dot_yabairc.tmpl" "$DOTFILES_DIR/README.md" > /dev/null 2>&1; then
     echo "  ✓ Legacy window-ID border integration stays removed"
     ((PASSED++))
 else

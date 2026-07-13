@@ -1,0 +1,40 @@
+      - name: Choose
+        key: s
+        command: 'display-popup -EE -w 70% -h 70% -d "#{pane_current_path}" -T "sesh" "$HOME/bin/tmux-sessionizer-zoxide"'
+      - name: Last
+        key: tab
+        command: switch-client -l
+      - name: Previous
+        key: h
+        command: switch-client -p
+      - name: Next
+        key: l
+        command: switch-client -n
+      - separator: true
+      - name: New named session
+        key: n
+        command: >-
+          command-prompt -p "New session:"
+          { new-session -A -s "%%" -c "#{pane_current_path}" }
+      - name: Rename contextually
+        key: r
+        command: >-
+          command-prompt -l
+          -p "Rename #S · #{b:pane_current_path}:"
+          -I "#{?#{m/r:^[0-9]+$,#S},#{s|[-_]+| |:#{b:pane_current_path}},#S}"
+          { rename-session -- "%%%" }
+      - name: Close
+        key: x
+        command: 'confirm-before -p "Close session #S? (y/n)" "kill-session -t #{session_id}"'
+      - separator: true
+      - name: Save all state
+        key: S
+        macro: save-all
+      - name: Restore all state
+        key: R
+        macro: restore-all
+      - name: Close detached layouts
+        key: X
+        command: >-
+          confirm-before -p "Close every detached managed layout? (y/n)"
+          { run-shell "$HOME/bin/tmux-workspace clean --yes" }

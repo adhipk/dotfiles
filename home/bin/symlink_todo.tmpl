@@ -1,0 +1,3 @@
+{{- if .modules.todo.enabled -}}
+{{ includeTemplate "../../modules/todo/targets/todo-path.tmpl" . }}
+{{- end -}}

@@ -1,0 +1,109 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: tmux-sessions
+version: 1.0.1
+description: Provides sesh-backed session selection, declarative tmux workspaces, and durable workspace persistence.
+dataKey: modules.tmuxSessions
+distribution:
+  standalone: true
+requires:
+  executables:
+    - bash
+    - bun
+    - fzf
+    - sesh
+    - tmux
+    - zoxide
+state:
+  preserved:
+    - ~/.local/state/tmux-workspace
+    - ~/.tmux/resurrect
+  ephemeral: []
+commands:
+  - name: tmux-session-picker
+    source: bin/tmux-session-picker
+    target: ~/bin/tmux-session-picker
+  - name: tmux-sessionizer
+    source: bin/tmux-sessionizer
+    target: ~/bin/tmux-sessionizer
+  - name: tmux-sessionizer-zoxide
+    source: bin/tmux-sessionizer-zoxide
+    target: ~/bin/tmux-sessionizer-zoxide
+  - name: tmux-workspace
+    source: bin/tmux-workspace
+    target: ~/bin/tmux-workspace
+targets:
+  - service: command
+    source: bin/tmux-session-picker
+    destination: ~/bin/tmux-session-picker
+    bridge: home/bin/executable_tmux-session-picker.tmpl
+    ownership: exclusive
+  - service: command
+    source: bin/tmux-sessionizer
+    destination: ~/bin/tmux-sessionizer
+    bridge: home/bin/executable_tmux-sessionizer.tmpl
+    ownership: exclusive
+  - service: command
+    source: bin/tmux-sessionizer-zoxide
+    destination: ~/bin/tmux-sessionizer-zoxide
+    bridge: home/bin/executable_tmux-sessionizer-zoxide.tmpl
+    ownership: exclusive
+  - service: command
+    source: bin/tmux-workspace
+    destination: ~/bin/tmux-workspace
+    bridge: home/bin/executable_tmux-workspace.tmpl
+    ownership: exclusive
+  - service: sesh
+    source: config/sesh.toml
+    destination: ~/.config/sesh/sesh.toml
+    bridge: home/dot_config/sesh/sesh.toml.tmpl
+    ownership: exclusive
+  - service: zsh
+    source: targets/zshrc
+    destination: ~/.config/zsh/tmux-sessions.zsh
+    bridge: home/dot_config/zsh/tmux-sessions.zsh.tmpl
+    ownership: exclusive
+  - service: tmux-layout
+    source: layouts/globals.d.ts
+    destination: ~/.config/tmux/layouts/globals.d.ts
+    bridge: home/dot_config/tmux/layouts/globals.d.ts.tmpl
+    ownership: exclusive
+  - service: tmux-layout
+    source: layouts/project.tmux.tsx
+    destination: ~/.config/tmux/layouts/project.tmux.tsx
+    bridge: home/dot_config/tmux/layouts/project.tmux.tsx.tmpl
+    ownership: exclusive
+  - service: tmux-layout
+    source: layouts/tsconfig.json
+    destination: ~/.config/tmux/layouts/tsconfig.json
+    bridge: home/dot_config/tmux/layouts/tsconfig.json.tmpl
+    ownership: exclusive
+  - service: tmux
+    source: targets/tmux.conf.tmpl
+    destination: ~/.tmux.conf
+    bridge: home/dot_tmux.conf.tmpl
+    ownership: contribution
+  - service: tmux-persistence
+    source: targets/tmux-persistence.conf.tmpl
+    destination: ~/.tmux.conf
+    bridge: home/dot_tmux.conf.tmpl
+    ownership: contribution
+  - service: tmux-which-key
+    source: targets/tmux-which-key-macros.yaml.tmpl
+    destination: ~/.config/tmux/which-key.yaml
+    bridge: home/dot_config/tmux/which-key.yaml.tmpl
+    ownership: contribution
+  - service: tmux-which-key
+    source: targets/tmux-which-key-sessions.yaml.tmpl
+    destination: ~/.config/tmux/which-key.yaml
+    bridge: home/dot_config/tmux/which-key.yaml.tmpl
+    ownership: contribution
+  - service: tmux-which-key
+    source: targets/tmux-which-key-layouts.yaml.tmpl
+    destination: ~/.config/tmux/which-key.yaml
+    bridge: home/dot_config/tmux/which-key.yaml.tmpl
+    ownership: contribution
+tests:
+  - tests/test_module.sh
+  - tests/test_tmux_workspace.sh
+  - tests/test_tmux_persistence.sh

@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-# man-me: name=projects-pick
-# man-me: category=Project Spaces
-# man-me: usage=projects-pick
-# man-me: description=Shortcut wrapper for projects pick.
-# man-me: tags=project projects projectdeck picker hyper hotkeys skhd yabai
-exec "$HOME/.config/yabai/projects" pick "$@"

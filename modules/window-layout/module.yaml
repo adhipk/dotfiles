@@ -1,0 +1,60 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: window-layout
+version: 1.0.0
+description: Provides yabai window cycling, snapping, swapping, resizing, tiling, stacking, closing, minimizing, and remembered floating preferences.
+dataKey: modules.windowLayout
+distribution:
+  standalone: true
+  platform: macos
+requires:
+  executables:
+    - bash
+    - bc
+    - jq
+    - yabai
+    - yq
+optional:
+  executables:
+    - terminal-notifier
+state:
+  preserved:
+    - ~/.config/yabai/floating-windows.json
+  ephemeral: []
+commands:
+  - name: snap_window.sh
+    source: bin/snap_window.sh
+    target: ~/.config/skhd/snap_window.sh
+    bridge: home/dot_config/skhd/executable_snap_window.sh.tmpl
+  - name: float-prefs
+    source: bin/float-prefs
+    target: ~/.config/yabai/float-prefs
+    bridge: home/dot_config/yabai/executable_float-prefs.tmpl
+targets:
+  - service: skhd-helper
+    source: bin/snap_window.sh
+    destination: ~/.config/skhd/snap_window.sh
+    bridge: home/dot_config/skhd/executable_snap_window.sh.tmpl
+    ownership: exclusive
+  - service: yabai-helper
+    source: bin/float-prefs
+    destination: ~/.config/yabai/float-prefs
+    bridge: home/dot_config/yabai/executable_float-prefs.tmpl
+    ownership: exclusive
+  - service: skhd
+    source: targets/skhdrc.tmpl
+    destination: ~/.skhdrc
+    bridge: home/dot_skhdrc.tmpl
+    ownership: contribution
+  - service: yabai
+    source: targets/yabairc.tmpl
+    destination: ~/.yabairc
+    bridge: home/dot_yabairc.tmpl
+    ownership: contribution
+  - service: yabai
+    source: targets/yabairc-restore.tmpl
+    destination: ~/.yabairc
+    bridge: home/dot_yabairc.tmpl
+    ownership: contribution
+tests:
+  - tests/test_module.sh

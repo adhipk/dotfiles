@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "offline": false,
+  "summary": {
+    "total": 0,
+    "missing": 0,
+    "unpinned": 0,
+    "outdated": 0,
+    "drifted": 0,
+    "managerErrors": 1,
+    "missingLockIds": 0,
+    "staleLockIds": 0
+  },
+  "managerErrors": ["brew is unavailable"],
+  "lockDrift": {
+    "missingIds": [],
+    "staleIds": []
+  },
+  "dependencies": []
+}

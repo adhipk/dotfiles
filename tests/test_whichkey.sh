@@ -5,6 +5,8 @@ DOTFILES_DIR="$(dirname "$TEST_DIR")"
 TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/whichkey-test.XXXXXX")"
 APP="$TEMP_DIR/whichkey"
 JSON="$TEMP_DIR/shortcuts.json"
+SKHDRC="$TEMP_DIR/skhdrc"
+SWIFT_SOURCE="$DOTFILES_DIR/modules/shortcut-guide/app/WhichKey.swift"
 
 PASSED=0
 FAILED=0
@@ -71,20 +73,26 @@ else
     fail "Embedded parser and search self-test passes"
 fi
 
-if grep -q 'NSApp.activate' "$DOTFILES_DIR/scripts/whichkey/WhichKey.swift"; then
+if grep -q 'NSApp.activate' "$SWIFT_SOURCE"; then
     fail "Shortcut guide does not activate away from the current app"
 else
     pass "Shortcut guide does not activate away from the current app"
 fi
 
-if grep -q 'case 125:' "$DOTFILES_DIR/scripts/whichkey/WhichKey.swift" &&
-   grep -q 'case 123:' "$DOTFILES_DIR/scripts/whichkey/WhichKey.swift"; then
+if grep -q 'case 125:' "$SWIFT_SOURCE" &&
+   grep -q 'case 123:' "$SWIFT_SOURCE"; then
     pass "Shortcut guide navigation stays on the Option layer"
 else
     fail "Shortcut guide navigation stays on the Option layer"
 fi
 
-if "$APP" --dump-json "$DOTFILES_DIR/home/dot_skhdrc" >"$JSON"; then
+if chezmoi -S "$DOTFILES_DIR" cat "$HOME/.skhdrc" >"$SKHDRC"; then
+    pass "Live skhd source renders through module composition"
+else
+    fail "Live skhd source renders through module composition"
+fi
+
+if "$APP" --dump-json "$SKHDRC" >"$JSON"; then
     pass "Live skhd source parses to JSON"
 else
     fail "Live skhd source parses to JSON"
@@ -105,7 +113,7 @@ assert_jq 'all(.[]; (.rawKey | contains("ctrl + alt + cmd") | not))' "Parser exp
 assert_jq 'all(.[]; (.command | contains("/projects ") | not))' "Parser exposes no project-context commands"
 assert_jq 'any(.[]; .rawKey == "alt + shift - h" and .title == "Grow window left")' "Parser includes Option+Shift window resizing"
 assert_jq 'any(.[]; .displayKey == "⌥ /" and .title == "Open shortcut guide")' "Parser understands the shortcut-guide mode trigger"
-assert_jq 'any(.[]; .displayKey == "⌥ ⇧ [" and (.command | contains("window --focus")))' "Parser joins multiline display commands"
+assert_jq 'any(.[]; .displayKey == "⌥ ⇧ [" and .command == "~/.config/yabai/display-move prev" and .owner == "space-display")' "Parser captures the module-owned previous-display command"
 assert_jq 'all(.[]; (.title | contains("yabai -m") | not) and (.title | contains("/.config/") | not))' "Shortcut rows never expose raw shell commands as titles"
 assert_jq '([.[].category] | unique | length) == 4' "Only active shortcut categories are populated"
 

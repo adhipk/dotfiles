@@ -1,0 +1,36 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: kit-tts
+version: 1.1.0
+description: Conditional adapters for the independently distributed kittentts-cli commands.
+dataKey: modules.kitTts
+distribution:
+  standalone: false
+requires:
+  executables:
+    - bash
+    - fswatch
+    - kit
+    - kit-watch
+    - uv
+state:
+  preserved: []
+  ephemeral: []
+commands:
+  - name: kit
+    source: targets/kit-path.tmpl
+    target: ~/bin/kit
+  - name: kit-watch
+    source: targets/kit-watch-path.tmpl
+    target: ~/bin/kit-watch
+targets:
+  - source: targets/kit-path.tmpl
+    destination: ~/bin/kit
+    bridge: home/bin/symlink_kit.tmpl
+    ownership: exclusive
+  - source: targets/kit-watch-path.tmpl
+    destination: ~/bin/kit-watch
+    bridge: home/bin/symlink_kit-watch.tmpl
+    ownership: exclusive
+tests:
+  - tests/test_module.sh
