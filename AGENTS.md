@@ -42,7 +42,7 @@ Your job is to maintain my dotfile configurations, this includes keyboard shortc
 
 ## Terminal Defaults
 - `home/dot_config/skhd/executable_open_terminal_window.sh` defaults to Ghostty.
-- Ordinary new tmux sessions use the shared `terminal` `0`, `codex` `1`, `nvim` `2`, `tuxedo` `3`, `awrit` `4` template. The canonical Awrit slot is a lazy typed shell; only an explicit Awrit create/duplicate action launches its direct Ghostty graphics session through the pinned `~/awrit` checkout. Sessions created with an explicit command, `hs-*` sessions, and sessions with `DOTFILES_TMUX_TEMPLATE=skip` are left alone.
+- Ordinary new tmux sessions use the shared `terminal` `0`, `codex` `1`, `nvim` `2`, `tuxedo` `3`, `awrit` `4` template. The canonical Awrit slot is a lazy typed shell; only an explicit Awrit create/duplicate action starts its native tmux renderer through the pinned `~/awrit` checkout. Sessions created with an explicit command, `hs-*` sessions, and sessions with `DOTFILES_TMUX_TEMPLATE=skip` are left alone.
 - In tmux, `Ctrl+0/1/2/3` cycles windows by `terminal`/`codex`/`nvim`/`tuxedo` type; `Ctrl+Shift+0/1/2/3` creates that type in the current pane's directory and switches to it. `Ctrl+4..9` still selects a window by index, so `Ctrl+4` selects canonical Awrit; the command center exposes typed Awrit cycle/create actions without taking another global chord.
 - `Ctrl-a s` and the shell/tmux session selectors use sesh's built-in picker rather than a hand-rolled `fzf` pipeline; its checked-in configuration is installed at `~/.config/sesh/sesh.toml`.
 - `Ctrl-a L` and the command center's Sessions > Last action use tmux's per-client history; closing a session keeps its clients inside tmux and moves them to a surviving session instead of detaching.

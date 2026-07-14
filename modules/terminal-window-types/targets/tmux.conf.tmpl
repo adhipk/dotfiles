@@ -3,6 +3,13 @@
 # DOTFILES_TMUX_TEMPLATE=skip opt-outs stay untouched.
 set-hook -g after-new-session[50] 'run-shell "$HOME/bin/tmux-session-template auto #{q:session_name}"'
 
+# Awrit's native renderer sends Kitty graphics through tmux passthrough while
+# keeping the browser inside its typed pane. `on` is the safe global baseline;
+# the Awrit launcher temporarily promotes only its pane while the renderer
+# suppresses hidden output and restores the inherited value on exit. Mouse
+# input is enabled by the shared tmux configuration.
+set -gq allow-passthrough on
+
 bind-key -N "New terminal window" c run-shell "$HOME/bin/tmux-session-template new '#{session_id}' terminal '#{pane_id}'"
 
 # skhd translates Right Command+D/R in Ghostty to F16/F17. Terminal protocols

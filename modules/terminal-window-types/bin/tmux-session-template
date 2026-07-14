@@ -349,9 +349,9 @@ ensure_standard_tmux_windows() {
   ensure_standard_tmux_window "$session" "$directory" codex 1 codex
   ensure_standard_tmux_window "$session" "$directory" nvim 2 nvim
   ensure_standard_tmux_window "$session" "$directory" tuxedo 3 todo
-  # Keep the canonical slot lazy. The public Awrit launcher hands tmux calls to
-  # a direct Ghostty surface, so auto-running it here would open a browser for
-  # every new session and scratchpad. Explicit create/duplicate still launches.
+  # Keep the canonical slot lazy so ordinary sessions and scratchpads never
+  # start a browser. Explicit create/duplicate actions launch Awrit's native
+  # renderer inside the typed pane.
   ensure_standard_tmux_window "$session" "$directory" awrit 4 ""
 }
 

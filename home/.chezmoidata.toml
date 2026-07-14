@@ -57,7 +57,7 @@ revision = "f6704782dd514c5c72e5d03a2c651a31523f167c"
 id = "chezmoi-git:awrit"
 manager = "chezmoi"
 path = "awrit"
-revision = "5136e4987b6b54b2ac7c5220755ecb6ade503c0c"
+revision = "c692a737bfbfa8c647e03d0a1ab904247ce28ac5"
 
 [[gitPins]]
 id = "chezmoi-git:projects/kittentts-cli"

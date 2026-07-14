@@ -13,13 +13,16 @@ This module owns the standard tmux window-type workflow as one vertical slice:
 
 The canonical Awrit slot is a lazy typed shell: creating ordinary sessions or
 scratchpads never launches a graphical browser. Explicit command-center
-create/duplicate actions run `awrit`, whose launcher hands off to direct
-Ghostty only for that explicit invocation. Awrit is intentionally the first type without a new global shortcut. `Ctrl+4`
+create/duplicate actions run `awrit` in that pane through Awrit's native tmux
+renderer. Awrit is intentionally the first type without a new global shortcut. `Ctrl+4`
 through `Ctrl+9` keep their direct-index contract, so `Ctrl+4` selects the
 canonical Awrit slot while the command center's `a` action or the public CLI
-cycles renamed/duplicated Awrit windows. The installed `awrit` launcher owns
-its tmux-to-direct-Ghostty handoff because the browser requires Kitty graphics
-and keyboard protocols that tmux does not forward.
+cycles renamed/duplicated Awrit windows. The module enables tmux graphics
+passthrough for Awrit while its launcher temporarily promotes only the browser
+pane to hidden passthrough and restores that pane's inherited or explicit value
+on exit. Other panes retain the safer visible-only policy, the existing mouse
+policy, and the narrow Shift+Enter adapter; broad tmux extended-key rewriting
+remains disabled.
 
 Chezmoi keeps the public command at `~/bin/tmux-session-template` and mounts the
 module-owned fragments into tmux, Ghostty, skhd, and tmux-which-key. Set

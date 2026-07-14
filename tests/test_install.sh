@@ -272,6 +272,7 @@ assert_executable "$COLD_HOME/bin/setup-yabai-sa" "clean apply installs the yaba
 assert_contains "$COLD_HOME/.tmux.conf" "tmux-session-template cycle" "clean apply installs typed tmux bindings"
 assert_contains "$COLD_HOME/.tmux.conf" "C-3.*tmux-session-template cycle.*tuxedo" "clean apply installs Tuxedo type cycling"
 assert_contains "$COLD_HOME/.tmux.conf" "C-S-3.*tmux-session-template new.*tuxedo" "clean apply installs Tuxedo type creation"
+assert_contains "$COLD_HOME/.tmux.conf" "set -gq allow-passthrough on" "clean apply enables visible-pane Awrit graphics passthrough"
 assert_contains "$COLD_HOME/bin/tmux-session-template" "ensure_standard_tmux_window.*tuxedo 3 todo" "clean apply installs the canonical Tuxedo window"
 assert_contains "$COLD_HOME/bin/tmux-session-template" 'ensure_standard_tmux_window.*awrit 4 ""' "clean apply installs a lazy canonical Awrit window"
 assert_contains "$COLD_HOME/bin/tmux-session-template" "duplicate_window_type" "clean apply installs typed tmux duplication"

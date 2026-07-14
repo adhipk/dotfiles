@@ -276,7 +276,7 @@ bundle ID.
 - `alt + backtick`: focus non-scratchpad Ghostty windows, skipping task windows titled like `nvim`, `vim`, `codex`, `claude`, or Codex's `Action Required` status
 - `alt + 1..4`: focus browser, editor, Teams, or Slack
 - normal Ghostty windows use a transparent background and keep their tmux-colored JankyBorder; scratchpads are borderless, opaque black panels with balanced terminal padding, rounded corners, and a native shadow
-- ordinary new tmux sessions start with `terminal` at `0`, `codex` at `1`, `nvim` at `2`, `tuxedo` at `3`, and a lazy `awrit` shell at `4`; only explicit Awrit create/duplicate actions hand off to a direct Ghostty graphics session, while command sessions and managed `hs-*` sessions are left unchanged
+- ordinary new tmux sessions start with `terminal` at `0`, `codex` at `1`, `nvim` at `2`, `tuxedo` at `3`, and a lazy `awrit` shell at `4`; only explicit Awrit create/duplicate actions start its native tmux renderer in that pane, while command sessions and managed `hs-*` sessions are left unchanged
 - `ctrl + 0/1/2/3` in tmux cycles windows by `terminal`/`codex`/`nvim`/`tuxedo` type; `ctrl + shift + 0/1/2/3` creates that type in the current pane's directory and switches to it. `ctrl + 4..9` remains direct index switching, so `ctrl + 4` selects canonical Awrit; typed Awrit cycle/create actions live in the command center
 - `ctrl + a`, then `space`, opens the repo-owned command center for session/window/pane lifecycle, saved state, and React-like workspace layouts
 - `ctrl + a`, then `L`, and the command center's Sessions > Last action use tmux's per-client history; closing a session keeps the client inside tmux and selects a surviving session instead of detaching

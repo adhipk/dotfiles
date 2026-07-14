@@ -49,7 +49,7 @@ Local Git plugins use standard TOML array tables in `config/sources.toml`:
 [[local_git_plugins]]
 id = "awrit"
 path = "awrit"
-commit = "5136e4987b6b54b2ac7c5220755ecb6ade503c0c"
+commit = "c692a737bfbfa8c647e03d0a1ab904247ce28ac5"
 provides = ["awrit"]
 ```
 
