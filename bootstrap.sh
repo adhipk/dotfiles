@@ -10,6 +10,16 @@ DOTFILES_DIR="${DOTFILES_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 BREWFILE="$DOTFILES_DIR/Brewfile"
 export DOTFILES_DIR
 
+activate_homebrew_path() {
+  local brew_prefix
+
+  command -v brew >/dev/null 2>&1 || return 0
+  brew_prefix=$(brew --prefix 2>/dev/null) || return 0
+  [[ -d "$brew_prefix/bin" ]] || return 0
+  export PATH="$brew_prefix/bin:$PATH"
+  hash -r
+}
+
 start_desktop_service() {
   local service="$1"
 
@@ -38,9 +48,12 @@ if ! command -v brew >/dev/null 2>&1; then
   fi
 fi
 
+activate_homebrew_path
+
 if [ -f "$BREWFILE" ]; then
   echo "Installing dependencies from Brewfile..."
   brew bundle --file "$BREWFILE"
+  activate_homebrew_path
 else
   echo "Brewfile not found at $BREWFILE" >&2
   exit 1

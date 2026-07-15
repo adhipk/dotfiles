@@ -12,6 +12,28 @@ CHEZMOI_DESTINATION="${HOME:?HOME is not set}"
 MODULE_CONTROLLER="$DOTFILES_DIR/modules/module-lifecycle/bin/dotfiles-module"
 DEPENDENCY_CONTROLLER="${DOTFILES_DEPS_BIN:-$DOTFILES_DIR/modules/dependencies/bin/dotfiles-deps}"
 
+activate_homebrew_path() {
+    local brew_prefix
+
+    command -v brew >/dev/null 2>&1 || return 0
+    brew_prefix=$(brew --prefix 2>/dev/null) || return 0
+    [[ -d "$brew_prefix/bin" ]] || return 0
+    export PATH="$brew_prefix/bin:$PATH"
+    hash -r
+}
+
+require_dependency_python() {
+    [[ "$DEPENDENCY_CONTROLLER" == "$DOTFILES_DIR/modules/dependencies/bin/dotfiles-deps" ]] || return 0
+
+    if ! command -v python3 >/dev/null 2>&1 \
+        || ! python3 -c 'import tomllib' >/dev/null 2>&1; then
+        echo "A Python 3.11+ runtime with tomllib is required. Run ./bootstrap.sh or brew install python." >&2
+        return 1
+    fi
+}
+
+activate_homebrew_path
+
 if ! command -v chezmoi >/dev/null 2>&1; then
     echo "chezmoi is not installed. Run ./bootstrap.sh or brew install chezmoi." >&2
     exit 1
@@ -142,6 +164,9 @@ reload_ghostty_config() {
 echo "[dotfiles] repository:  $DOTFILES_DIR"
 echo "[dotfiles] source:      $CHEZMOI_SOURCE_ROOT"
 echo "[dotfiles] destination: $CHEZMOI_DESTINATION"
+if [[ "$is_dry_run" == false ]]; then
+    require_dependency_python
+fi
 validate_modules
 echo "[dotfiles] pending changes before apply:"
 show_status
