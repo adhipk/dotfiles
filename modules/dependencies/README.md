@@ -47,10 +47,10 @@ Local Git plugins use standard TOML array tables in `config/sources.toml`:
 
 ```toml
 [[local_git_plugins]]
-id = "awrit"
-path = "awrit"
-commit = "c692a737bfbfa8c647e03d0a1ab904247ce28ac5"
-provides = ["awrit"]
+id = "kittentts-cli"
+path = "projects/kittentts-cli"
+commit = "f6142dcc697e3c8c760855dd4af2a22bfd1161a7"
+provides = ["kit", "kit-watch"]
 ```
 
 `path` is relative to `$HOME`, commits must be immutable 40-character Git

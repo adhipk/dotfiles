@@ -5,9 +5,29 @@ marker="# agent-timer backstop"
 temp_file="$(mktemp "${TMPDIR:-/tmp}/agent-timer-cron.XXXXXX")"
 trap 'rm -f "$temp_file"' EXIT
 
-command -v crontab >/dev/null 2>&1 || exit 0
-crontab -l 2>/dev/null | grep -Fv "$marker" >"$temp_file" || true
-{{ if .modules.agentTimer.enabled -}}
-printf '%s\n' '* * * * * "$HOME/bin/agent-timer" tick >/dev/null 2>&1 # agent-timer backstop' >>"$temp_file"
+if command -v crontab >/dev/null 2>&1; then
+    crontab -l 2>/dev/null | grep -Fv "$marker" >"$temp_file" || true
+{{ if and .modules.agentTimer.enabled .modules.agentTimer.autoStart -}}
+    printf '%s\n' '* * * * * "$HOME/bin/agent-timer" tick >/dev/null 2>&1 # agent-timer backstop' >>"$temp_file"
 {{- end }}
-crontab "$temp_file"
+    crontab "$temp_file"
+fi
+
+{{ if .modules.agentTimer.enabled -}}
+# The before-apply phase may have latched the runtime while retiring legacy
+# workers. Clear that transient latch only after the new fail-open config and
+# hooks are installed. auto_start=false still prevents automatic re-arming.
+timer="$HOME/bin/agent-timer"
+restore_marker="$HOME/.local/state/agent-timer/restore-after-auto-start-disable"
+latch="$HOME/.local/state/agent-timer/module-disabled"
+if [ -x "$timer" ] && [ -e "$restore_marker" ] && [ -e "$latch" ] && grep -q '^reason=auto-start-disabled$' "$latch"; then
+    "$timer" enable >/dev/null
+    rm -f "$restore_marker"
+elif [ -x "$timer" ] && [ -e "$latch" ] && grep -q '^reason=module-disabled$' "$latch"; then
+    "$timer" enable >/dev/null
+    rm -f "$restore_marker"
+elif [ -e "$restore_marker" ]; then
+    # A manual shutdown superseded an interrupted automatic-start migration.
+    rm -f "$restore_marker"
+fi
+{{- end }}

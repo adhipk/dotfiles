@@ -2,8 +2,8 @@
 # man-me: name=tmux-session-template
 # man-me: category=Terminal and Sessions
 # man-me: usage=tmux-session-template auto SESSION; tmux-session-template ensure SESSION [DIRECTORY]; tmux-session-template cycle SESSION TYPE [WINDOW]; tmux-session-template new SESSION TYPE [PANE]; tmux-session-template duplicate SESSION [PANE]
-# man-me: description=Apply and navigate the standard terminal, Codex, Neovim, Tuxedo, and Awrit tmux window types.
-# man-me: tags=tmux terminal session template codex nvim tuxedo todo awrit browser window cycle new duplicate
+# man-me: description=Apply and navigate the standard terminal, Codex, Neovim, and Tuxedo tmux window types.
+# man-me: tags=tmux terminal session template codex nvim tuxedo todo window cycle new duplicate
 
 set -euo pipefail
 
@@ -53,7 +53,6 @@ The standard layout is:
   1  codex     runs codex
   2  nvim      runs nvim
   3  tuxedo    runs this session directory's todo.txt TUI
-  4  awrit     typed shell; explicit create/duplicate launches Awrit
 EOF
 }
 
@@ -164,7 +163,6 @@ window_type_index() {
     codex) printf '1\n' ;;
     nvim) printf '2\n' ;;
     tuxedo) printf '3\n' ;;
-    awrit) printf '4\n' ;;
     *) return 1 ;;
   esac
 }
@@ -175,7 +173,6 @@ window_type_command() {
     codex) printf 'codex\n' ;;
     nvim) printf 'nvim\n' ;;
     tuxedo) printf 'todo\n' ;;
-    awrit) printf 'awrit\n' ;;
     *) return 1 ;;
   esac
 }
@@ -349,10 +346,6 @@ ensure_standard_tmux_windows() {
   ensure_standard_tmux_window "$session" "$directory" codex 1 codex
   ensure_standard_tmux_window "$session" "$directory" nvim 2 nvim
   ensure_standard_tmux_window "$session" "$directory" tuxedo 3 todo
-  # Keep the canonical slot lazy so ordinary sessions and scratchpads never
-  # start a browser. Explicit create/duplicate actions launch Awrit's native
-  # renderer inside the typed pane.
-  ensure_standard_tmux_window "$session" "$directory" awrit 4 ""
 }
 
 mark_session_templated() {

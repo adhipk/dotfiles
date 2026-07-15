@@ -1,7 +1,7 @@
 apiVersion: dotfiles/v1
 kind: Module
 id: agent-timer
-version: 1.2.3
+version: 1.5.0
 description: Global recurring wall-clock timer that checkpoints active terminal agents without terminating open work.
 dataKey: modules.agentTimer
 distribution:
@@ -22,6 +22,9 @@ state:
     - ~/.local/state/agent-timer
   ephemeral:
     - ~/.local/state/agent-timer/*.lock
+    - ~/.local/state/agent-timer/*.request
+    - ~/.local/state/agent-timer/*.timeout
+    - ~/.local/state/agent-timer/restore-after-auto-start-disable
 commands:
   - name: agent-timer
     source: bin/agent-timer

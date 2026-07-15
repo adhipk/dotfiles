@@ -25,11 +25,11 @@ Your job is to maintain my dotfile configurations, this includes keyboard shortc
 - `alt + backtick` focuses normal Ghostty windows; scratchpads are excluded from the app MRU list.
 - `alt + 1..4` focuses browser, editor, Teams, or Slack.
 - normal Ghostty windows are transparent and keep the tmux-colored JankyBorder; scratchpads are borderless, opaque black panels with balanced terminal padding, rounded corners, and a native shadow.
-- `fn + comma` opens the black terminal scratchpad and switches to a `~/dotfiles` tmux session containing `terminal`, `codex`, `nvim`, `tuxedo`, and `awrit` windows.
-- `fn + 1` opens the same black terminal scratchpad and switches to a separate `~/projects` tmux session containing `terminal`, `codex`, `nvim`, `tuxedo`, and `awrit` windows.
+- `fn + comma` opens the black terminal scratchpad and switches to a `~/dotfiles` tmux session containing `terminal`, `codex`, `nvim`, and `tuxedo` windows.
+- `fn + 1` opens the same black terminal scratchpad and switches to a separate `~/projects` tmux session containing `terminal`, `codex`, `nvim`, and `tuxedo` windows.
 - In Ghostty, `Cmd+Backtick`, `Cmd+1`, `Cmd+2`, and `Cmd+3` cycle `terminal`, `codex`, `nvim`, and `tuxedo` windows by type, including renamed duplicates.
 - `Cmd+B` toggles Yazi in a 40%-wide full-height right tmux pane, while `Cmd+Shift+B` opens or selects a dedicated Yazi tmux window; new views inherit the active pane's directory.
-- `Right Cmd+D` duplicates the active typed window in the same directory and names successive copies `terminal-2`, `codex-2`, `nvim-2`, `tuxedo-2`, or `awrit-2`; `Right Cmd+R/S/Space` rename, choose a session, or open the command center.
+- `Right Cmd+D` duplicates the active typed window in the same directory and names successive copies `terminal-2`, `codex-2`, `nvim-2`, or `tuxedo-2`; `Right Cmd+R/S/Space` rename, choose a session, or open the command center.
 - Broader tmux session/window/pane actions stay under `Ctrl-a` and `Ctrl-a Space`, not Hyper or a flat Command chord set.
 - `alt + shift + backtick` creates a new terminal window on the focused space.
 
@@ -42,13 +42,13 @@ Your job is to maintain my dotfile configurations, this includes keyboard shortc
 
 ## Terminal Defaults
 - `home/dot_config/skhd/executable_open_terminal_window.sh` defaults to Ghostty.
-- Ordinary new tmux sessions use the shared `terminal` `0`, `codex` `1`, `nvim` `2`, `tuxedo` `3`, `awrit` `4` template. The canonical Awrit slot is a lazy typed shell; only an explicit Awrit create/duplicate action starts its native tmux renderer through the pinned `~/awrit` checkout. Sessions created with an explicit command, `hs-*` sessions, and sessions with `DOTFILES_TMUX_TEMPLATE=skip` are left alone.
-- In tmux, `Ctrl+0/1/2/3` cycles windows by `terminal`/`codex`/`nvim`/`tuxedo` type; `Ctrl+Shift+0/1/2/3` creates that type in the current pane's directory and switches to it. `Ctrl+4..9` still selects a window by index, so `Ctrl+4` selects canonical Awrit; the command center exposes typed Awrit cycle/create actions without taking another global chord.
+- Ordinary new tmux sessions use the shared `terminal` `0`, `codex` `1`, `nvim` `2`, `tuxedo` `3` template. Sessions created with an explicit command, `hs-*` sessions, and sessions with `DOTFILES_TMUX_TEMPLATE=skip` are left alone.
+- In tmux, `Ctrl+0/1/2/3` cycles windows by `terminal`/`codex`/`nvim`/`tuxedo` type; `Ctrl+Shift+0/1/2/3` creates that type in the current pane's directory and switches to it. `Ctrl+4..9` still selects a window by index.
 - `Ctrl-a s` and the shell/tmux session selectors use sesh's built-in picker rather than a hand-rolled `fzf` pipeline; its checked-in configuration is installed at `~/.config/sesh/sesh.toml`.
 - `Ctrl-a L` and the command center's Sessions > Last action use tmux's per-client history; closing a session keeps its clients inside tmux and moves them to a surviving session instead of detaching.
 - `Ctrl-a Space` opens the repo-owned tmux command center for session, window, pane, persistence, and workspace-layout actions.
 - `tmux-workspace open project --root DIR` builds the import-free React-like layout in `~/.config/tmux/layouts/project.tmux.tsx`; repeated apply preserves running panes and explicit repair fixes structural drift.
-- The minimal tmux bar stays at the bottom and centers `~ · codex · nvim · tuxedo · awrit`; at left it shows a meaningful session name, substitutes the active folder for generated numeric sessions, and omits duplicate folder context. Each session colors the foreground-only active label and normal focused Ghostty border, while scratchpads stay borderless, and `Ctrl-a ,` renames a tab and seeds Codex renames from the pane title.
+- The minimal tmux bar stays at the bottom and centers `~ · codex · nvim · tuxedo`; at left it shows a meaningful session name, substitutes the active folder for generated numeric sessions, and omits duplicate folder context. Each session colors the foreground-only active label and normal focused Ghostty border, while scratchpads stay borderless, and `Ctrl-a ,` renames a tab and seeds Codex renames from the pane title.
 
 ## Chezmoi
 - `.chezmoiroot` points to `home/`, the desired state for `$HOME`.

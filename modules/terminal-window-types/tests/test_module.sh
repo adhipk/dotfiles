@@ -90,6 +90,7 @@ assert_file "$MODULE_DIR/targets/tmux.conf.tmpl" "module owns its tmux behavior"
 assert_file "$MODULE_DIR/targets/ghostty.conf.tmpl" "module owns its Ghostty adapters"
 assert_file "$MODULE_DIR/targets/skhdrc.tmpl" "module owns its sided-Command adapters"
 assert_file "$MODULE_DIR/targets/tmux-which-key-cycle.yaml.tmpl" "module owns its command-center actions"
+assert_file "$MODULE_DIR/install/remove-legacy-awrit-link.sh.tmpl" "module owns its legacy Awrit cleanup migration"
 
 if yq eval '.' "$MODULE_DIR/module.yaml" >/dev/null 2>&1; then
     pass "module manifest parses as YAML"
@@ -109,6 +110,24 @@ assert_contains "$DOTFILES_DIR/home/Library/Application Support/com.mitchellh.gh
 assert_contains "$DOTFILES_DIR/home/dot_skhdrc.tmpl" \
     'includeTemplate "../modules/terminal-window-types/targets/skhdrc.tmpl"' \
     "skhd mounts the module through an owned fragment"
+assert_contains "$DOTFILES_DIR/home/.chezmoiscripts/run_onchange_before_remove-legacy-awrit-link.sh.tmpl" \
+    'includeTemplate "../modules/terminal-window-types/install/remove-legacy-awrit-link.sh.tmpl"' \
+    "ChezMoi mounts the module-owned legacy cleanup migration"
+assert_contains "$DOTFILES_DIR/home/.chezmoiscripts/run_onchange_before_remove-legacy-awrit-link.sh.tmpl" \
+    'if .modules.terminalWindowTypes.enabled' \
+    "legacy cleanup bridge is safe when the module is disabled and removed"
+assert_contains "$MODULE_DIR/install/remove-legacy-awrit-link.sh.tmpl" \
+    '[[ -L "$legacy_link" ]] || exit 0' \
+    "legacy cleanup only considers symlinks"
+assert_contains "$MODULE_DIR/install/remove-legacy-awrit-link.sh.tmpl" \
+    '[[ "$current_target" != "$legacy_target" ]]' \
+    "legacy cleanup verifies the exact former managed target"
+assert_contains "$MODULE_DIR/install/remove-legacy-awrit-link.sh.tmpl" \
+    'unlink "$legacy_link"' \
+    "legacy cleanup unlinks only the verified launcher"
+assert_not_contains "$MODULE_DIR/install/remove-legacy-awrit-link.sh.tmpl" \
+    'rm -' \
+    "legacy cleanup never recursively removes Awrit state"
 assert_contains "$MODULE_DIR/bin/tmux-session-template" \
     'source "$DOTFILES_LIB_DIR/$library"' \
     "runtime command consumes the public standard library"
@@ -119,7 +138,9 @@ assert_executable "$DESTINATION/bin/tmux-session-template" "enabled profile inst
 assert_contains "$DESTINATION/.tmux.conf" 'after-new-session[50]' "enabled profile renders automatic session setup"
 assert_contains "$DESTINATION/.tmux.conf" 'Cycle Tuxedo windows' "enabled profile renders typed cycling"
 assert_contains "$DESTINATION/.tmux.conf" 'New Tuxedo window' "enabled profile renders typed creation"
-assert_contains "$DESTINATION/.tmux.conf" 'set -gq allow-passthrough on' "enabled profile permits visible-pane Awrit graphics passthrough"
+assert_contains "$DESTINATION/.tmux.conf" 'set-option -gu allow-passthrough' "enabled profile clears legacy graphics passthrough"
+assert_not_contains "$DESTINATION/.tmux.conf" 'allow-passthrough on' "enabled profile does not enable graphics passthrough"
+assert_absent "$DESTINATION/bin/awrit" "enabled profile does not install an Awrit launcher"
 assert_contains "$DESTINATION/.tmux.conf" 'S-Enter send-keys Escape "[13;2u"' "enabled profile forwards Shift+Enter to Codex explicitly"
 assert_contains "$DESTINATION/.tmux.conf" 'Duplicate current window" S-F4' "enabled profile renders the duplicate bridge"
 assert_contains "$DESTINATION/.tmux.conf" '@resurrect-processes '\''codex tuxedo yazi'\''' "enabled profile contributes typed persistence"
@@ -129,6 +150,7 @@ assert_contains "$DESTINATION/Library/Application Support/com.mitchellh.ghostty/
 assert_contains "$DESTINATION/.skhdrc" '"Ghostty" : skhd -k "f16"' "enabled profile renders Right Command+D"
 assert_contains "$DESTINATION/.config/tmux/which-key.yaml" 'name: Cycle terminal' "enabled profile renders command-center cycling"
 assert_contains "$DESTINATION/.config/tmux/which-key.yaml" 'name: Duplicate current' "enabled profile renders command-center duplication"
+assert_not_contains "$DESTINATION/.config/tmux/which-key.yaml" 'Awrit' "enabled profile omits Awrit command-center actions"
 
 if yq eval '.' "$DESTINATION/.config/tmux/which-key.yaml" >/dev/null 2>&1; then
     pass "enabled command-center YAML is valid"
@@ -147,7 +169,8 @@ render_profile false
 assert_absent "$DESTINATION/bin/tmux-session-template" "disabled profile removes the public command"
 assert_not_contains "$DESTINATION/.tmux.conf" 'tmux-session-template' "disabled profile removes typed tmux actions"
 assert_not_contains "$DESTINATION/.tmux.conf" '@dotfiles_window_type' "disabled profile removes typed rename policy"
-assert_not_contains "$DESTINATION/.tmux.conf" 'allow-passthrough on' "disabled profile removes Awrit graphics passthrough"
+assert_contains "$DESTINATION/.tmux.conf" 'set-option -gu allow-passthrough' "disabled profile keeps the legacy passthrough reset"
+assert_not_contains "$DESTINATION/.tmux.conf" 'allow-passthrough on' "disabled profile does not enable graphics passthrough"
 assert_not_contains "$DESTINATION/Library/Application Support/com.mitchellh.ghostty/config" 'cmd+backquote' "disabled profile removes Ghostty cycling"
 assert_not_contains "$DESTINATION/.skhdrc" 'skhd -k "f16"' "disabled profile removes Right Command+D"
 assert_not_contains "$DESTINATION/.config/tmux/which-key.yaml" 'tmux-session-template' "disabled profile removes command-center actions"

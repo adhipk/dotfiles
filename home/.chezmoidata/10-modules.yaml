@@ -27,8 +27,10 @@ modules:
     enabled: true
   agentTimer:
     enabled: true
+    autoStart: false
     defaultSeconds: 600
     warningSeconds: 60
+    reportTimeoutSeconds: 120
     retentionSeconds: 604800
     expirySound: Ping
     preferredAgents:

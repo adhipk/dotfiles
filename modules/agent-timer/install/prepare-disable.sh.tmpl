@@ -1,22 +1,67 @@
-#!/bin/sh
-set -eu
+#!/usr/bin/env bash
+set -euo pipefail
 
 # This before-apply hook must remain mounted even while the module is disabled:
 # chezmoi runs it while the currently installed command still exists, before
-# reconciling the module's empty target templates.
+# reconciling targets and configuration. Turning automatic start off uses the
+# same worker retirement path while preserving the installed module.
 {{ if not .modules.agentTimer.enabled -}}
 timer="$HOME/bin/agent-timer"
 if [ -x "$timer" ]; then
     "$timer" shutdown --reason module-disabled
 fi
-{{- else -}}
-latch="$HOME/.local/state/agent-timer/module-disabled"
+{{- else if not .modules.agentTimer.autoStart -}}
 timer="$HOME/bin/agent-timer"
-if [ -e "$latch" ]; then
-    if [ -x "$timer" ]; then
-        "$timer" enable
+latch="$HOME/.local/state/agent-timer/module-disabled"
+restore_marker="$HOME/.local/state/agent-timer/restore-after-auto-start-disable"
+if [ -x "$timer" ] && { [ ! -e "$latch" ] || grep -Eq '^reason=(module-disabled|auto-start-disabled)$' "$latch"; }; then
+    if "$timer" help 2>&1 | grep -q -- '--automatic-only'; then
+        "$timer" shutdown --reason auto-start-disabled --automatic-only
+        printf 'restore=automatic-only\n' >"$restore_marker"
     else
-        rm -f "$latch"
+        # Warm upgrades run this hook before installing the new command. Older
+        # binaries cannot selectively shut down, so use their installed state
+        # and standard libraries instead of invoking an all-timer shutdown.
+        lib_dir="$HOME/.local/lib/dotfiles"
+        for library in core locks state; do
+            [ -r "$lib_dir/$library.sh" ] || {
+                printf 'agent-timer: missing installed standard library for safe warm upgrade: %s\n' "$lib_dir/$library.sh" >&2
+                exit 1
+            }
+            # shellcheck source=/dev/null
+            source "$lib_dir/$library.sh"
+        done
+        command -v jq >/dev/null 2>&1 || {
+            printf 'agent-timer: jq is required for safe warm-upgrade retirement\n' >&2
+            exit 1
+        }
+        state_dir="$HOME/.local/state/agent-timer"
+        lifecycle_lock="$state_dir/lifecycle.lock"
+        mkdir -p "$state_dir"
+        chmod 700 "$state_dir"
+        dotfiles_lock_acquire "$lifecycle_lock" 2000 0.02 || {
+            printf 'agent-timer: could not lock the legacy timer lifecycle\n' >&2
+            exit 1
+        }
+        if ! printf 'disabled_at=%s\nreason=auto-start-disabled\n' "$(date +%s)" | dotfiles_atomic_write "$latch" 600; then
+            dotfiles_lock_release "$lifecycle_lock" || true
+            exit 1
+        fi
+        for state_file in "$state_dir"/*.json; do
+            [ -f "$state_file" ] || continue
+            if jq -e '((.status == "running") or (.status == "warning")) and ((.origin == "automatic") or (((.origin // "") == "") and ((.id // "") | startswith("codex-"))))' "$state_file" >/dev/null 2>&1; then
+                timer_id="$(jq -r '.id' "$state_file")"
+                if ! "$timer" cancel --id "$timer_id" >/dev/null; then
+                    dotfiles_lock_release "$lifecycle_lock" || true
+                    exit 1
+                fi
+            fi
+        done
+        if ! printf 'restore=legacy-selective\n' | dotfiles_atomic_write "$restore_marker" 600; then
+            dotfiles_lock_release "$lifecycle_lock" || true
+            exit 1
+        fi
+        dotfiles_lock_release "$lifecycle_lock"
     fi
 fi
 {{- end }}

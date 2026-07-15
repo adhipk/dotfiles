@@ -19,7 +19,9 @@ CRON_MARKER="# agent-timer backstop"
 FALLBACK_SECONDS="${AGENT_TIMER_DEFAULT_SECONDS:-600}"
 FALLBACK_WARNING_SECONDS="${AGENT_TIMER_DEFAULT_WARNING_SECONDS:-60}"
 FALLBACK_RETENTION_SECONDS="${AGENT_TIMER_DEFAULT_RETENTION_SECONDS:-604800}"
+FALLBACK_REPORT_TIMEOUT_SECONDS="${AGENT_TIMER_DEFAULT_REPORT_TIMEOUT_SECONDS:-120}"
 FALLBACK_EXPIRY_SOUND="${AGENT_TIMER_DEFAULT_EXPIRY_SOUND:-Ping}"
+FALLBACK_AUTO_START="${AGENT_TIMER_DEFAULT_AUTO_START:-false}"
 
 DOTFILES_LIB_DIR="${DOTFILES_LIB_DIR:-$HOME/.local/lib/dotfiles}"
 if [[ ! -r "$DOTFILES_LIB_DIR/locks.sh" ]]; then
@@ -35,8 +37,9 @@ for library in core locks state; do
     source "$DOTFILES_LIB_DIR/$library.sh"
 done
 
-DEFAULT_WARNING_MESSAGE="TASK TIME WARNING: checkpoint due soon. Keep the primary task running; delegate read-only checkpoint preparation to an available subagent, preserve the current artifact, and avoid expanding scope."
-DEFAULT_EXPIRY_MESSAGE="TASK CHECKPOINT DUE: keep the primary task running. Delegate status collection to an available subagent and post the checkpoint as commentary (not final). If no subagent result is ready, post a minimal root snapshot at the next safe boundary; never wait; continue open canonical tasks immediately. Report the artifact, validation, working-tree state, open task IDs, and next step. A new %SECONDS%s block is armed immediately; do not interrupt Codex or end the turn or tmux session. Stop only when the requested work is complete or genuinely blocked."
+DEFAULT_WARNING_MESSAGE="TASK TIME WARNING: checkpoint due soon. Keep the primary task running and avoid expanding scope."
+DEFAULT_EXPIRY_MESSAGE="TASK CHECKPOINT DUE: provide a concise read-only status snapshot of the main task. Report the artifact, validation, working-tree state, open task IDs, and next step. Do not modify files, steer or interrupt the main task, or start subagents. A new %SECONDS%s block is already armed."
+REPORT_SAFETY_PREFIX="This is a detached read-only checkpoint. Do not modify files, use the network, contact external services, launch agents, or create, close, or alter tmux sessions, windows, or panes."
 
 usage() {
     cat <<'EOF'
@@ -47,7 +50,7 @@ Usage:
   agent-timer manage
   agent-timer close SESSION [--yes] [--force-active]
   agent-timer cancel [--id ID]
-  agent-timer shutdown [--reason TEXT]
+  agent-timer shutdown [--reason TEXT] [--automatic-only]
   agent-timer enable
   agent-timer prune
   agent-timer tick
@@ -56,9 +59,11 @@ Usage:
 
 `start` reads TASK_TIMELIMIT_SECS unless --seconds is supplied. It records an
 immutable checkpoint block for the active turn and launches one detached worker.
-At warning and checkpoint expiry the worker types a literal steering message
-plus Enter into the same verified tmux agent pane. Expiry immediately advances
-the same timer into another block; it never sends an interrupt key.
+Warnings use the native notification path and never type into the agent. At
+checkpoint expiry, Codex may launch one bounded, detached `codex exec` process
+to collect a read-only repository snapshot under timer state. Native delivery
+and the beep happen immediately; unsupported agents or unavailable launchers
+remain native-only. Expiry never injects terminal input or ends the main turn.
 EOF
 }
 
@@ -110,12 +115,32 @@ configured_retention_seconds() {
     fi
 }
 
+configured_report_timeout_seconds() {
+    if [[ -n "${AGENT_TIMER_REPORT_TIMEOUT_SECS:-}" ]]; then
+        printf '%s\n' "$AGENT_TIMER_REPORT_TIMEOUT_SECS"
+    else
+        config_value report_timeout_seconds "$FALLBACK_REPORT_TIMEOUT_SECONDS"
+    fi
+}
+
 configured_expiry_sound() {
     if [[ -n "${AGENT_TIMER_EXPIRY_SOUND:-}" ]]; then
         printf '%s\n' "$AGENT_TIMER_EXPIRY_SOUND"
     else
         config_value expiry_sound "$FALLBACK_EXPIRY_SOUND"
     fi
+}
+
+automatic_start_enabled() {
+    local value="${AGENT_TIMER_AUTO_START:-}"
+
+    if [[ -z "$value" ]]; then
+        value="$(config_value auto_start "$FALLBACK_AUTO_START")"
+    fi
+    case "$value" in
+        1|true|TRUE|True|yes|YES|Yes|on|ON|On) return 0 ;;
+        *) return 1 ;;
+    esac
 }
 
 now_epoch() {
@@ -149,6 +174,16 @@ safe_id() {
 
 state_file_for() {
     printf '%s/%s.json\n' "$STATE_DIR" "$(safe_id "$1")"
+}
+
+is_direct_state_path() {
+    local path="$1"
+    local suffix="$2"
+    local name
+
+    [[ "${path%/*}" == "$STATE_DIR" ]] || return 1
+    name="${path##*/}"
+    [[ -n "$name" && "$name" != "." && "$name" != ".." && "$name" == *"$suffix" ]]
 }
 
 load_states_json() {
@@ -202,6 +237,21 @@ write_state() {
     local state_file="$1"
     local contents="$2"
     printf '%s\n' "$contents" | dotfiles_atomic_write "$state_file" 600
+}
+
+remove_side_report_artifacts_from_state() {
+    local state="$1"
+    local report_path log_path request_path
+
+    report_path="$($JQ_BIN -r '.sideReport.reportPath // empty' <<<"$state" 2>/dev/null || true)"
+    log_path="$($JQ_BIN -r '.sideReport.logPath // empty' <<<"$state" 2>/dev/null || true)"
+    request_path="$($JQ_BIN -r '.sideReport.requestPath // empty' <<<"$state" 2>/dev/null || true)"
+    is_direct_state_path "$report_path" ".md" && rm -f "$report_path"
+    is_direct_state_path "$log_path" ".log" && rm -f "$log_path"
+    if is_direct_state_path "$request_path" ".request"; then
+        rm -f "$request_path" "$request_path.timeout"
+    fi
+    return 0
 }
 
 tmux_snapshot() {
@@ -428,18 +478,249 @@ verify_live_target() {
     agent_is_descendant "$current_pane_pid" "$agent_pid"
 }
 
-send_steer() {
-    local target="$1"
-    local message="$2"
+codex_launcher_from_state() {
+    local state="$1"
+    local command_line first second launcher=""
 
-    message="${message//$'\n'/ }"
-    message="${message//$'\r'/ }"
-    "$TMUX_BIN" send-keys -t "$target" -l "$message"
-    # A rapid literal stream enters Codex's paste-burst state. End is a harmless
-    # non-character event at the current end of this single-line message; Codex
-    # deterministically flushes and clears the burst before processing Enter.
-    "$TMUX_BIN" send-keys -t "$target" End
-    "$TMUX_BIN" send-keys -t "$target" Enter
+    command_line="$($JQ_BIN -r '.agent.command // empty' <<<"$state" 2>/dev/null || true)"
+    read -r first second _ <<<"$command_line"
+    case "$first" in
+        /*/codex) launcher="$first" ;;
+        node|*/node) case "$second" in /*/codex) launcher="$second" ;; esac ;;
+    esac
+    [[ -n "$launcher" && "$launcher" == /* && -x "$launcher" ]] || return 1
+    printf '%s\n' "$launcher"
+}
+
+side_report_process_is_live() {
+    local state="$1"
+    local pid started current_started
+
+    pid="$($JQ_BIN -r '.sideReport.workerPid // empty' <<<"$state")"
+    started="$($JQ_BIN -r '.sideReport.workerStartedAt // empty' <<<"$state")"
+    [[ -n "$pid" && -n "$started" ]] || return 1
+    kill -0 "$pid" 2>/dev/null || return 1
+    current_started="$(process_started_at "$pid" || true)"
+    [[ "$current_started" == "$started" ]]
+}
+
+start_codex_side_report() {
+    local state_file="$1"
+    local state="$2"
+    local now="$3"
+    local status launcher cwd message timeout_seconds count report_id base report_path log_path request_path request worker_pid worker_started worker_pgid parent_pgid updated
+
+    status="$($JQ_BIN -r '.sideReport.status // empty' <<<"$state")"
+    if [[ "$status" == "launching" || "$status" == "running" ]] && side_report_process_is_live "$state"; then
+        updated="$($JQ_BIN '.lastCheckpointSideReportStatus="overlap-skipped"' <<<"$state")"
+        write_state "$state_file" "$updated"
+        return 1
+    fi
+
+    launcher="$(codex_launcher_from_state "$state" 2>/dev/null || true)"
+    cwd="$($JQ_BIN -r '.cwd // empty' <<<"$state")"
+    message="$REPORT_SAFETY_PREFIX $($JQ_BIN -r '.expiryMessage // empty' <<<"$state")"
+    timeout_seconds="$(configured_report_timeout_seconds 2>/dev/null || true)"
+    if [[ -z "$launcher" || "$cwd" != /* || ! -d "$cwd" || -z "$message" ]] || ! is_positive_integer "$timeout_seconds" || ! command -v nohup >/dev/null 2>&1; then
+        updated="$($JQ_BIN '.lastCheckpointSideReportStatus="unavailable"' <<<"$state")"
+        write_state "$state_file" "$updated"
+        return 1
+    fi
+
+    count="$($JQ_BIN -r '.checkpointCount' <<<"$state")"
+    report_id="$($JQ_BIN -r '.token' <<<"$state")-$count"
+    remove_side_report_artifacts_from_state "$state"
+    base="${state_file%.json}.checkpoint-${report_id}"
+    report_path="$base.md"
+    log_path="$base.log"
+    request_path="$base.request"
+    request="$($JQ_BIN -n \
+        --arg id "$report_id" \
+        --arg token "$($JQ_BIN -r '.token' <<<"$state")" \
+        --arg stateFile "$state_file" \
+        --arg launcher "$launcher" \
+        --arg cwd "$cwd" \
+        --arg message "$message" \
+        --arg reportPath "$report_path" \
+        --arg logPath "$log_path" \
+        --argjson timeoutSeconds "$timeout_seconds" \
+        '{id:$id,token:$token,stateFile:$stateFile,launcher:$launcher,cwd:$cwd,message:$message,reportPath:$reportPath,logPath:$logPath,timeoutSeconds:$timeoutSeconds}')"
+    printf '%s\n' "$request" | dotfiles_atomic_write "$request_path" 600 || return 1
+    updated="$($JQ_BIN --arg id "$report_id" --arg reportPath "$report_path" --arg logPath "$log_path" --arg requestPath "$request_path" --argjson timeoutSeconds "$timeout_seconds" --argjson now "$now" \
+        '.sideReport={id:$id,status:"launching",startedAt:$now,reportPath:$reportPath,logPath:$logPath,requestPath:$requestPath,timeoutSeconds:$timeoutSeconds} | .lastCheckpointSideReportStatus="launching"' <<<"$state")"
+    write_state "$state_file" "$updated" || return 1
+
+    set -m
+    nohup "$SELF" _report-worker "$request_path" </dev/null >/dev/null 2>&1 &
+    worker_pid=$!
+    set +m
+    for _ in {1..20}; do
+        worker_started="$(process_started_at "$worker_pid" || true)"
+        worker_pgid="$(process_group_id "$worker_pid" || true)"
+        [[ -n "$worker_started" && -n "$worker_pgid" ]] && break
+        sleep 0.01
+    done
+    parent_pgid="$(process_group_id "$$" || true)"
+    if [[ -z "$worker_started" || -z "$worker_pgid" || "$worker_pgid" == "$parent_pgid" ]]; then
+        if [[ -n "$worker_pgid" && "$worker_pgid" != "$parent_pgid" ]]; then
+            terminate_process_group "$worker_pgid" || true
+        else
+            kill "$worker_pid" 2>/dev/null || true
+        fi
+        wait "$worker_pid" 2>/dev/null || true
+        rm -f "$request_path"
+        updated="$($JQ_BIN '.sideReport.status="unavailable" | .lastCheckpointSideReportStatus="unavailable"' <<<"$updated")"
+        write_state "$state_file" "$updated"
+        return 1
+    fi
+    updated="$($JQ_BIN --argjson pid "$worker_pid" --arg started "$worker_started" --argjson pgid "$worker_pgid" \
+        '.sideReport.status="running" | .sideReport.workerPid=$pid | .sideReport.workerStartedAt=$started | .sideReport.workerPgid=$pgid | .lastCheckpointSideReportStatus="running"' <<<"$updated")"
+    write_state "$state_file" "$updated"
+}
+
+complete_codex_side_report() {
+    local state_file="$1" token="$2" report_id="$3" exit_code="$4" report_path="$5"
+    local lock_dir state updated now completion_status excerpt recorded=0
+
+    now="$(now_epoch)"
+    if [[ "$exit_code" == "0" && -s "$report_path" ]]; then
+        completion_status="completed"
+    else
+        completion_status="failed"
+    fi
+    lock_dir="$(state_lock_dir "$state_file")"
+    if acquire_lock "$lock_dir" && [[ -f "$state_file" ]]; then
+        state="$(cat "$state_file")"
+        if [[ "$($JQ_BIN -r '.token // empty' <<<"$state")" == "$token" && "$($JQ_BIN -r '.sideReport.id // empty' <<<"$state")" == "$report_id" && "$($JQ_BIN -r '.sideReport.status // empty' <<<"$state")" =~ ^(launching|running)$ ]]; then
+            updated="$($JQ_BIN --arg status "$completion_status" --argjson exitCode "$exit_code" --argjson now "$now" \
+                '.sideReport.status=$status | .sideReport.exitCode=$exitCode | .sideReport.completedAt=$now | .lastCheckpointSideReportStatus=$status' <<<"$state")"
+            write_state "$state_file" "$updated" || true
+            recorded=1
+        fi
+        release_lock "$lock_dir" || true
+    fi
+    [[ "$recorded" == "1" ]] || return 0
+    if [[ "$completion_status" == "completed" ]]; then
+        IFS= read -r excerpt <"$report_path" || true
+        excerpt="$(printf '%s' "$excerpt" | sed $'s/\033\\[[0-9;?]*[ -/]*[@-~]//g' | tr '\r\n\t' '   ' | sed 's/[[:space:]][[:space:]]*/ /g;s/^ //;s/ $//')"
+        excerpt="${excerpt:0:180}"
+        [[ -n "$excerpt" ]] || excerpt="Read-only checkpoint report completed."
+        notify_user "Agent checkpoint report ready" "$excerpt"
+    else
+        notify_user "Agent checkpoint report failed" "The timer continues normally; inspect the side-report log beside $report_path."
+    fi
+}
+
+report_worker() {
+    local request_path="$1"
+    local request state_file token report_id launcher cwd message report_path log_path timeout_seconds timeout_marker codex_pid codex_started codex_pgid report_pgid watchdog_pid exit_code
+    local lock_dir current_state expected_launcher expected_message valid_request=0
+
+    is_direct_state_path "$request_path" ".request" && [[ -r "$request_path" ]] || return 1
+    request="$(cat "$request_path")"
+    state_file="$($JQ_BIN -r '.stateFile // empty' <<<"$request")"
+    token="$($JQ_BIN -r '.token // empty' <<<"$request")"
+    report_id="$($JQ_BIN -r '.id // empty' <<<"$request")"
+    launcher="$($JQ_BIN -r '.launcher // empty' <<<"$request")"
+    cwd="$($JQ_BIN -r '.cwd // empty' <<<"$request")"
+    message="$($JQ_BIN -r '.message // empty' <<<"$request")"
+    report_path="$($JQ_BIN -r '.reportPath // empty' <<<"$request")"
+    log_path="$($JQ_BIN -r '.logPath // empty' <<<"$request")"
+    timeout_seconds="$($JQ_BIN -r '.timeoutSeconds // empty' <<<"$request")"
+    if ! is_direct_state_path "$state_file" ".json" ||
+        ! is_direct_state_path "$report_path" ".md" ||
+        ! is_direct_state_path "$log_path" ".log" ||
+        [[ "$launcher" != /* || ! -x "$launcher" || "$cwd" != /* || ! -d "$cwd" ]] ||
+        ! is_positive_integer "$timeout_seconds"; then
+        return 1
+    fi
+    lock_dir="$(state_lock_dir "$state_file")"
+    if acquire_lock "$lock_dir" && [[ -f "$state_file" ]]; then
+        current_state="$(cat "$state_file")"
+        expected_launcher="$(codex_launcher_from_state "$current_state" 2>/dev/null || true)"
+        expected_message="$REPORT_SAFETY_PREFIX $($JQ_BIN -r '.expiryMessage // empty' <<<"$current_state")"
+        if [[ "$($JQ_BIN -r '.token // empty' <<<"$current_state")" == "$token" &&
+            "$($JQ_BIN -r '.sideReport.id // empty' <<<"$current_state")" == "$report_id" &&
+            "$($JQ_BIN -r '.sideReport.status // empty' <<<"$current_state")" == "running" &&
+            "$($JQ_BIN -r '.sideReport.workerPid // empty | tostring' <<<"$current_state")" == "$$" &&
+            "$($JQ_BIN -r '.sideReport.requestPath // empty' <<<"$current_state")" == "$request_path" &&
+            "$($JQ_BIN -r '.sideReport.reportPath // empty' <<<"$current_state")" == "$report_path" &&
+            "$($JQ_BIN -r '.sideReport.logPath // empty' <<<"$current_state")" == "$log_path" &&
+            "$($JQ_BIN -r '.sideReport.timeoutSeconds // empty | tostring' <<<"$current_state")" == "$timeout_seconds" &&
+            "$($JQ_BIN -r '.cwd // empty' <<<"$current_state")" == "$cwd" &&
+            "$launcher" == "$expected_launcher" && "$message" == "$expected_message" ]]; then
+            valid_request=1
+        fi
+        release_lock "$lock_dir" || true
+    fi
+    [[ "$valid_request" == "1" ]] || return 1
+
+    timeout_marker="$request_path.timeout"
+    rm -f "$timeout_marker"
+    set -m
+    AGENT_TIMER_AUTO_START=false "$launcher" --ask-for-approval never exec --ephemeral --ignore-user-config --sandbox read-only -C "$cwd" --output-last-message "$report_path" "$message" >"$log_path" 2>&1 &
+    codex_pid=$!
+    set +m
+    for _ in {1..20}; do
+        codex_started="$(process_started_at "$codex_pid" || true)"
+        codex_pgid="$(process_group_id "$codex_pid" || true)"
+        [[ -n "$codex_started" && -n "$codex_pgid" ]] && break
+        sleep 0.01
+    done
+    report_pgid="$(process_group_id "$$" || true)"
+    [[ -n "$codex_pgid" && "$codex_pgid" != "$report_pgid" ]] || codex_pgid=""
+    if [[ -z "$codex_started" ]] && ! kill -0 "$codex_pid" 2>/dev/null; then
+        if wait "$codex_pid"; then
+            exit_code=0
+        else
+            exit_code=$?
+        fi
+        rm -f "$request_path"
+        complete_codex_side_report "$state_file" "$token" "$report_id" "$exit_code" "$report_path"
+        return 0
+    fi
+    if [[ -z "$codex_started" ]]; then
+        if [[ -n "$codex_pgid" ]]; then
+            terminate_process_group "$codex_pgid" || true
+        else
+            kill "$codex_pid" 2>/dev/null || true
+        fi
+        wait "$codex_pid" 2>/dev/null || true
+        rm -f "$request_path"
+        complete_codex_side_report "$state_file" "$token" "$report_id" 70 "$report_path"
+        return 0
+    fi
+    trap report_worker_signal_cleanup HUP INT TERM
+    (
+        sleep "$timeout_seconds"
+        if [[ -n "$codex_started" ]] && kill -0 "$codex_pid" 2>/dev/null; then
+            : >"$timeout_marker"
+            if [[ -n "$codex_pgid" ]]; then
+                terminate_process_group "$codex_pgid" || true
+            else
+                terminate_process_tree "$codex_pid" "$codex_started" || true
+            fi
+        fi
+    ) &
+    watchdog_pid=$!
+    if wait "$codex_pid"; then
+        exit_code=0
+    else
+        exit_code=$?
+    fi
+    if [[ -e "$timeout_marker" ]]; then
+        # The watchdog creates this marker before terminating the Codex
+        # process group. Let it finish its TERM/KILL escalation even though
+        # the group leader may already have exited.
+        wait "$watchdog_pid" 2>/dev/null || true
+    else
+        kill "$watchdog_pid" 2>/dev/null || true
+        wait "$watchdog_pid" 2>/dev/null || true
+    fi
+    trap - HUP INT TERM
+    [[ ! -e "$timeout_marker" ]] || exit_code=124
+    rm -f "$request_path" "$timeout_marker"
+    complete_codex_side_report "$state_file" "$token" "$report_id" "$exit_code" "$report_path"
 }
 
 stop_worker_from_state() {
@@ -471,6 +752,125 @@ stop_worker_from_state() {
             [[ "$current_started" == "$expected_started" ]] && kill -KILL "$worker_pid" 2>/dev/null || true
             ;;
     esac
+}
+
+terminate_process_tree() {
+    local root_pid="$1" expected_started="$2"
+    local current_started process_rows frontier next_frontier parent child child_started depth attempt index any_live
+    local descendant_count=0
+    local -a descendant_pids=() descendant_started=()
+
+    [[ -n "$root_pid" && -n "$expected_started" ]] || return 1
+    kill -0 "$root_pid" 2>/dev/null || return 0
+    current_started="$(process_started_at "$root_pid" || true)"
+    [[ "$current_started" == "$expected_started" ]] || return 1
+    process_rows="$($PS_BIN -axo pid=,ppid= 2>/dev/null || true)"
+    frontier="$root_pid"
+    for depth in 1 2 3 4 5 6 7 8; do
+        next_frontier=""
+        for parent in $frontier; do
+            while IFS= read -r child; do
+                [[ -n "$child" ]] || continue
+                child_started="$(process_started_at "$child" || true)"
+                descendant_pids[$descendant_count]="$child"
+                descendant_started[$descendant_count]="$child_started"
+                descendant_count=$((descendant_count + 1))
+                next_frontier="$next_frontier $child"
+            done < <(awk -v parent="$parent" '$2 == parent { print $1 }' <<<"$process_rows")
+        done
+        frontier="$next_frontier"
+        [[ -n "$frontier" ]] || break
+    done
+    for ((index = 0; index < descendant_count; index++)); do
+        kill "${descendant_pids[$index]}" 2>/dev/null || true
+    done
+    kill "$root_pid" 2>/dev/null || true
+    for attempt in 1 2 3 4 5 6 7 8 9 10; do
+        any_live=0
+        current_started="$(process_started_at "$root_pid" || true)"
+        if kill -0 "$root_pid" 2>/dev/null && [[ "$current_started" == "$expected_started" ]]; then
+            any_live=1
+        fi
+        for ((index = 0; index < descendant_count; index++)); do
+            child="${descendant_pids[$index]}"
+            child_started="${descendant_started[$index]}"
+            current_started="$(process_started_at "$child" || true)"
+            if kill -0 "$child" 2>/dev/null && [[ -n "$child_started" && "$current_started" == "$child_started" ]]; then
+                any_live=1
+            fi
+        done
+        (( any_live == 0 )) && return 0
+        sleep 0.05
+    done
+    current_started="$(process_started_at "$root_pid" || true)"
+    if [[ "$current_started" == "$expected_started" ]]; then
+        kill -KILL "$root_pid" 2>/dev/null || true
+    fi
+    for ((index = 0; index < descendant_count; index++)); do
+        child="${descendant_pids[$index]}"
+        child_started="${descendant_started[$index]}"
+        current_started="$(process_started_at "$child" || true)"
+        if [[ -n "$child_started" && "$current_started" == "$child_started" ]]; then
+            kill -KILL "$child" 2>/dev/null || true
+        fi
+    done
+}
+
+process_group_id() {
+    "$PS_BIN" -p "$1" -o pgid= 2>/dev/null | tr -d '[:space:]'
+}
+
+terminate_process_group() {
+    local process_group="$1"
+    local self_group attempt
+
+    [[ "$process_group" =~ ^[0-9]+$ ]] && (( process_group > 1 )) || return 1
+    self_group="$(process_group_id "$$" || true)"
+    [[ -n "$self_group" && "$process_group" != "$self_group" ]] || return 1
+    kill -TERM -- "-$process_group" 2>/dev/null || true
+    for attempt in 1 2 3 4 5 6 7 8 9 10; do
+        kill -0 -- "-$process_group" 2>/dev/null || return 0
+        sleep 0.05
+    done
+    kill -KILL -- "-$process_group" 2>/dev/null || true
+    for attempt in 1 2 3 4 5 6 7 8 9 10; do
+        kill -0 -- "-$process_group" 2>/dev/null || return 0
+        sleep 0.05
+    done
+    return 0
+}
+
+report_worker_signal_cleanup() {
+    trap - HUP INT TERM
+    if [[ -n "${codex_pgid:-}" ]]; then
+        terminate_process_group "$codex_pgid" || true
+    elif [[ -n "${codex_pid:-}" && -n "${codex_started:-}" ]]; then
+        terminate_process_tree "$codex_pid" "$codex_started" || true
+    fi
+    [[ -z "${watchdog_pid:-}" ]] || kill "$watchdog_pid" 2>/dev/null || true
+    if [[ -n "${timeout_marker:-}" ]] && is_direct_state_path "$timeout_marker" ".request.timeout"; then
+        rm -f "$timeout_marker"
+    fi
+    exit 143
+}
+
+stop_side_report_from_state() {
+    local state="$1"
+    local worker_pid expected_started current_started command_line request_path
+
+    request_path="$($JQ_BIN -r '.sideReport.requestPath // empty' <<<"$state")"
+    is_direct_state_path "$request_path" ".request" && rm -f "$request_path" "$request_path.timeout"
+
+    worker_pid="$($JQ_BIN -r '.sideReport.workerPid // empty' <<<"$state")"
+    expected_started="$($JQ_BIN -r '.sideReport.workerStartedAt // empty' <<<"$state")"
+    [[ -n "$worker_pid" && -n "$expected_started" ]] || return 0
+    kill -0 "$worker_pid" 2>/dev/null || return 0
+    current_started="$(process_started_at "$worker_pid" || true)"
+    [[ "$current_started" == "$expected_started" ]] || return 0
+    command_line="$(process_command "$worker_pid" || true)"
+    case "$command_line" in *"agent-timer _report-worker "*) ;; *) return 0 ;; esac
+
+    terminate_process_tree "$worker_pid" "$expected_started" || true
 }
 
 worker_is_live() {
@@ -610,10 +1010,11 @@ start_timer() {
     local warning_message="$7"
     local warning_seconds="$8"
     local no_worker="$9"
+    local origin="${10:-manual}"
     local now deadline warning_at token state_file state_lock session_lock lifecycle_lock snapshot current_snapshot
     local tmux_session tmux_session_name window_id pane_id pane_pid pane_tty pane_command
     local check_session check_session_name check_window check_pane check_pid check_tty check_command
-    local agent_pid agent_started agent_command state existing_turn existing_status old_state
+    local agent_pid agent_started agent_command agent_type state existing_turn existing_status old_state
 
     is_positive_integer "$seconds" || die "TASK_TIMELIMIT_SECS must be a positive integer (got '${seconds:-unset}')"
     is_positive_integer "$warning_seconds" || warning_seconds="$FALLBACK_WARNING_SECONDS"
@@ -631,6 +1032,7 @@ start_timer() {
     agent_command="$(process_command "$agent_pid")"
     [[ -n "$agent_started" && -n "$agent_command" ]] || die "could not fingerprint agent process $agent_pid"
     is_agent_command "$agent_command" || die "process $agent_pid is not a supported terminal agent"
+    agent_type="$(agent_kind "$agent_command")"
     target="$pane_id"
 
     [[ -n "$timer_id" ]] || timer_id="tmux-${pane_id#%}"
@@ -701,6 +1103,8 @@ start_timer() {
     if [[ -f "$state_file" ]]; then
         old_state="$(cat "$state_file")"
         stop_worker_from_state "$old_state"
+        stop_side_report_from_state "$old_state"
+        remove_side_report_artifacts_from_state "$old_state"
     fi
 
     now="$(now_epoch)"
@@ -727,6 +1131,8 @@ start_timer() {
         --arg command "$pane_command" \
         --arg agentStarted "$agent_started" \
         --arg agentCommand "$agent_command" \
+        --arg agentType "$agent_type" \
+        --arg origin "$origin" \
         --arg warningMessage "$warning_message" \
         --arg expiryMessage "$expiry_message" \
         --argjson seconds "$seconds" \
@@ -736,7 +1142,7 @@ start_timer() {
         --argjson warningSeconds "$warning_seconds" \
         --argjson panePid "$pane_pid" \
         --argjson agentPid "$agent_pid" \
-        '{version:3,id:$id,token:$token,turnId:$turnId,cwd:$cwd,target:$target,seconds:$seconds,warningSeconds:$warningSeconds,startedAt:$startedAt,warningAt:$warningAt,deadlineAt:$deadlineAt,status:"running",checkpointCount:0,warningMessage:$warningMessage,expiryMessage:$expiryMessage,tmux:{sessionId:$sessionId,sessionName:$sessionName,windowId:$windowId,paneId:$paneId,panePid:$panePid,paneTty:$paneTty,command:$command},agent:{pid:$agentPid,startedAt:$agentStarted,command:$agentCommand}}')"
+        '{version:5,id:$id,origin:$origin,token:$token,turnId:$turnId,cwd:$cwd,target:$target,seconds:$seconds,warningSeconds:$warningSeconds,startedAt:$startedAt,warningAt:$warningAt,deadlineAt:$deadlineAt,status:"running",checkpointCount:0,warningMessage:$warningMessage,expiryMessage:$expiryMessage,tmux:{sessionId:$sessionId,sessionName:$sessionName,windowId:$windowId,paneId:$paneId,panePid:$panePid,paneTty:$paneTty,command:$command},agent:{pid:$agentPid,kind:$agentType,startedAt:$agentStarted,command:$agentCommand}}')"
     write_state "$state_file" "$state"
 
     if [[ "$no_worker" != "1" ]]; then
@@ -769,7 +1175,7 @@ fire_state() {
     local state_file="$1"
     local expected_token="$2"
     local phase="$3"
-    local state token status now due target message updated lock_dir
+    local state token status now due message updated lock_dir agent_type agent_command delivery_mode
 
     [[ -f "$state_file" ]] || return 0
     lock_dir="$(state_lock_dir "$state_file")"
@@ -793,66 +1199,65 @@ fire_state() {
     fi
 
     if ! verify_live_target "$state"; then
-        updated="$($JQ_BIN --argjson now "$now" '.status="stale" | .staleAt=$now' <<<"$state")"
+        stop_side_report_from_state "$state"
+        updated="$($JQ_BIN --argjson now "$now" '.status="stale" | .staleAt=$now | if ((.sideReport.status // "") | test("^(launching|running)$")) then .sideReport.status="canceled" | .sideReport.canceledAt=$now else . end' <<<"$state")"
         write_state "$state_file" "$updated"
         release_lock "$lock_dir" || true
-        notify_user "Agent timer target changed" "Skipped a stale timer rather than steering a reused pane."
+        notify_user "Agent timer target changed" "Skipped a stale timer rather than delivering into a reused pane."
         return 0
     fi
 
-    target="$($JQ_BIN -r '.target' <<<"$state")"
+    agent_type="$($JQ_BIN -r '.agent.kind // empty' <<<"$state")"
+    if [[ -z "$agent_type" ]]; then
+        agent_command="$($JQ_BIN -r '.agent.command // empty' <<<"$state")"
+        agent_type="$(agent_kind "$agent_command" 2>/dev/null || true)"
+    fi
     if [[ "$phase" == "warning" ]]; then
-        if ! send_steer "$target" "$message"; then
-            release_lock "$lock_dir" || true
-            return 1
-        fi
-        updated="$($JQ_BIN --argjson now "$now" '.status="warning" | .warningSentAt=$now' <<<"$state")"
+        updated="$($JQ_BIN --argjson now "$now" \
+            '.status="warning" | .warningNotifiedAt=$now | .warningDeliveryMode="native-notification"' \
+            <<<"$state")"
         write_state "$state_file" "$updated"
         release_lock "$lock_dir" || true
         notify_user "Agent task time warning" "$message"
         return 0
     fi
 
-    # Persist the next block before steering. A PreToolUse hook triggered by the
-    # checkpoint can therefore never observe the old overdue deadline.
-    updated="$($JQ_BIN --argjson now "$now" '
+    delivery_mode="native-notification"
+
+    # Persist the next block before scheduling the detached report. Neither the
+    # report process nor the primary hook ever types into the live terminal.
+    updated="$($JQ_BIN --argjson now "$now" --arg deliveryMode "$delivery_mode" '
         . as $previous
         | ($previous.warningSeconds // ($previous.deadlineAt - $previous.warningAt)) as $warningSeconds
-        | .version=3
+        | .version=5
         | .status="running"
         | .checkpointCount=((.checkpointCount // 0) + 1)
         | .lastCheckpointAt=$now
         | .lastCheckpointDeadlineAt=$previous.deadlineAt
         | .lastCheckpointDeliveryStatus="pending"
+        | .lastCheckpointDeliveryMode=$deliveryMode
         | .startedAt=$now
         | .warningSeconds=$warningSeconds
         | .warningAt=($now + .seconds - $warningSeconds)
         | .deadlineAt=($now + .seconds)
-        | del(.warningSentAt, .expiredAt, .lastCheckpointDeliveredAt, .lastCheckpointDeliveryFailedAt)
+        | del(.warningSentAt, .warningNotifiedAt, .expiredAt, .lastCheckpointDeliveredAt, .lastCheckpointDeliveryFailedAt)
     ' <<<"$state")"
     if ! write_state "$state_file" "$updated"; then
         release_lock "$lock_dir" || true
         return 1
     fi
 
-    if send_steer "$target" "$message"; then
-        updated="$($JQ_BIN --argjson now "$now" '.lastCheckpointDeliveryStatus="sent" | .lastCheckpointDeliveredAt=$now' <<<"$updated")"
-        if ! write_state "$state_file" "$updated"; then
-            release_lock "$lock_dir" || true
-            notify_user "Agent checkpoint delivery uncertain" "The next timer block is armed, but delivery status could not be persisted."
-            return 1
-        fi
-        release_lock "$lock_dir" || true
-        notify_user "Agent checkpoint due" "$message"
-        play_expiry_sound "$updated"
-        return 0
+    if [[ "$agent_type" == "codex" ]] && start_codex_side_report "$state_file" "$updated" "$now"; then
+        delivery_mode="codex-exec"
     fi
-
-    updated="$($JQ_BIN --argjson now "$now" '.lastCheckpointDeliveryStatus="failed" | .lastCheckpointDeliveryFailedAt=$now' <<<"$updated")"
-    write_state "$state_file" "$updated" || true
+    updated="$(cat "$state_file")"
+    updated="$($JQ_BIN --argjson now "$now" --arg deliveryMode "$delivery_mode" \
+        '.lastCheckpointDeliveryStatus="sent" | .lastCheckpointDeliveryMode=$deliveryMode | .lastCheckpointDeliveredAt=$now' <<<"$updated")"
+    write_state "$state_file" "$updated"
     release_lock "$lock_dir" || true
-    notify_user "Agent checkpoint delivery failed" "The next timer block remains armed; the checkpoint steer could not be delivered."
-    return 1
+    notify_user "Agent checkpoint due" "$message"
+    play_expiry_sound "$updated"
+    return 0
 }
 
 AGENT_TIMER_SLEEP_PID=""
@@ -939,7 +1344,8 @@ retire_stale_worker_state() {
         release_lock "$lock_dir" || true
         return 1
     fi
-    updated="$($JQ_BIN --argjson now "$(now_epoch)" '.status="stale" | .staleAt=$now' <<<"$state")"
+    stop_side_report_from_state "$state"
+    updated="$($JQ_BIN --argjson now "$(now_epoch)" '.status="stale" | .staleAt=$now | if ((.sideReport.status // "") | test("^(launching|running)$")) then .sideReport.status="canceled" | .sideReport.canceledAt=$now else . end' <<<"$state")"
     write_state "$state_file" "$updated"
     release_lock "$lock_dir" || true
     notify_user "Agent timer target ended" "Retired the recurring timer after its agent or tmux pane exited."
@@ -1017,10 +1423,20 @@ hook_context() {
     "$JQ_BIN" -n --arg event "$event" --arg message "$message" '{hookSpecificOutput:{hookEventName:$event,additionalContext:$message}}'
 }
 
+schedule_fire_state() {
+    local state_file="$1" token="$2" phase="$3"
+
+    command -v nohup >/dev/null 2>&1 || return 1
+    nohup "$SELF" _fire "$state_file" "$token" "$phase" </dev/null >/dev/null 2>&1 &
+}
+
 handle_hook() {
     local input event session_id turn_id cwd seconds target timer_id state state_file now deadline reason status state_turn lock_dir token
     input="$(cat)"
-    require_command "$JQ_BIN"
+    if [[ -f "$(disabled_latch_file)" ]] || ! command -v "$JQ_BIN" >/dev/null 2>&1; then
+        printf '{}\n'
+        return 0
+    fi
     event="$($JQ_BIN -r '.hook_event_name // empty' <<<"$input")"
     session_id="$($JQ_BIN -r '.session_id // empty' <<<"$input")"
     turn_id="$($JQ_BIN -r '.turn_id // empty' <<<"$input")"
@@ -1030,6 +1446,10 @@ handle_hook() {
 
     case "$event" in
         UserPromptSubmit)
+            if ! automatic_start_enabled 2>/dev/null; then
+                printf '{}\n'
+                return 0
+            fi
             seconds="$(configured_seconds)"
             if ! is_positive_integer "$seconds"; then
                 reason="TASK_TIMELIMIT_SECS is invalid; no task deadline was armed. Set it to a positive integer before starting Codex."
@@ -1037,9 +1457,8 @@ handle_hook() {
                 return 0
             fi
             target="${TMUX_PANE:-}"
-            if ! state="$(start_timer "$seconds" "$target" "$timer_id" "$turn_id" "$cwd" "${AGENT_TIMER_EXPIRY_MESSAGE:-$DEFAULT_EXPIRY_MESSAGE}" "${AGENT_TIMER_WARNING_MESSAGE:-$DEFAULT_WARNING_MESSAGE}" "$(configured_warning_seconds)" "${AGENT_TIMER_NO_WORKER:-0}" 2>&1)"; then
-                reason="Agent task timer could not start: $state"
-                "$JQ_BIN" -n --arg event "$event" --arg reason "$reason" '{systemMessage:$reason,hookSpecificOutput:{hookEventName:$event,additionalContext:$reason}}'
+            if ! state="$(start_timer "$seconds" "$target" "$timer_id" "$turn_id" "$cwd" "${AGENT_TIMER_EXPIRY_MESSAGE:-$DEFAULT_EXPIRY_MESSAGE}" "${AGENT_TIMER_WARNING_MESSAGE:-$DEFAULT_WARNING_MESSAGE}" "$(configured_warning_seconds)" "${AGENT_TIMER_NO_WORKER:-0}" automatic 2>&1)"; then
+                printf '{}\n'
                 return 0
             fi
             hook_context "$state" "$event"
@@ -1060,7 +1479,8 @@ handle_hook() {
             ;;
         PreToolUse)
             if [[ ! -f "$state_file" ]]; then
-                exit 0
+                printf '{}\n'
+                return 0
             fi
             state="$(cat "$state_file")"
             status="$($JQ_BIN -r '.status // empty' <<<"$state")"
@@ -1073,21 +1493,9 @@ handle_hook() {
             deadline="$($JQ_BIN -r '.deadlineAt' <<<"$state")"
             if (( now >= deadline )); then
                 token="$($JQ_BIN -r '.token' <<<"$state")"
-                fire_state "$state_file" "$token" expiry || true
-                if [[ -f "$state_file" ]]; then
-                    state="$(cat "$state_file")"
-                    status="$($JQ_BIN -r '.status // empty' <<<"$state")"
-                    if is_active_status "$status"; then
-                        hook_context "$state" "$event"
-                    else
-                        printf '{}\n'
-                    fi
-                else
-                    printf '{}\n'
-                fi
-            else
-                printf '{}\n'
+                schedule_fire_state "$state_file" "$token" expiry || true
             fi
+            printf '{}\n'
             ;;
         Stop)
             if [[ -f "$state_file" ]]; then
@@ -1099,7 +1507,8 @@ handle_hook() {
                 state_turn="$($JQ_BIN -r '.turnId // empty' <<<"$state")"
                 if [[ "$state_turn" == "$turn_id" ]] && is_active_status "$status"; then
                     stop_worker_from_state "$state"
-                    state="$($JQ_BIN --argjson now "$(now_epoch)" '.status="completed" | .completedAt=$now' <<<"$state")"
+                    stop_side_report_from_state "$state"
+                    state="$($JQ_BIN --argjson now "$(now_epoch)" '.status="completed" | .completedAt=$now | if ((.sideReport.status // "") | test("^(launching|running)$")) then .sideReport.status="canceled" | .sideReport.canceledAt=$now else . end' <<<"$state")"
                     write_state "$state_file" "$state"
                 fi
                 release_lock "$lock_dir" || true
@@ -1153,6 +1562,7 @@ prune_states() {
                 timestamp="$($JQ_BIN -r '.canceledAt // .closedAt // .closeFailedAt // .completedAt // .shutdownAt // .expiredAt // .staleAt // .deadlineAt' <<<"$state")"
                 age=$((now - timestamp))
                 if (( age >= retention )); then
+                    remove_side_report_artifacts_from_state "$state"
                     rm -f "$state_file"
                 fi
                 ;;
@@ -1177,7 +1587,8 @@ reconcile_states() {
         status="$($JQ_BIN -r '.status' <<<"$state")"
         if [[ "$status" == "running" || "$status" == "warning" ]] && ! verify_live_target "$state"; then
             stop_worker_from_state "$state"
-            updated="$($JQ_BIN --argjson now "$now" '.status="stale" | .staleAt=$now' <<<"$state")"
+            stop_side_report_from_state "$state"
+            updated="$($JQ_BIN --argjson now "$now" '.status="stale" | .staleAt=$now | if ((.sideReport.status // "") | test("^(launching|running)$")) then .sideReport.status="canceled" | .sideReport.canceledAt=$now else . end' <<<"$state")"
             write_state "$state_file" "$updated"
         fi
         release_lock "$lock_dir" || true
@@ -1395,8 +1806,9 @@ close_session() {
         status="$($JQ_BIN -r '.status // empty' <<<"$state")"
         if [[ "$state_session" == "$session_id" ]]; then
             stop_worker_from_state "$state"
+            stop_side_report_from_state "$state"
             if is_active_status "$status"; then
-                updated="$($JQ_BIN --argjson now "$closed_at" --arg sessionId "$session_id" '.status="closed" | .closedAt=$now | .closedSessionId=$sessionId' <<<"$state")"
+                updated="$($JQ_BIN --argjson now "$closed_at" --arg sessionId "$session_id" '.status="closed" | .closedAt=$now | .closedSessionId=$sessionId | if ((.sideReport.status // "") | test("^(launching|running)$")) then .sideReport.status="canceled" | .sideReport.canceledAt=$now else . end' <<<"$state")"
                 write_state "$state_file" "$updated"
             fi
         fi
@@ -1474,15 +1886,17 @@ cancel_timer() {
     [[ -f "$state_file" ]] || die "timer not found: $timer_id"
     with_lock "$state_file" || die "could not lock timer: $timer_id"
     state="$(cat "$state_file")"
-    write_state "$state_file" "$($JQ_BIN --argjson now "$(now_epoch)" '.status="canceled" | .canceledAt=$now' <<<"$state")"
     stop_worker_from_state "$state" || true
+    stop_side_report_from_state "$state" || true
+    write_state "$state_file" "$($JQ_BIN --argjson now "$(now_epoch)" '.status="canceled" | .canceledAt=$now | if ((.sideReport.status // "") | test("^(launching|running)$")) then .sideReport.status="canceled" | .sideReport.canceledAt=$now else . end' <<<"$state")"
     release_lock
     printf 'Canceled %s\n' "$timer_id"
 }
 
 shutdown_timers() {
     local reason="$1"
-    local lifecycle_lock latch state_file state status lock_dir updated now stopped=0 failures=0
+    local automatic_only="${2:-0}"
+    local lifecycle_lock latch state_file state status origin timer_id lock_dir updated now stopped=0 failures=0
 
     mkdir -p "$STATE_DIR"
     chmod 700 "$STATE_DIR"
@@ -1504,9 +1918,18 @@ shutdown_timers() {
         fi
         state="$(cat "$state_file")"
         status="$($JQ_BIN -r '.status // empty' <<<"$state")"
+        if [[ "$automatic_only" == "1" ]]; then
+            origin="$($JQ_BIN -r '.origin // empty' <<<"$state")"
+            timer_id="$($JQ_BIN -r '.id // empty' <<<"$state")"
+            if [[ "$origin" != "automatic" && ! ( -z "$origin" && "$timer_id" == codex-* ) ]]; then
+                release_lock "$lock_dir" || true
+                continue
+            fi
+        fi
         stop_worker_from_state "$state"
+        stop_side_report_from_state "$state"
         if is_active_status "$status"; then
-            updated="$($JQ_BIN --argjson now "$now" --arg reason "$reason" '.status="disabled" | .shutdownAt=$now | .shutdownReason=$reason' <<<"$state")"
+            updated="$($JQ_BIN --argjson now "$now" --arg reason "$reason" '.status="disabled" | .shutdownAt=$now | .shutdownReason=$reason | if ((.sideReport.status // "") | test("^(launching|running)$")) then .sideReport.status="canceled" | .sideReport.canceledAt=$now else . end' <<<"$state")"
             write_state "$state_file" "$updated"
             stopped=$((stopped + 1))
         fi
@@ -1577,7 +2000,7 @@ command_start() {
             *) die "unknown start option: $1" ;;
         esac
     done
-    state="$(start_timer "$seconds" "$target" "$timer_id" "$turn_id" "$PWD" "$message" "$warning_message" "$warning_seconds" "${AGENT_TIMER_NO_WORKER:-0}")"
+    state="$(start_timer "$seconds" "$target" "$timer_id" "$turn_id" "$PWD" "$message" "$warning_message" "$warning_seconds" "${AGENT_TIMER_NO_WORKER:-0}" manual)"
     if [[ "$json" == "1" ]]; then
         printf '%s\n' "$state"
     else
@@ -1592,6 +2015,7 @@ main() {
     local yes=0
     local force_active=0
     local reason="manual"
+    local automatic_only=0
     [[ -n "$command" ]] || { usage; exit 2; }
     shift || true
 
@@ -1635,15 +2059,18 @@ main() {
             while [[ $# -gt 0 ]]; do
                 case "$1" in
                     --reason) [[ $# -ge 2 ]] || die "--reason requires a value"; reason="$2"; shift 2 ;;
+                    --automatic-only) automatic_only=1; shift ;;
                     *) die "unknown shutdown option: $1" ;;
                 esac
             done
-            shutdown_timers "$reason"
+            shutdown_timers "$reason" "$automatic_only"
             ;;
         enable) [[ $# -eq 0 ]] || die "enable takes no options"; enable_timers ;;
         prune) prune_states ;;
         install-cron) install_cron ;;
         uninstall-cron) uninstall_cron ;;
+        _fire) [[ $# -eq 3 ]] || exit 2; fire_state "$1" "$2" "$3" ;;
+        _report-worker) [[ $# -eq 1 ]] || exit 2; report_worker "$1" ;;
         _worker) [[ $# -eq 2 ]] || exit 2; worker "$1" "$2" ;;
         help|-h|--help) usage ;;
         *) die "unknown command: $command" ;;

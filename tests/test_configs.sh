@@ -373,8 +373,7 @@ assert_contains "$TMUX_WHICH_KEY" "kill-session" "tmux command center can close 
 assert_contains "$TMUX_WHICH_KEY" "tmux-session-template new" "tmux command center creates typed windows"
 assert_contains "$TMUX_WHICH_KEY" "cycle.*tuxedo" "tmux command center cycles Tuxedo windows"
 assert_contains "$TMUX_WHICH_KEY" "new.*tuxedo" "tmux command center creates Tuxedo windows"
-assert_contains "$TMUX_WHICH_KEY" "cycle.*awrit" "tmux command center cycles Awrit windows"
-assert_contains "$TMUX_WHICH_KEY" "new.*awrit" "tmux command center creates Awrit windows"
+assert_not_contains "$TMUX_WHICH_KEY" "[Aa]writ" "tmux command center omits Awrit actions"
 assert_contains "$TMUX_WHICH_KEY" "tmux-session-template duplicate" "tmux command center duplicates the current window"
 assert_not_contains "$TMUX_CONFIG" "C-[0123] select-window" "Ctrl+0/1/2/3 no longer target fixed indices"
 assert_contains "$TMUX_CONFIG" "C-4 select-window -t :4" "Ctrl+4 keeps direct index switching"
@@ -431,7 +430,7 @@ assert_contains "$TMUX_TEMPLATE_HELPER" "ensure_standard_tmux_window.*terminal 0
 assert_contains "$TMUX_TEMPLATE_HELPER" "ensure_standard_tmux_window.*codex 1 codex" "tmux template starts Codex at window 1"
 assert_contains "$TMUX_TEMPLATE_HELPER" "ensure_standard_tmux_window.*nvim 2 nvim" "tmux template starts Neovim at window 2"
 assert_contains "$TMUX_TEMPLATE_HELPER" "ensure_standard_tmux_window.*tuxedo 3 todo" "tmux template starts Tuxedo through the canonical todo wrapper at window 3"
-assert_contains "$TMUX_TEMPLATE_HELPER" 'ensure_standard_tmux_window.*awrit 4 ""' "tmux template keeps canonical Awrit lazy at window 4"
+assert_not_contains "$TMUX_TEMPLATE_HELPER" "[Aa]writ" "tmux template omits the Awrit window type"
 assert_contains "$SCRATCHPADS" "hide_scratchpad_and_restore_focus" "scratchpads toggles Codex visibility without closing"
 assert_contains "$SCRATCHPADS" "restore_origin_focus" "scratchpads restore the originating display and space"
 

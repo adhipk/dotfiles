@@ -1,8 +1,8 @@
 apiVersion: dotfiles/v1
 kind: Module
 id: terminal-window-types
-version: 1.1.0
-description: Provides typed terminal, Codex, Neovim, Tuxedo, and Awrit tmux windows and their terminal-facing controls.
+version: 2.0.0
+description: Provides typed terminal, Codex, Neovim, and Tuxedo tmux windows and their terminal-facing controls.
 dataKey: modules.terminalWindowTypes
 distribution:
   standalone: true
@@ -13,7 +13,6 @@ requires:
     - codex
     - nvim
     - todo
-    - awrit
   libraries:
     - core.sh
     - tmux.sh
@@ -32,10 +31,10 @@ targets:
     destination: ~/bin/tmux-session-template
     bridge: home/bin/executable_tmux-session-template.tmpl
     ownership: exclusive
-  - service: command
-    source: targets/awrit-path.tmpl
-    destination: ~/bin/awrit
-    bridge: home/bin/symlink_awrit.tmpl
+  - service: chezmoi
+    source: install/remove-legacy-awrit-link.sh.tmpl
+    destination: chezmoi before-apply lifecycle
+    bridge: home/.chezmoiscripts/run_onchange_before_remove-legacy-awrit-link.sh.tmpl
     ownership: exclusive
   - service: tmux
     source: targets/tmux.conf.tmpl

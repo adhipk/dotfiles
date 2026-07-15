@@ -36,3 +36,5 @@ x 2026-07-13 2026-07-13 Curate resume-reloaded with completed showcaseable proje
 x 2026-07-13 2026-07-13 Fix Awrit rendering/input compatibility inside tmux using the Ghostty discussion 5924 workaround +dotfiles @tmux id:a77d4180-02a2-4a43-85eb-a26081db7ccf owner:codex
 x 2026-07-13 2026-07-13 Restore Shift+Enter in Codex through the Ghostty and tmux keyboard boundary +dotfiles @tmux id:e440d6a8-453c-43ee-a495-f389108c007b owner:codex
 x 2026-07-13 2026-07-13 Evaluate and integrate marromlam Awrit tmux-support branch without disturbing live sessions +dotfiles @tmux id:78bea955-5d87-40ec-9d07-96bfd875db9f owner:codex
+x 2026-07-14 2026-07-14 Remove Awrit from managed tmux, bootstrap, and dependency surfaces +dotfiles @tmux id:2fe6566f-e80d-48c0-ae7c-c5b1a62c4bd6 owner:codex
+x 2026-07-14 2026-07-14 Make disabled or unavailable agent timer hooks fail open to normal agent behavior +dotfiles @agent id:f7051955-5cf0-48a7-8749-836070d5de43 owner:codex

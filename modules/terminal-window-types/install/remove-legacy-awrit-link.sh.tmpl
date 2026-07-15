@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+home_dir={{ .chezmoi.homeDir | quote }}
+legacy_link="$home_dir/bin/awrit"
+legacy_target="$home_dir/awrit/awrit"
+
+[[ -L "$legacy_link" ]] || exit 0
+
+current_target=$(readlink "$legacy_link")
+if [[ "$current_target" != "$legacy_target" ]]; then
+    printf 'chezmoi: preserving non-managed Awrit path: %s -> %s\n' \
+        "$legacy_link" "$current_target" >&2
+    exit 0
+fi
+
+unlink "$legacy_link"

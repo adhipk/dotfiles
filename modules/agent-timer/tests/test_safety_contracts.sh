@@ -172,9 +172,9 @@ old_prompt='{"hook_event_name":"UserPromptSubmit","session_id":"replace","turn_i
 new_prompt='{"hook_event_name":"UserPromptSubmit","session_id":"replace","turn_id":"turn-new","cwd":"/tmp/work"}'
 old_stop='{"hook_event_name":"Stop","session_id":"replace","turn_id":"turn-old","cwd":"/tmp/work"}'
 old_pretool='{"hook_event_name":"PreToolUse","session_id":"replace","turn_id":"turn-old","cwd":"/tmp/work","tool_name":"Bash"}'
-TMUX_PANE=%9 TASK_TIMELIMIT_SECS=10 AGENT_TIMER_NOW=1100 "$TIMER" hook <<<"$old_prompt" >/dev/null
+TMUX_PANE=%9 AGENT_TIMER_AUTO_START=true TASK_TIMELIMIT_SECS=10 AGENT_TIMER_NOW=1100 "$TIMER" hook <<<"$old_prompt" >/dev/null
 AGENT_TIMER_NOW=1101 "$TIMER" cancel --id codex-replace >/dev/null
-TMUX_PANE=%9 TASK_TIMELIMIT_SECS=100 AGENT_TIMER_NOW=1102 "$TIMER" hook <<<"$new_prompt" >/dev/null
+TMUX_PANE=%9 AGENT_TIMER_AUTO_START=true TASK_TIMELIMIT_SECS=100 AGENT_TIMER_NOW=1102 "$TIMER" hook <<<"$new_prompt" >/dev/null
 old_pretool_result="$(TMUX_PANE=%9 AGENT_TIMER_NOW=1111 "$TIMER" hook <<<"$old_pretool")"
 TMUX_PANE=%9 AGENT_TIMER_NOW=1112 "$TIMER" hook <<<"$old_stop" >/dev/null
 replacement_state="$(cat "$AGENT_TIMER_STATE_DIR/codex-replace.json")"
@@ -189,7 +189,7 @@ AGENT_TIMER_NOW=2000 "$TIMER" start --seconds 100 --warning-seconds 20 --target 
 export FAKE_TMUX_SNAPSHOT="\$9|renamed-work|@1|%9|$$|/dev/ttys999|bash"
 : >"$FAKE_TMUX_LOG"
 AGENT_TIMER_NOW=2080 "$TIMER" tick
-assert_eq "3" "$(wc -l <"$FAKE_TMUX_LOG" | tr -d ' ')" "session rename and pane command change do not suppress a valid steer"
+assert_eq "0" "$(wc -l <"$FAKE_TMUX_LOG" | tr -d ' ')" "session rename and pane command change keep warning delivery out of terminal input"
 assert_eq "warning" "$(jq -r '.status' "$AGENT_TIMER_STATE_DIR/mutable.json")" "mutable tmux metadata does not mark the target stale"
 
 printf '\nTesting active-agent inventory and close protection...\n'
@@ -292,7 +292,7 @@ recurring_first_deadline="$(jq -r '.deadlineAt' <<<"$recurring_state")"
 TRACKED_PIDS+=("$recurring_worker_pid")
 assert_eq "ready" "$(jq -r '.workerLaunchStatus // empty' <<<"$recurring_state")" "tmux-owned worker self-registers before start returns"
 assert_eq "1" "$(wc -l <"$FAKE_TMUX_RUN_SHELL_LOG" | tr -d ' ')" "one tmux server launch owns the recurring worker"
-if wait_for_state "$AGENT_TIMER_STATE_DIR/worker-recurrence.json" '.status == "warning" and (.warningSentAt > 0)'; then
+if wait_for_state "$AGENT_TIMER_STATE_DIR/worker-recurrence.json" '.status == "warning" and (.warningNotifiedAt > 0) and .warningDeliveryMode == "native-notification"'; then
     pass "real worker reaches warning state"
 else
     fail "real worker reaches warning state" "warning was not observed before expiry"
@@ -411,6 +411,10 @@ if "$TIMER" shutdown --reason safety-test >"$TEMP_DIR/shutdown.out" 2>"$TEMP_DIR
     else
         assert_contains "$blocked_start" "disabled" "the disabled latch blocks post-shutdown re-arming"
     fi
+    disabled_hook_input='{"hook_event_name":"UserPromptSubmit","session_id":"disabled-hook","turn_id":"turn-disabled","cwd":"/tmp/work"}'
+    disabled_hook="$(TMUX_PANE=%9 AGENT_TIMER_AUTO_START=true "$TIMER" hook <<<"$disabled_hook_input")"
+    assert_eq "{}" "$disabled_hook" "a cached Codex hook fails open while the timer lifecycle is disabled"
+    assert_eq "missing" "$([[ -e "$AGENT_TIMER_STATE_DIR/codex-disabled-hook.json" ]] && printf present || printf missing)" "disabled hook creates no timer state"
     "$TIMER" enable >/dev/null
     reenabled_state="$(AGENT_TIMER_NO_WORKER=1 "$TIMER" start --seconds 60 --target %9 --id reenabled --json)"
     assert_eq "running" "$(jq -r '.status' <<<"$reenabled_state")" "explicit enable clears the latch for a future turn"

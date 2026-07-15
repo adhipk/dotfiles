@@ -16,11 +16,6 @@
       "installedVersion": "e261deb1b47614eed3400089ce7197dc68acc4eb",
       "resolvedVersion": "e261deb1b47614eed3400089ce7197dc68acc4eb"
     },
-    "chezmoi-git:awrit": {
-      "installedPath": null,
-      "installedVersion": "c692a737bfbfa8c647e03d0a1ab904247ce28ac5",
-      "resolvedVersion": "c692a737bfbfa8c647e03d0a1ab904247ce28ac5"
-    },
     "chezmoi-git:projects/gh-create-repo": {
       "installedPath": null,
       "installedVersion": "ad85879fe7d91e10362da14f6d3f69840bce478d",
@@ -246,11 +241,6 @@
       "installedVersion": "present",
       "resolvedVersion": null
     },
-    "local-git:awrit": {
-      "installedPath": "/Users/adhipkashyap/awrit",
-      "installedVersion": "c692a737bfbfa8c647e03d0a1ab904247ce28ac5",
-      "resolvedVersion": "c692a737bfbfa8c647e03d0a1ab904247ce28ac5"
-    },
     "local-git:gh-create-repo": {
       "installedPath": "/Users/adhipkashyap/projects/gh-create-repo",
       "installedVersion": "ad85879fe7d91e10362da14f6d3f69840bce478d",
@@ -364,7 +354,7 @@
     "module-executable:tmux-session-template": {
       "installedPath": "/Users/adhipkashyap/bin/tmux-session-template",
       "installedVersion": null,
-      "resolvedVersion": "ca5d32bb1abd7ba5549ed8297f8ec725beef096a77f7c6f8bfe5fe40bbce91f9"
+      "resolvedVersion": "767ba8d6c7eac6a57a105e2222788c9b01641a115ee5aec53960fffd9b15f990"
     },
     "module-executable:zsh": {
       "installedPath": "/bin/zsh",

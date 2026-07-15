@@ -1,0 +1,3 @@
+{{- if .modules.terminalWindowTypes.enabled -}}
+{{ includeTemplate "../modules/terminal-window-types/install/remove-legacy-awrit-link.sh.tmpl" . }}
+{{- end -}}

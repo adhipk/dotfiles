@@ -54,12 +54,6 @@ path = ".local/share/raycast-extensions/raycast-lucide-excalidraw"
 revision = "f6704782dd514c5c72e5d03a2c651a31523f167c"
 
 [[gitPins]]
-id = "chezmoi-git:awrit"
-manager = "chezmoi"
-path = "awrit"
-revision = "c692a737bfbfa8c647e03d0a1ab904247ce28ac5"
-
-[[gitPins]]
 id = "chezmoi-git:projects/kittentts-cli"
 manager = "chezmoi"
 path = "projects/kittentts-cli"
@@ -124,19 +118,6 @@ setupCommands = [
     "npm --prefix projects/raycast-extension ci",
     "npm --prefix projects/excalidraw-library run generate",
 ]
-
-[[externalProjects]]
-name = "awrit"
-url = "git@github.com:adhipk/awrit.git"
-refreshPeriod = "168h"
-path = "awrit"
-requiredExecutables = ["curl", "unzip"]
-rerunWhenMissingPaths = [
-    ".bun/bin/bun",
-    "node_modules",
-    "awrit-native-rs/awrit-native-rs.darwin-arm64.node",
-]
-setupCommands = ["./setup.sh"]
 
 [[externalProjects]]
 name = "kittentts-cli"

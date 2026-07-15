@@ -14,7 +14,6 @@ PROJECT_DIR="$TEMP_DIR/project"
 TYPE_DIR="$PROJECT_DIR/current-pane"
 TMUX_CONFIG="$TEMP_DIR/tmux.conf"
 TUXEDO_CALLS_FILE="$TEMP_DIR/tuxedo-calls"
-AWRIT_CALLS_FILE="$TEMP_DIR/awrit-calls"
 
 PASSED=0
 FAILED=0
@@ -116,22 +115,7 @@ wait_for_tuxedo_calls() {
     return 1
 }
 
-wait_for_awrit_calls() {
-    local expected="$1"
-    local attempt
-
-    for attempt in {1..100}; do
-        if [[ -f "$AWRIT_CALLS_FILE" ]] \
-            && [[ "$(wc -l < "$AWRIT_CALLS_FILE" | tr -d '[:space:]')" -ge "$expected" ]]; then
-            return 0
-        fi
-        sleep 0.02
-    done
-    return 1
-}
-
 mkdir -p "$FAKE_BIN" "$PROJECT_DIR" "$TYPE_DIR"
-: > "$AWRIT_CALLS_FILE"
 
 cat > "$FAKE_BIN/codex" <<'EOF'
 #!/usr/bin/env bash
@@ -142,18 +126,13 @@ cat > "$FAKE_BIN/nvim" <<'EOF'
 exec sleep 300
 EOF
 TUXEDO_CALLS_FILE_QUOTED=$(printf '%q' "$TUXEDO_CALLS_FILE")
-AWRIT_CALLS_FILE_QUOTED=$(printf '%q' "$AWRIT_CALLS_FILE")
 cp "$TODO_FIXTURE" "$FAKE_BIN/todo"
 cat > "$FAKE_BIN/tuxedo" <<EOF
 #!/usr/bin/env bash
 printf '%s|%s|%s|%s\n' "\$PWD" "\$TODO_DIR" "\$TODO_FILE" "\$DONE_FILE" >> $TUXEDO_CALLS_FILE_QUOTED
 exec sleep 300
 EOF
-cat > "$FAKE_BIN/awrit" <<EOF
-#!/usr/bin/env bash
-printf '%s\n' "\$PWD" >> $AWRIT_CALLS_FILE_QUOTED
-EOF
-chmod +x "$FAKE_BIN/codex" "$FAKE_BIN/nvim" "$FAKE_BIN/todo" "$FAKE_BIN/tuxedo" "$FAKE_BIN/awrit"
+chmod +x "$FAKE_BIN/codex" "$FAKE_BIN/nvim" "$FAKE_BIN/todo" "$FAKE_BIN/tuxedo"
 
 cat > "$TMUX_CONFIG" <<EOF
 set -g default-shell /bin/bash
@@ -191,8 +170,8 @@ echo ""
 echo "Testing the automatic template..."
 new_session -d -s ordinary -c "$PROJECT_DIR"
 assert_equals \
-    "ordinary sessions get terminal/codex/nvim/tuxedo/awrit at 0/1/2/3/4" \
-    $'0:terminal\n1:codex\n2:nvim\n3:tuxedo\n4:awrit' \
+    "ordinary sessions get terminal/codex/nvim/tuxedo at 0/1/2/3" \
+    $'0:terminal\n1:codex\n2:nvim\n3:tuxedo' \
     "$(session_windows ordinary)"
 
 CANONICAL_PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd -P)"
@@ -209,14 +188,13 @@ assert_equals \
     "standard" \
     "$(tmux_test show-options -qv -t ordinary @dotfiles_tmux_template)"
 assert_equals \
-    "template windows carry stable terminal/codex/nvim/tuxedo/awrit type metadata" \
-    $'terminal\ncodex\nnvim\ntuxedo\nawrit' \
+    "template windows carry stable terminal/codex/nvim/tuxedo type metadata" \
+    $'terminal\ncodex\nnvim\ntuxedo' \
     "$(
         window_type "$(window_id_at_index ordinary 0)"
         window_type "$(window_id_at_index ordinary 1)"
         window_type "$(window_id_at_index ordinary 2)"
         window_type "$(window_id_at_index ordinary 3)"
-        window_type "$(window_id_at_index ordinary 4)"
     )"
 sleep 0.1
 wait_for_tuxedo_calls 1 || true
@@ -232,11 +210,6 @@ assert_equals \
         tmux_test list-panes -t '=ordinary:nvim' -F '#{pane_current_command}'
         tmux_test list-panes -t '=ordinary:tuxedo' -F '#{pane_current_command}'
     )"
-assert_equals \
-    "canonical Awrit stays lazy instead of opening a browser for every session" \
-    "0|bash" \
-    "$(printf '%s|' "$(wc -l < "$AWRIT_CALLS_FILE" | tr -d '[:space:]')"; tmux_test list-panes -t '=ordinary:awrit' -F '#{pane_current_command}')"
-
 echo ""
 echo "Testing typed window creation and cycling..."
 mkdir -p "$TEMP_DIR/home"
@@ -252,13 +225,12 @@ CANONICAL_TYPE_DIR=$(cd "$TYPE_DIR" && pwd -P)
 CANONICAL_CODEX_ID=$(window_id_at_index ordinary 1)
 CANONICAL_NVIM_ID=$(window_id_at_index ordinary 2)
 CANONICAL_TUXEDO_ID=$(window_id_at_index ordinary 3)
-CANONICAL_AWRIT_ID=$(window_id_at_index ordinary 4)
 TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
     "$TEMPLATE_HELPER" new ordinary codex "$TERMINAL_PANE"
 NEW_CODEX_ID=$(active_window_id ordinary)
 assert_equals \
     "new Codex creates and selects one duplicate in the source pane directory" \
-    "6|codex|codex|$CANONICAL_TYPE_DIR|$NEW_CODEX_ID" \
+    "5|codex|codex|$CANONICAL_TYPE_DIR|$NEW_CODEX_ID" \
     "$(
         printf '%s|' "$(session_window_count ordinary)"
         printf '%s|' "$(window_type "$NEW_CODEX_ID")"
@@ -309,14 +281,13 @@ TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
     "$TEMPLATE_HELPER" ensure ordinary "$PROJECT_DIR"
 assert_equals \
     "ensure remains idempotent after a renamed typed duplicate" \
-    $'6\nterminal\ncodex\nnvim\ntuxedo\nawrit\ncodex' \
+    $'5\nterminal\ncodex\nnvim\ntuxedo\ncodex' \
     "$(
         printf '%s\n' "$(session_window_count ordinary)"
         window_type "$(window_id_at_index ordinary 0)"
         window_type "$(window_id_at_index ordinary 1)"
         window_type "$(window_id_at_index ordinary 2)"
         window_type "$(window_id_at_index ordinary 3)"
-        window_type "$(window_id_at_index ordinary 4)"
         window_type "$NEW_CODEX_ID"
     )"
 
@@ -380,27 +351,15 @@ assert_equals \
     "$CANONICAL_TUXEDO_ID" \
     "$(active_window_id ordinary)"
 
+WINDOW_COUNT_BEFORE_REMOVED_TYPE=$(session_window_count ordinary)
+REMOVED_TYPE_STATUS=0
 TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
-    "$TEMPLATE_HELPER" new ordinary awrit "$TERMINAL_PANE"
-NEW_AWRIT_ID=$(active_window_id ordinary)
-wait_for_awrit_calls 1 || true
+    "$TEMPLATE_HELPER" new ordinary awrit "$TERMINAL_PANE" >/dev/null 2>&1 \
+    || REMOVED_TYPE_STATUS=$?
 assert_equals \
-    "new Awrit creates a typed browser launcher in the source pane directory" \
-    "awrit|awrit|$CANONICAL_TYPE_DIR|bash|$CANONICAL_TYPE_DIR|$NEW_AWRIT_ID" \
-    "$(
-        printf '%s|' "$(window_type "$NEW_AWRIT_ID")"
-        printf '%s|' "$(tmux_test display-message -p -t "$NEW_AWRIT_ID" '#{window_name}')"
-        printf '%s|' "$(tmux_test display-message -p -t "$NEW_AWRIT_ID" '#{pane_current_path}')"
-        printf '%s|' "$(tmux_test display-message -p -t "$NEW_AWRIT_ID" '#{pane_current_command}')"
-        printf '%s|' "$(tail -n 1 "$AWRIT_CALLS_FILE" 2>/dev/null || true)"
-        active_window_id ordinary
-    )"
-TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
-    "$TEMPLATE_HELPER" cycle ordinary awrit "$NEW_AWRIT_ID"
-assert_equals \
-    "Awrit cycling wraps to the canonical Awrit launcher" \
-    "$CANONICAL_AWRIT_ID" \
-    "$(active_window_id ordinary)"
+    "the removed Awrit type is rejected without creating a window" \
+    "2|$WINDOW_COUNT_BEFORE_REMOVED_TYPE" \
+    "$REMOVED_TYPE_STATUS|$(session_window_count ordinary)"
 
 echo ""
 echo "Testing typed window duplication..."
@@ -487,23 +446,6 @@ assert_equals \
         active_window_id ordinary
     )"
 
-NEW_AWRIT_PANE=$(tmux_test list-panes -t "$NEW_AWRIT_ID" -F '#{pane_id}' | head -n 1)
-TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
-    "$TEMPLATE_HELPER" duplicate ordinary "$NEW_AWRIT_PANE"
-DUPLICATE_AWRIT_ID=$(active_window_id ordinary)
-wait_for_awrit_calls 2 || true
-assert_equals \
-    "duplicate Awrit preserves its type and source-pane directory" \
-    "awrit-2|awrit|$CANONICAL_TYPE_DIR|bash|$CANONICAL_TYPE_DIR|$DUPLICATE_AWRIT_ID" \
-    "$(
-        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_AWRIT_ID" '#{window_name}')"
-        printf '%s|' "$(window_type "$DUPLICATE_AWRIT_ID")"
-        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_AWRIT_ID" '#{pane_current_path}')"
-        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_AWRIT_ID" '#{pane_current_command}')"
-        printf '%s|' "$(tail -n 1 "$AWRIT_CALLS_FILE" 2>/dev/null || true)"
-        active_window_id ordinary
-    )"
-
 tmux_test new-window -d -t '=ordinary:' -n untyped -c "$PROJECT_DIR" "sleep 300"
 UNTYPED_ID=$(tmux_test list-windows -t '=ordinary' -F '#{window_id}|#{window_name}' \
     | awk -F '|' '$2 == "untyped" { print $1; exit }')
@@ -545,8 +487,8 @@ TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
     "$TEMPLATE_HELPER" ensure pre-tuxedo "$PROJECT_DIR"
 sleep 0.1
 assert_equals \
-    "ensure preserves an existing index-three window while adding Tuxedo and Awrit" \
-    "$PREEXISTING_INDEX_THREE_ID|5|notes||tuxedo|tuxedo" \
+    "ensure preserves an existing index-three window while adding Tuxedo" \
+    "$PREEXISTING_INDEX_THREE_ID|4|notes||tuxedo|tuxedo" \
     "$(
         printf '%s|' "$PREEXISTING_INDEX_THREE_ID"
         printf '%s|' "$(tmux_test display-message -p -t "$PREEXISTING_INDEX_THREE_ID" '#{window_index}')"
@@ -600,7 +542,7 @@ assert_equals \
 new_session -d -s "space name" -c "$PROJECT_DIR"
 assert_equals \
     "hook quoting supports session names with spaces" \
-    $'0:terminal\n1:codex\n2:nvim\n3:tuxedo\n4:awrit' \
+    $'0:terminal\n1:codex\n2:nvim\n3:tuxedo' \
     "$(session_windows "space name")"
 
 DOLLAR_SESSION='$named-session'
@@ -611,7 +553,7 @@ DOLLAR_SESSION_ID=$(tmux_test list-sessions -F '#{session_id}|#{session_name}' \
     | awk -F '|' -v name="$DOLLAR_SESSION" '$2 == name { print $1; exit }')
 assert_equals \
     "literal dollar-prefixed session names are not mistaken for tmux IDs" \
-    $'0:terminal\n1:codex\n2:nvim\n3:tuxedo\n4:awrit' \
+    $'0:terminal\n1:codex\n2:nvim\n3:tuxedo' \
     "$(tmux_test list-windows -t "$DOLLAR_SESSION_ID" -F '#{window_index}:#{window_name}')"
 
 echo ""
@@ -632,11 +574,11 @@ assert_equals \
     "$(head -n 1 "$TUXEDO_CALLS_FILE" 2>/dev/null || true)"
 assert_equals \
     "explicit ensure mode creates the shared layout idempotently" \
-    $'0:terminal\n1:codex\n2:nvim\n3:tuxedo\n4:awrit' \
+    $'0:terminal\n1:codex\n2:nvim\n3:tuxedo' \
     "$(session_windows scratchpad)"
 assert_equals \
     "explicit ensure mode does not duplicate windows" \
-    "5" \
+    "4" \
     "$(session_window_count scratchpad)"
 
 new_session -d -e DOTFILES_TMUX_TEMPLATE=skip -s concurrent -c "$PROJECT_DIR" -n terminal
@@ -656,7 +598,7 @@ assert_equals \
     "$FIRST_ENSURE_STATUS:$SECOND_ENSURE_STATUS"
 assert_equals \
     "concurrent ensure calls create one copy of each window" \
-    $'0:terminal\n1:codex\n2:nvim\n3:tuxedo\n4:awrit' \
+    $'0:terminal\n1:codex\n2:nvim\n3:tuxedo' \
     "$(session_windows concurrent)"
 
 echo ""

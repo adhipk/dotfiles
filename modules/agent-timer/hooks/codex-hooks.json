@@ -5,9 +5,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/bin/agent-timer hook",
-            "timeout": 5,
-            "statusMessage": "Arming recurring task checkpoint"
+            "command": "if [ -x \"$HOME/bin/agent-timer\" ]; then if output=$(\"$HOME/bin/agent-timer\" hook 2>/dev/null); then printf '%s\\n' \"$output\"; else printf '{}\\n'; fi; else cat >/dev/null; printf '{}\\n'; fi",
+            "timeout": 5
           }
         ]
       }
@@ -17,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/bin/agent-timer hook",
+            "command": "if [ -x \"$HOME/bin/agent-timer\" ]; then if output=$(\"$HOME/bin/agent-timer\" hook 2>/dev/null); then printf '%s\\n' \"$output\"; else printf '{}\\n'; fi; else cat >/dev/null; printf '{}\\n'; fi",
             "timeout": 5
           }
         ]
@@ -28,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/bin/agent-timer hook",
+            "command": "if [ -x \"$HOME/bin/agent-timer\" ]; then if output=$(\"$HOME/bin/agent-timer\" hook 2>/dev/null); then printf '%s\\n' \"$output\"; else printf '{}\\n'; fi; else cat >/dev/null; printf '{}\\n'; fi",
             "timeout": 5
           }
         ]
@@ -39,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/bin/agent-timer hook",
+            "command": "if [ -x \"$HOME/bin/agent-timer\" ]; then if output=$(\"$HOME/bin/agent-timer\" hook 2>/dev/null); then printf '%s\\n' \"$output\"; else printf '{}\\n'; fi; else cat >/dev/null; printf '{}\\n'; fi",
             "timeout": 5
           }
         ]

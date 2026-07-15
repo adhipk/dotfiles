@@ -55,6 +55,18 @@ assert_contains() {
     fi
 }
 
+assert_not_contains() {
+    local name="$1"
+    local pattern="$2"
+    local actual="$3"
+
+    if grep -q -- "$pattern" <<<"$actual"; then
+        fail "$name" "text without $pattern" "$actual"
+    else
+        pass "$name"
+    fi
+}
+
 echo "================================"
 echo "Tmux Command Center Tests"
 echo "================================"
@@ -199,8 +211,8 @@ assert_contains "window menu uses typed cycling" "tmux-session-template cycle" "
 assert_contains "window menu creates typed windows" "tmux-session-template new" "$NEW_WINDOWS"
 assert_contains "window menu cycles Tuxedo windows" "cycle #{session_id} tuxedo" "$WINDOWS"
 assert_contains "window menu creates Tuxedo windows" "new #{session_id} tuxedo" "$NEW_WINDOWS"
-assert_contains "window menu cycles Awrit windows" "cycle #{session_id} awrit" "$WINDOWS"
-assert_contains "window menu creates Awrit windows" "new #{session_id} awrit" "$NEW_WINDOWS"
+assert_not_contains "window menu omits Awrit cycling" "[Aa]writ" "$WINDOWS"
+assert_not_contains "window menu omits Awrit creation" "[Aa]writ" "$NEW_WINDOWS"
 assert_contains "window menu duplicates the current typed window" "tmux-session-template duplicate" "$WINDOWS"
 assert_contains "window menu renames windows" "rename-window" "$WINDOWS"
 assert_contains "window close is confirmed" "Close window" "$WINDOWS"

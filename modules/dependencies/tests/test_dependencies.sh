@@ -37,7 +37,7 @@ mkdir -p \
   "$ROOT/modules/dependencies/config" "$ROOT/modules/alpha" "$ROOT/modules/beta/bin" "$ROOT/modules/beta/targets" \
   "$ROOT/home/dot_local/lib/dotfiles" "$ROOT/home/dot_config/yazi" \
   "$HOME_DIR/.custom/plugins/tpm/.git" "$HOME_DIR/.custom/plugins/example/.git" "$HOME_DIR/.custom/plugins/unpinned/.git" \
-  "$HOME_DIR/projects/awrit/.git" \
+  "$HOME_DIR/projects/plugin-cli/.git" \
   "$FAKE_BIN" "$ROOT/nvim"
 cat >"$ROOT/modules/dependencies/config/sources.toml" <<'EOF'
 schema_version = 1
@@ -55,10 +55,10 @@ shared_library_dir = "home/dot_local/lib/dotfiles"
 tmux_plugin_dir = ".custom/plugins"
 
 [[local_git_plugins]]
-id = "awrit"
-path = "projects/awrit"
+id = "plugin-cli"
+path = "projects/plugin-cli"
 commit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-provides = ["awrit"]
+provides = ["plugin-cli"]
 EOF
 
 cat >"$ROOT/Brewfile" <<'EOF'
@@ -75,7 +75,7 @@ apiVersion: dotfiles/v1
 kind: Module
 id: alpha
 requires:
-  executables: [foo, missing-cli, cksum, bc, nvim, rg, ghostty, owned-cli, awrit]
+  executables: [foo, missing-cli, cksum, bc, nvim, rg, ghostty, owned-cli, plugin-cli]
   libraries: [core.sh]
 optional:
   executables: [optional-cli]
@@ -188,8 +188,8 @@ cat >"$FAKE_BIN/git" <<'EOF'
 #!/usr/bin/env bash
 printf 'git %s\n' "$*" >>"$TOOL_LOG"
 if [[ "$*" == *" status --porcelain=v1"* ]]; then
-  if [[ "$*" == *"/projects/awrit"* && "$GIT_DIRTY" == "1" ]]; then
-    printf ' M awrit\n'
+  if [[ "$*" == *"/projects/plugin-cli"* && "$GIT_DIRTY" == "1" ]]; then
+    printf ' M plugin-cli\n'
   fi
   if [[ "$*" == *"/.custom/plugins/tpm"* && "$GIT_PIN_DIRTY" == "1" ]]; then
     printf ' M bin/install_plugins\n'
@@ -232,8 +232,8 @@ assert_json 'any(.dependencies[]; .id == "module-executable:bc" and .pinStatus =
 assert_json 'any(.dependencies[]; .id == "module-executable:owned-cli" and .pinStatus == "source-hash" and .resolvedVersion != null and (.owners | sort) == ["alpha", "beta"] and (.sources | sort) == ["modules/alpha/module.yaml", "modules/beta/module.yaml"])' "module-provided executables resolve to their source hash and provider"
 assert_json '([.dependencies[] | select(.id == "module-executable:nvim" or .id == "module-executable:rg" or .id == "module-executable:ghostty")] | length) == 0' "Homebrew aliases do not create redundant module dependency authorities"
 assert_json 'any(.dependencies[]; .id == "homebrew:formula:neovim" and (.owners | index("alpha")) != null) and any(.dependencies[]; .id == "homebrew:formula:ripgrep" and (.owners | index("alpha")) != null) and any(.dependencies[]; .id == "homebrew:cask:ghostty" and (.owners | index("alpha")) != null)' "Homebrew formulae and casks inherit module ownership"
-assert_json 'any(.dependencies[]; .id == "local-git:awrit" and .declaredVersion == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" and .resolvedVersion == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" and (.installedPath | endswith("/projects/awrit")) and .providedExecutables == ["awrit"] and (.owners | index("alpha")) != null)' "status inventories the HOME-relative local Git plugin authority"
-assert_json '([.dependencies[] | select(.id == "module-executable:awrit")] | length) == 0 and any(.dependencies[]; .id == "local-git:awrit" and (.sources | index("modules/alpha/module.yaml")) != null)' "provided executables map module requirements to one local Git authority"
+assert_json 'any(.dependencies[]; .id == "local-git:plugin-cli" and .declaredVersion == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" and .resolvedVersion == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" and (.installedPath | endswith("/projects/plugin-cli")) and .providedExecutables == ["plugin-cli"] and (.owners | index("alpha")) != null)' "status inventories the HOME-relative local Git plugin authority"
+assert_json '([.dependencies[] | select(.id == "module-executable:plugin-cli")] | length) == 0 and any(.dependencies[]; .id == "local-git:plugin-cli" and (.sources | index("modules/alpha/module.yaml")) != null)' "provided executables map module requirements to one local Git authority"
 assert_json 'any(.dependencies[]; .id == "chezmoi-git:.custom/plugins/tpm" and .pinStatus == "commit" and .declaredVersion == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")' "status applies immutable pins to static ChezMoi git externals"
 assert_json 'any(.dependencies[]; .id == "chezmoi-git:.local/share/project")' "status inventories data-driven external projects"
 assert_json 'any(.dependencies[]; .id == "tpm:owner/example" and .pinStatus == "commit") and any(.dependencies[]; .id == "tpm:owner/unpinned" and .pinStatus == "commit" and .declaredVersion == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")' "status applies explicit commit pins where TPM only declares a floating plugin"
@@ -287,7 +287,7 @@ cp "$TEMP_DIR/install.good" "$ROOT/install.sh"
 run_deps snapshot --json
 assert_eq 0 "$STATUS" "snapshot succeeds entirely through fake local managers"
 assert_json '.dependencies["homebrew:tap:owner/tap"].installedVersion == "present"' "snapshot matches Homebrew taps case-insensitively"
-assert_json '.dependencies["local-git:awrit"].installedVersion == "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" and .dependencies["local-git:awrit"].resolvedVersion == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" and (.dependencies["local-git:awrit"].installedPath | endswith("/projects/awrit"))' "snapshot captures the local Git HEAD, declared commit, and checkout path"
+assert_json '.dependencies["local-git:plugin-cli"].installedVersion == "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" and .dependencies["local-git:plugin-cli"].resolvedVersion == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" and (.dependencies["local-git:plugin-cli"].installedPath | endswith("/projects/plugin-cli"))' "snapshot captures the local Git HEAD, declared commit, and checkout path"
 
 : >"$TOOL_LOG"
 CODIUM_FAIL=1 run_deps snapshot --json
@@ -305,7 +305,7 @@ assert_json 'any(.dependencies[]; .id == "homebrew:formula:foo" and .outdated ==
 assert_json 'any(.dependencies[]; .id == "homebrew:formula:missing-formula" and .state == "missing" and .updateStatus == "missing")' "check never calls a missing Homebrew entry current"
 assert_json 'any(.dependencies[]; .id == "homebrew:formula:foo" and .state == "available" and .installedVersion == "1.0.0" and .resolvedVersion == "1.1.0")' "check refreshes Homebrew installed and stable versions"
 assert_json '.summary.drifted > 0' "check reports local Git drift from the checked snapshot"
-assert_json 'any(.dependencies[]; .id == "local-git:awrit" and .installedVersion == "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" and .updateStatus == "local-modified" and .remoteStatus == "unchecked" and .drifted == true)' "check surfaces a dirty local plugin without claiming a remote result"
+assert_json 'any(.dependencies[]; .id == "local-git:plugin-cli" and .installedVersion == "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" and .updateStatus == "local-modified" and .remoteStatus == "unchecked" and .drifted == true)' "check surfaces a dirty local plugin without claiming a remote result"
 assert_json 'all(.dependencies[] | select(.manager == "chezmoi" or .manager == "tpm"); .updateStatus == "local-drift" or .updateStatus == "remote-unchecked")' "check surfaces Git remote update state as unchecked"
 if rg -q '^brew outdated --json=v2$' "$TOOL_LOG" && rg -q '^git -C .* rev-parse HEAD$' "$TOOL_LOG"; then
   pass "check delegates to existing Brew and Git manager surfaces"
@@ -320,7 +320,7 @@ fi
 if ! rg -q '^codium ' "$TOOL_LOG"; then pass "check does not invent a VSCodium update manager"; else fail "check does not invent a VSCodium update manager" "no codium mutation" "$(cat "$TOOL_LOG")"; fi
 
 GIT_HEAD=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa GIT_DIRTY=0 run_deps check --json
-assert_json 'any(.dependencies[]; .id == "local-git:awrit" and .updateStatus == "remote-unchecked" and .remoteStatus == "unchecked" and .drifted == false)' "a clean declared HEAD still reports remote availability as unchecked"
+assert_json 'any(.dependencies[]; .id == "local-git:plugin-cli" and .updateStatus == "remote-unchecked" and .remoteStatus == "unchecked" and .drifted == false)' "a clean declared HEAD still reports remote availability as unchecked"
 
 GIT_HEAD=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa GIT_PIN_DIRTY=1 run_deps check --json
 assert_json 'any(.dependencies[]; .id == "chezmoi-git:.custom/plugins/tpm" and .updateStatus == "local-modified" and .drifted == true)' "manager checks surface tracked changes in immutable ChezMoi and TPM checkouts"
@@ -362,7 +362,7 @@ run_deps status --json
 [[ "$STATUS" -ne 0 ]] && pass "malformed source TOML fails closed" || fail "malformed source TOML fails closed" "nonzero" "$STATUS"
 cp "$TEMP_DIR/config.good" "$ROOT/modules/dependencies/config/sources.toml"
 
-sed 's|path = "projects/awrit"|path = "../awrit"|' "$TEMP_DIR/config.good" >"$ROOT/modules/dependencies/config/sources.toml"
+sed 's|path = "projects/plugin-cli"|path = "../plugin-cli"|' "$TEMP_DIR/config.good" >"$ROOT/modules/dependencies/config/sources.toml"
 run_deps status --json
 if [[ "$STATUS" -ne 0 ]] && rg -q 'unsafe HOME-relative path' "$ERR"; then pass "local Git plugin paths cannot escape HOME"; else fail "local Git plugin paths cannot escape HOME" "unsafe path failure" "status=$STATUS err=$(cat "$ERR")"; fi
 cp "$TEMP_DIR/config.good" "$ROOT/modules/dependencies/config/sources.toml"

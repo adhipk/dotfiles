@@ -11,18 +11,27 @@ the module data, so profiles can set the default budget, warning lead time, and
 terminal-record retention without shell startup code:
 
 ```toml
+auto_start = false
 default_seconds = 600
 warning_seconds = 60
+report_timeout_seconds = 120
 retention_seconds = 604800
 expiry_sound = "Ping"
 preferred_agents = ["codex", "claude", "opencode"]
 ```
 
-Codex is the default terminal agent. The standard tmux layout starts it in window 1,
-and its `UserPromptSubmit` hook arms the timer automatically. For Claude Code or
-OpenCode, run `agent-timer start` at the beginning of the work turn. When more than
-one supported agent is present in a pane, the preferred list above decides which one
-owns the timer.
+The timer command and fail-open Codex hooks are installed, but `auto_start = false`
+keeps ordinary Codex, Claude Code, and OpenCode turns untimed. Start a timer
+explicitly with `agent-timer start`, set `AGENT_TIMER_AUTO_START=true` for one Codex
+session, or opt a profile into automatic start in the TOML. When more than one
+supported agent is present in a pane, the preferred list above decides which one
+owns an explicitly started timer.
+
+Automatic hooks are optional integration. A disabled lifecycle latch, missing timer
+command, unavailable dependency, non-tmux session, or failed worker launch returns
+an empty successful hook response and leaves the coding agent on its normal path.
+Manual `agent-timer start` remains strict so an operator can diagnose an explicit
+request.
 
 An environment variable remains an explicit per-session override. Set it
 before launching or prompting an agent when a different block is appropriate:
@@ -31,31 +40,34 @@ before launching or prompting an agent when a different block is appropriate:
 export TASK_TIMELIMIT_SECS=600
 ```
 
-A warning steer is sent according to `warning_seconds`; override that for one
-session with `TASK_TIME_WARNING_SECS`. At expiry the timer asks the agent to
-delegate a read-only status snapshot to an available subagent, post the update
-as commentary, and keep the primary task moving. It immediately advances the
-same state record into another block. With the managed defaults, every new
-block is 600 seconds. Expiry never ends the Codex turn or tmux session; work
-stops only when complete or genuinely blocked.
+A native warning notification is sent according to `warning_seconds`; override that
+for one session with `TASK_TIME_WARNING_SECS`. It never types a warning prompt into
+the agent. At expiry the timer advances the same state record into another block,
+then immediately notifies and beeps. For Codex it may start one separate
+`codex exec` process with `--ephemeral`, `--ignore-user-config`, a read-only sandbox,
+approvals disabled, automatic timing disabled, and a bounded timeout. It writes the
+full repository snapshot to a unique report beneath
+`~/.local/state/agent-timer`; state records its PID, status, timeout, report, and log
+paths. A second expiry never overlaps a running report. The detached process sees
+the repository, not the live TUI transcript or subagent state, and its prompt forbids
+edits, network access, external actions, and tmux mutation. Completion produces a
+second native notification with a sanitized bounded excerpt. Missing launch
+capability and non-Codex agents stay native-only. Automated delivery never sends
+tmux keys; `/btw` remains an explicit manual interactive Codex action.
 
-After a verified checkpoint steer is recorded, macOS plays the configured system
+At checkpoint expiry, macOS immediately plays the configured system
 sound once using `/usr/bin/afplay`. Set `expiry_sound = "none"` (or export
 `AGENT_TIMER_EXPIRY_SOUND=none`) to silence it; other names resolve below
 `/System/Library/Sounds`.
 
 The single worker captures immutable tmux session/pane IDs, the pane PID and TTY, and
-the exact agent PID, start time, and command. Before steering it verifies those
-fingerprints, so a stale timer will not type into a pane that has been reused;
+the exact agent PID, kind, start time, and command. Before delivery it verifies those
+fingerprints, so a stale timer cannot schedule a report for a reused pane;
 ordinary session renames and foreground-command display changes remain safe.
-Those fingerprints are retained across every re-armed block. Steering sends
-literal text, a harmless `End` navigation key, then Enter. Codex deliberately
-treats rapid literal input as a paste burst and otherwise turns Enter into a
-newline. A non-character `End` event deterministically flushes that state and
-keeps the cursor at the end before Enter submits the steer, regardless of
-message length. It never sends Ctrl-C or Escape and never
-starts a second Codex process, closes a tmux session, or creates a duplicate
-timer. The worker checks liveness
+Those fingerprints are retained across every re-armed block. Automated delivery
+never sends terminal input or creates or closes tmux resources. It allows at most one
+detached report process per timer, terminates it on timeout or lifecycle retirement,
+and otherwise falls back to native delivery. The worker checks liveness
 between bounded sleep slices and retires the timer as stale when the exact pane
 or agent exits, so a recurring timer cannot become an indefinite orphan.
 
@@ -71,20 +83,29 @@ worker dies; cron is not the primary timer because it cannot provide
 second-level deadlines. The state token and lock make a worker/tick race
 idempotent: only one checkpoint can advance a deadline. Removal is explicit:
 `agent-timer uninstall-cron` removes only its marked entry.
-Normal chezmoi apply manages that same marked entry automatically: enabling the
-module installs one entry, and disabling it removes the entry without touching
-unrelated cron jobs.
+Normal chezmoi apply manages that same marked entry automatically: the entry is
+present only when both the module and automatic start are enabled. The checked-in
+`auto_start = false` profile therefore runs no periodic timer service; an explicit
+manual timer uses only its dedicated worker. Reconciliation preserves unrelated
+cron jobs.
 
-Module disablement has a separate before-apply boundary. When
+Lifecycle changes have a separate before-apply boundary. When
 `modules.agentTimer.enabled` changes to `false`, chezmoi invokes the currently
 installed `agent-timer shutdown --reason module-disabled` before it removes the
-command, hooks, configuration, and tmux integration. Shutdown stops live timer
-workers, records their terminal status, and writes a disabled latch while it
+command, hooks, configuration, and tmux integration. An enabled apply with
+`autoStart: false` similarly invokes
+`shutdown --reason auto-start-disabled --automatic-only` so timers armed by an
+older automatic profile cannot survive the transition while explicitly started
+manual timers continue; it keeps the command, hooks, and configuration installed
+for manual use. New state records distinguish `automatic` from `manual` origin, and
+legacy hook records retain their canonical `codex-*` identity. Shutdown stops matching
+live
+timer workers, records their terminal status, and writes a disabled latch while it
 still owns the lifecycle lock; it does not delete
 `~/.local/state/agent-timer`. The after-apply lifecycle then removes only the
-marked cron entry. The latch prevents a prompt from re-arming a worker between
-shutdown and target removal. Re-enabling the module clears that latch before
-installing targets. If any timer state cannot be locked and stopped, the
+marked cron entry when disabled and clears the transient latch after the managed
+targets and new `auto_start` setting are installed. The latch prevents a prompt from
+re-arming a worker during reconciliation. If any timer state cannot be locked and stopped, the
 before-apply hook fails the apply instead of removing the command while workers
 may still be live.
 
@@ -122,7 +143,7 @@ active timers are never pruned.
 Codex requires one-time review of a new user hook. After applying the module,
 open `/hooks`, review `~/.codex/hooks.json`, and trust its command definition.
 
-The default checkpoint steer deliberately does not request a commit. A global timer cannot
+The default checkpoint request deliberately does not request a commit. A global timer cannot
 know whether every dirty file belongs to the active agent. When a commit is
 part of the requested workflow, use `--message` or
 `AGENT_TIMER_EXPIRY_MESSAGE` to say so explicitly.

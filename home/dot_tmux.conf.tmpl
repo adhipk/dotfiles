@@ -15,10 +15,14 @@ bind-key C-a send-prefix
 
 
 # Non-templated sessions keep tmux's one-based starting index. The typed-window
-# module pins terminal/codex/nvim/tuxedo/awrit to 0/1/2/3/4 when enabled.
+# module pins terminal/codex/nvim/tuxedo to 0/1/2/3 when enabled.
 set -g base-index 1
 # don't rename windows automatically
 set-option -g allow-rename off
+
+# Awrit previously enabled graphics passthrough globally. Explicitly clear the
+# legacy server option so a warm config reload is enough; no restart is needed.
+set-option -gu allow-passthrough
 
 {{ if .modules.tmuxSessions.enabled }}{{ printf "\n%s" (includeTemplate "../modules/tmux-sessions/targets/tmux.conf.tmpl" .) }}{{ end }}
 {{ if .modules.agentTimer.enabled }}{{ printf "\n%s" (includeTemplate "../modules/agent-timer/targets/tmux.conf.tmpl" .) }}{{ end }}
