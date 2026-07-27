@@ -38,3 +38,4 @@ x 2026-07-13 2026-07-13 Restore Shift+Enter in Codex through the Ghostty and tmu
 x 2026-07-13 2026-07-13 Evaluate and integrate marromlam Awrit tmux-support branch without disturbing live sessions +dotfiles @tmux id:78bea955-5d87-40ec-9d07-96bfd875db9f owner:codex
 x 2026-07-14 2026-07-14 Remove Awrit from managed tmux, bootstrap, and dependency surfaces +dotfiles @tmux id:2fe6566f-e80d-48c0-ae7c-c5b1a62c4bd6 owner:codex
 x 2026-07-14 2026-07-14 Make disabled or unavailable agent timer hooks fail open to normal agent behavior +dotfiles @agent id:f7051955-5cf0-48a7-8749-836070d5de43 owner:codex
+x 2026-07-27 2026-07-27 Fix Option number app window cycling +dotfiles @hotkeys id:98c7e4b6-1f43-4868-8169-282dd7891940 owner:codex
