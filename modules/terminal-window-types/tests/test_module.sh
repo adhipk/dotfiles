@@ -86,6 +86,7 @@ echo "===================================="
 
 assert_file "$MODULE_DIR/module.yaml" "module manifest exists"
 assert_executable "$MODULE_DIR/bin/tmux-session-template" "module owns its executable entrypoint"
+assert_executable "$MODULE_DIR/bin/tmux-window-program" "module owns its live program label resolver"
 assert_file "$MODULE_DIR/targets/tmux.conf.tmpl" "module owns its tmux behavior"
 assert_file "$MODULE_DIR/targets/ghostty.conf.tmpl" "module owns its Ghostty adapters"
 assert_file "$MODULE_DIR/targets/skhdrc.tmpl" "module owns its sided-Command adapters"
@@ -101,6 +102,9 @@ fi
 assert_contains "$DOTFILES_DIR/home/bin/executable_tmux-session-template.tmpl" \
     'includeTemplate "../modules/terminal-window-types/bin/tmux-session-template"' \
     "stable command path is a thin module bridge"
+assert_contains "$DOTFILES_DIR/home/bin/executable_tmux-window-program.tmpl" \
+    'includeTemplate "../modules/terminal-window-types/bin/tmux-window-program"' \
+    "program label command path is a thin module bridge"
 assert_contains "$DOTFILES_DIR/home/dot_tmux.conf.tmpl" \
     'includeTemplate "../modules/terminal-window-types/targets/tmux.conf.tmpl"' \
     "tmux mounts the module through an owned fragment"
@@ -135,6 +139,7 @@ assert_contains "$MODULE_DIR/bin/tmux-session-template" \
 render_profile true
 
 assert_executable "$DESTINATION/bin/tmux-session-template" "enabled profile installs the public command"
+assert_executable "$DESTINATION/bin/tmux-window-program" "enabled profile installs the live program label resolver"
 assert_contains "$DESTINATION/.tmux.conf" 'after-new-session[50]' "enabled profile renders automatic session setup"
 assert_contains "$DESTINATION/.tmux.conf" 'Cycle Tuxedo windows' "enabled profile renders typed cycling"
 assert_contains "$DESTINATION/.tmux.conf" 'New Tuxedo window' "enabled profile renders typed creation"
@@ -144,6 +149,8 @@ assert_absent "$DESTINATION/bin/awrit" "enabled profile does not install an Awri
 assert_contains "$DESTINATION/.tmux.conf" 'S-Enter send-keys Escape "[13;2u"' "enabled profile forwards Shift+Enter to Codex explicitly"
 assert_contains "$DESTINATION/.tmux.conf" 'Duplicate current window" S-F4' "enabled profile renders the duplicate bridge"
 assert_contains "$DESTINATION/.tmux.conf" '@resurrect-processes '\''codex tuxedo yazi'\''' "enabled profile contributes typed persistence"
+assert_contains "$DESTINATION/.tmux.conf" 'tmux-window-program' "enabled profile resolves toolbar labels from foreground processes"
+assert_not_contains "$DESTINATION/.tmux.conf" 'pane_current_command},node' "enabled profile does not hardcode a typed agent label"
 assert_contains "$DESTINATION/Library/Application Support/com.mitchellh.ghostty/config" 'keybind = cmd+backquote=csi:48;5u' "enabled profile renders Command cycling"
 assert_contains "$DESTINATION/Library/Application Support/com.mitchellh.ghostty/config" 'keybind = ctrl+shift+digit_3=csi:51;6u' "enabled profile renders typed creation translation"
 assert_contains "$DESTINATION/Library/Application Support/com.mitchellh.ghostty/config" 'keybind = shift+enter=csi:13;2u' "enabled profile distinguishes Shift+Enter"
@@ -167,8 +174,11 @@ fi
 render_profile false
 
 assert_absent "$DESTINATION/bin/tmux-session-template" "disabled profile removes the public command"
+assert_absent "$DESTINATION/bin/tmux-window-program" "disabled profile removes the live program label resolver"
 assert_not_contains "$DESTINATION/.tmux.conf" 'tmux-session-template' "disabled profile removes typed tmux actions"
 assert_not_contains "$DESTINATION/.tmux.conf" '@dotfiles_window_type' "disabled profile removes typed rename policy"
+assert_contains "$DESTINATION/.tmux.conf" 'set -g @dotfiles_window_label' "disabled profile still defines a live window label"
+assert_contains "$DESTINATION/.tmux.conf" '#{pane_current_command}' "disabled profile still labels windows from the active program"
 assert_contains "$DESTINATION/.tmux.conf" 'set-option -gu allow-passthrough' "disabled profile keeps the legacy passthrough reset"
 assert_not_contains "$DESTINATION/.tmux.conf" 'allow-passthrough on' "disabled profile does not enable graphics passthrough"
 assert_not_contains "$DESTINATION/Library/Application Support/com.mitchellh.ghostty/config" 'cmd+backquote' "disabled profile removes Ghostty cycling"
@@ -213,7 +223,7 @@ else
     fail "parent source renders after the disabled module folder is removed" "successful render" "render failed"
 fi
 
-assert_contains "$REMOVAL_HOME/.tmux.conf" 'Open tmux command center" S-F7' "physical removal preserves unrelated tmux behavior"
+assert_contains "$REMOVAL_HOME/.tmux.conf" 'Search tmux commands with Telescope" S-F7' "physical removal preserves unrelated tmux behavior"
 assert_contains "$REMOVAL_HOME/.skhdrc" 'skhd -k "f19"' "physical removal preserves unrelated skhd behavior"
 assert_contains "$REMOVAL_HOME/Library/Application Support/com.mitchellh.ghostty/config" 'keybind = cmd+b=' "physical removal preserves unrelated Ghostty behavior"
 

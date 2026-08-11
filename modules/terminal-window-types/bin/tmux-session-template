@@ -8,7 +8,7 @@
 set -euo pipefail
 
 DOTFILES_LIB_DIR="${DOTFILES_LIB_DIR:-$HOME/.local/lib/dotfiles}"
-for library in core.sh tmux.sh; do
+for library in core.sh prefs.sh tmux.sh; do
   if [[ ! -r "$DOTFILES_LIB_DIR/$library" ]]; then
     printf 'tmux-session-template: missing standard library: %s\n' "$DOTFILES_LIB_DIR/$library" >&2
     exit 1
@@ -170,8 +170,8 @@ window_type_index() {
 window_type_command() {
   case "$1" in
     terminal) printf '\n' ;;
-    codex) printf 'codex\n' ;;
-    nvim) printf 'nvim\n' ;;
+    codex) dotfiles_pref assistant codex ;;
+    nvim) dotfiles_pref terminal_editor nvim ;;
     tuxedo) printf 'todo\n' ;;
     *) return 1 ;;
   esac
@@ -382,7 +382,7 @@ window_ids_for_type() {
 
     index=$(tmux_window_index "$window_id")
     name=$(tmux_window_name "$window_id")
-    if [[ "$name" == "$type" \
+    if [[ "$name" == "$type" || "$name" =~ ^${type}-[0-9]+$ \
         || ("$standard_session" == true && "$allow_index_migration" == true \
           && "$index" == "$expected_index") ]]; then
       mark_tmux_window_type "$window_id" "$type"

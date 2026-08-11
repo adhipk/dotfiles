@@ -1,8 +1,8 @@
 apiVersion: dotfiles/v1
 kind: Module
 id: tmux-sessions
-version: 1.0.1
-description: Provides sesh-backed session selection, declarative tmux workspaces, and durable workspace persistence.
+version: 1.4.0
+description: Provides sesh-backed session selection, a compact agent/task overview with safe cleanup, daemon log sessions, declarative workspaces, and durable persistence.
 dataKey: modules.tmuxSessions
 distribution:
   standalone: true
@@ -11,6 +11,7 @@ requires:
     - bash
     - bun
     - fzf
+    - nvim
     - sesh
     - tmux
     - zoxide
@@ -20,6 +21,12 @@ state:
     - ~/.tmux/resurrect
   ephemeral: []
 commands:
+  - name: daemon
+    source: bin/daemon
+    target: ~/bin/daemon
+  - name: tmux-hub
+    source: bin/tmux-hub
+    target: ~/bin/tmux-hub
   - name: tmux-session-picker
     source: bin/tmux-session-picker
     target: ~/bin/tmux-session-picker
@@ -33,6 +40,16 @@ commands:
     source: bin/tmux-workspace
     target: ~/bin/tmux-workspace
 targets:
+  - service: command
+    source: bin/daemon
+    destination: ~/bin/daemon
+    bridge: home/bin/executable_daemon.tmpl
+    ownership: exclusive
+  - service: command
+    source: bin/tmux-hub
+    destination: ~/bin/tmux-hub
+    bridge: home/bin/executable_tmux-hub.tmpl
+    ownership: exclusive
   - service: command
     source: bin/tmux-session-picker
     destination: ~/bin/tmux-session-picker
@@ -105,5 +122,7 @@ targets:
     ownership: contribution
 tests:
   - tests/test_module.sh
+  - tests/test_daemon.sh
+  - tests/test_tmux_hub.sh
   - tests/test_tmux_workspace.sh
   - tests/test_tmux_persistence.sh

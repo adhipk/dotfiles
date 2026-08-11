@@ -1,7 +1,10 @@
 # yaml-language-server: $schema=../../.tmux/plugins/tmux-which-key/config.schema.yaml
 command_alias_start_index: 200
 keybindings:
-  prefix_table: Space
+  # The active Space entrypoint is the Telescope command palette. Keep this
+  # generated menu on an unused key so its catalog remains available to the
+  # palette while legacy installs transition away from the display-menu UI.
+  prefix_table: F12
 title:
   style: align=centre,bold
   prefix: '#S · #W'

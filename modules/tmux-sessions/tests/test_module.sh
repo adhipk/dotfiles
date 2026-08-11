@@ -63,6 +63,8 @@ printf '%s\n' '===================================' 'Tmux Sessions Module Contra
 
 assert_file "$MODULE_DIR/module.yaml" "module manifest exists"
 assert_file "$MODULE_DIR/README.md" "module owns its documentation"
+assert_executable "$MODULE_DIR/bin/daemon" "module owns the daemon command"
+assert_executable "$MODULE_DIR/bin/tmux-hub" "module owns the centralized tmux hub"
 assert_executable "$MODULE_DIR/bin/tmux-session-picker" "module owns the session-only picker"
 assert_executable "$MODULE_DIR/bin/tmux-sessionizer" "module owns the compatibility sessionizer"
 assert_executable "$MODULE_DIR/bin/tmux-sessionizer-zoxide" "module owns the project-aware picker"
@@ -83,6 +85,12 @@ fi
 assert_contains "$DOTFILES_DIR/home/bin/executable_tmux-workspace.tmpl" \
   'includeTemplate "../modules/tmux-sessions/bin/tmux-workspace"' \
   "workspace command is mounted through a thin bridge"
+assert_contains "$DOTFILES_DIR/home/bin/executable_daemon.tmpl" \
+  'includeTemplate "../modules/tmux-sessions/bin/daemon"' \
+  "daemon command is mounted through a thin bridge"
+assert_contains "$DOTFILES_DIR/home/bin/executable_tmux-hub.tmpl" \
+  'includeTemplate "../modules/tmux-sessions/bin/tmux-hub"' \
+  "tmux hub is mounted through a thin bridge"
 assert_contains "$DOTFILES_DIR/home/dot_tmux.conf.tmpl" \
   'includeTemplate "../modules/tmux-sessions/targets/tmux.conf.tmpl"' \
   "tmux mounts one guarded session fragment"
@@ -92,7 +100,7 @@ assert_contains "$DOTFILES_DIR/home/dot_tmux.conf.tmpl" \
 assert_contains "$DOTFILES_DIR/home/dot_config/tmux/which-key.yaml.tmpl" \
   'includeTemplate "../modules/tmux-sessions/targets/tmux-which-key-sessions.yaml.tmpl"' \
   "command center mounts the module through an explicit fragment"
-assert_contains "$DOTFILES_DIR/home/dot_zshrc" \
+assert_contains "$DOTFILES_DIR/home/dot_zshrc.tmpl" \
   '[ -r "$HOME/.config/zsh/tmux-sessions.zsh" ]' \
   "parent zsh config uses a guarded runtime adapter"
 
@@ -106,7 +114,7 @@ fi
 
 render_profile true
 
-for command in tmux-session-picker tmux-sessionizer tmux-sessionizer-zoxide tmux-workspace; do
+for command in daemon tmux-hub tmux-session-picker tmux-sessionizer tmux-sessionizer-zoxide tmux-workspace; do
   assert_executable "$DESTINATION/bin/$command" "enabled profile installs $command"
 done
 assert_file "$DESTINATION/.config/sesh/sesh.toml" "enabled profile installs sesh configuration"
@@ -132,7 +140,7 @@ mkdir -p "$DESTINATION/.local/state/tmux-workspace" "$DESTINATION/.tmux/resurrec
 touch "$DESTINATION/.local/state/tmux-workspace/keep" "$DESTINATION/.tmux/resurrect/keep"
 render_profile false
 
-for command in tmux-session-picker tmux-sessionizer tmux-sessionizer-zoxide tmux-workspace; do
+for command in daemon tmux-hub tmux-session-picker tmux-sessionizer tmux-sessionizer-zoxide tmux-workspace; do
   assert_absent "$DESTINATION/bin/$command" "disabled profile removes $command"
 done
 assert_absent "$DESTINATION/.config/sesh/sesh.toml" "disabled profile removes sesh configuration"
@@ -179,7 +187,8 @@ else
 fi
 
 assert_absent "$REMOVAL_HOME/bin/tmux-workspace" "physical removal leaves no workspace command"
-assert_contains "$REMOVAL_HOME/.tmux.conf" 'Open tmux command center' "physical removal preserves base tmux behavior"
+assert_absent "$REMOVAL_HOME/bin/tmux-hub" "physical removal leaves no tmux hub command"
+assert_contains "$REMOVAL_HOME/.tmux.conf" 'Search tmux commands with Telescope' "physical removal preserves base tmux behavior"
 assert_contains "$REMOVAL_HOME/.tmux.conf" 'tmux-session-template cycle' "physical removal preserves typed windows"
 assert_contains "$REMOVAL_HOME/.config/tmux/which-key.yaml" 'Agent timers and durable sessions' "physical removal preserves sibling command-center contributions"
 assert_contains "$REMOVAL_HOME/.zshrc" '[ -r "$HOME/.config/zsh/tmux-sessions.zsh" ]' "physical removal leaves a safe shell guard"

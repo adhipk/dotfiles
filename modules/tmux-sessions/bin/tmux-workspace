@@ -82,6 +82,27 @@ function h(type, props, ...children) {
   throw new Error("tmux-workspace: invalid JSX element")
 }
 
+// Managed preferences rendered by the settings module; fall back to the
+// historical defaults when the file or key is absent so layouts stay usable.
+function preferenceValue(key, fallback) {
+  const override = process.env[`DOTFILES_PREF_${key.toUpperCase()}`]
+  if (override) {
+    return override
+  }
+  const prefsFile = process.env.DOTFILES_PREFS_FILE
+    ?? join(home, ".config", "dotfiles", "preferences.toml")
+  try {
+    const text = readFileSync(prefsFile, "utf8")
+    const match = text.match(new RegExp(`^${key}\\s*=\\s*"([^"]*)"`, "m"))
+    if (match && match[1]) {
+      return match[1]
+    }
+  } catch {
+    // fall through to the fallback
+  }
+  return fallback
+}
+
 const component = (kind) => (props) => element(kind, props)
 const Session = component("Session")
 const Window = component("Window")
@@ -105,7 +126,7 @@ function Codex(props = {}) {
     name: "codex",
     type: "codex",
     index: 1,
-    run: "codex",
+    run: preferenceValue("assistant", "codex"),
     ...props,
   })
 }
@@ -116,7 +137,7 @@ function Nvim(props = {}) {
     name: "nvim",
     type: "nvim",
     index: 2,
-    run: "nvim",
+    run: preferenceValue("terminal_editor", "nvim"),
     ...props,
   })
 }

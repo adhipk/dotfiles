@@ -1,6 +1,10 @@
       - name: Choose
         key: s
         command: 'display-popup -EE -w 70% -h 70% -d "#{pane_current_path}" -T "sesh" "$HOME/bin/tmux-sessionizer-zoxide"'
+      - name: Central hub
+        key: g
+        command: >-
+          run-shell "$HOME/bin/tmux-hub open #{q:pane_current_path}"
       - name: Last
         key: tab
         command: switch-client -l

@@ -1,7 +1,6 @@
 # List of plugins
 set -g @plugin 'tmux-plugins/tpm'
 set -g @plugin 'tmux-plugins/tmux-sensible'
-
 # Other examples:
 # set -g @plugin 'github_username/plugin_name'
 # set -g @plugin 'github_username/plugin_name#branch'
@@ -35,9 +34,11 @@ bind-key -N "Next window" n next-window
 bind-key -N "Close window" '&' confirm-before -p "Close window #W? (y/n)" kill-window
 bind-key -N "Toggle pane zoom" z resize-pane -Z
 
-# Right Command+Space remains a shared Ghostty-only management adapter. skhd
+# Search the same live tmux command surface with the configured Neovim
+# Telescope UI. Right Command+Space remains the Ghostty-only adapter; skhd
 # translates it to F19, which terminal protocols expose as Shift+F7.
-bind-key -n -N "Open tmux command center" S-F7 run-shell -C "show-wk-menu-root"
+bind-key -N "Search tmux commands with Telescope" Space display-popup -EE -w 95% -h 92% -d "#{pane_current_path}" -T "tmux · Telescope" "$HOME/bin/tmux-command-palette"
+bind-key -n -N "Search tmux commands with Telescope" S-F7 display-popup -EE -w 95% -h 92% -d "#{pane_current_path}" -T "tmux · Telescope" "$HOME/bin/tmux-command-palette"
 
 # Higher numbers retain direct index switching.
 bind-key -n C-4 select-window -t :4
@@ -78,7 +79,7 @@ set -g mouse on
 set -g default-terminal "tmux-256color"
 
 # Keep Catppuccin's colors, but use a quiet status line that blends into Ghostty.
-set -g @catppuccin_flavor "mocha"
+set -g @catppuccin_flavor "{{ .preferences.theme.tmuxFlavor }}"
 set -g @catppuccin_status_background "none"
 set -g @catppuccin_window_status_style "none"
 
@@ -91,11 +92,14 @@ set -g @dotfiles_status_accent '#{?#{==:#{session_name},dotfiles},#{@thm_mauve},
 
 {{ if .modules.appearancePip.enabled }}{{ includeTemplate "../modules/appearance-pip/targets/tmux.conf.tmpl" . | trim }}{{ end }}
 
-# Minimal bottom bar: session/context at left, stable app labels in the center.
-# The terminal window remains named "terminal" internally so helpers and
-# shortcuts keep working; only its displayed label is shortened to "~". When
-# a generated numeric session has not been renamed, show its folder instead;
-# when a named session already matches its folder, do not repeat it.
+# Minimal bottom bar: session/context at left, live foreground programs in the
+# center. Window names and typed metadata remain untouched for shortcuts; only
+# the displayed label follows the active pane command. Interactive shells
+# collapse to "~". Each window index receives a distinct Catppuccin foreground
+# from a twelve-color rotation, while bold still marks the current window.
+set -g @dotfiles_window_accent '#{?#{==:#{e|m:#{window_index},12},0},#{@thm_mauve},#{==:#{e|m:#{window_index},12},1},#{@thm_blue},#{==:#{e|m:#{window_index},12},2},#{@thm_green},#{==:#{e|m:#{window_index},12},3},#{@thm_peach},#{==:#{e|m:#{window_index},12},4},#{@thm_teal},#{==:#{e|m:#{window_index},12},5},#{@thm_yellow},#{==:#{e|m:#{window_index},12},6},#{@thm_pink},#{==:#{e|m:#{window_index},12},7},#{@thm_lavender},#{==:#{e|m:#{window_index},12},8},#{@thm_sky},#{==:#{e|m:#{window_index},12},9},#{@thm_sapphire},#{==:#{e|m:#{window_index},12},10},#{@thm_red},#{@thm_flamingo}}'
+set -g @dotfiles_window_label '#{?#{m/r:^(ba|c|da|fi|k|tc|z)?sh$,#{pane_current_command}},~,#{pane_current_command}}'
+{{ if .modules.terminalWindowTypes.enabled }}{{ includeTemplate "../modules/terminal-window-types/targets/tmux-status.conf.tmpl" . }}{{ end }}
 set -g status-position bottom
 set -g status-justify absolute-centre
 set -g status-style default
@@ -108,9 +112,8 @@ set -g window-status-style default
 set -g window-status-current-style default
 set -g window-status-activity-style default
 set -g window-status-bell-style default
-{{ if .modules.terminalWindowTypes.enabled }}{{ includeTemplate "../modules/terminal-window-types/targets/tmux-status.conf.tmpl" . }}{{ else }}set -g window-status-format '#[fg=#{@thm_overlay_0},nobold]#W#[default]'
-set -g window-status-current-format '#[fg=#{E:@dotfiles_status_accent},bold]#W#[default]'
-{{ end }}
+set -g window-status-format '#[fg=#{E:@dotfiles_window_accent},nobold]#{E:@dotfiles_window_label}#[default]'
+set -g window-status-current-format '#[fg=#{E:@dotfiles_window_accent},bold]#{E:@dotfiles_window_label}#[default]'
 
 
 

@@ -1,31 +1,3 @@
-# man-me: name=daemon
-# man-me: category=Terminal and Sessions
-# man-me: usage=daemon NAME COMMAND [ARG ...]
-# man-me: description=Run a command with nohup, write /tmp logs, and create a tmux log-tail session.
-# man-me: tags=tmux terminal daemon background log logs nohup
-daemon() {
-  local logfile="${1:-daemon}"
-  shift
-
-  nohup "$@" > "/tmp/${logfile}.log" 2>&1 < /dev/null &
-  echo $! > "/tmp/${logfile}.pid"
-
-  echo "Started PID $(cat /tmp/${logfile}.pid)"
-  echo "Logs: /tmp/${logfile}.log"
-
-  # Create tmux session to tail the log
-  local session_name="daemon-${logfile}"
-
-  if tmux has-session -t "$session_name" 2>/dev/null; then
-    echo "Tmux session '$session_name' already exists"
-    echo "Attach with: tmux attach -t $session_name"
-  else
-    tmux new-session -d -s "$session_name" "tail -f /tmp/${logfile}.log"
-    echo "Created tmux session '$session_name' tailing logs"
-    echo "Attach with: tmux attach -t $session_name"
-  fi
-}
- 
 # man-me: name=tms
 # man-me: category=Terminal and Sessions
 # man-me: usage=tms [SESSION] [DIRECTORY]

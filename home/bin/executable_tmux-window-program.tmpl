@@ -1,0 +1,3 @@
+{{- if .modules.terminalWindowTypes.enabled -}}
+{{ includeTemplate "../modules/terminal-window-types/bin/tmux-window-program" . }}
+{{- end -}}

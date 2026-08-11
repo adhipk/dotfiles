@@ -15,6 +15,7 @@ requires:
     - todo
   libraries:
     - core.sh
+    - prefs.sh
     - tmux.sh
 state:
   preserved: []
@@ -25,11 +26,20 @@ commands:
     source: bin/tmux-session-template
     target: ~/bin/tmux-session-template
     bridge: home/bin/executable_tmux-session-template.tmpl
+  - name: tmux-window-program
+    source: bin/tmux-window-program
+    target: ~/bin/tmux-window-program
+    bridge: home/bin/executable_tmux-window-program.tmpl
 targets:
   - service: command
     source: bin/tmux-session-template
     destination: ~/bin/tmux-session-template
     bridge: home/bin/executable_tmux-session-template.tmpl
+    ownership: exclusive
+  - service: command
+    source: bin/tmux-window-program
+    destination: ~/bin/tmux-window-program
+    bridge: home/bin/executable_tmux-window-program.tmpl
     ownership: exclusive
   - service: chezmoi
     source: install/remove-legacy-awrit-link.sh.tmpl
@@ -84,3 +94,4 @@ targets:
 tests:
   - tests/test_module.sh
   - tests/test_tmux_session_template.sh
+  - tests/test_tmux_window_program.sh

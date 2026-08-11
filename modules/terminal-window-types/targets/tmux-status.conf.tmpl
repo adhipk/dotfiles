@@ -1,2 +1,4 @@
-set -g window-status-format '#[fg=#{@thm_overlay_0},nobold]#{?#{==:#W,terminal},~,#W}#[default]'
-set -g window-status-current-format '#[fg=#{E:@dotfiles_status_accent},bold]#{?#{==:#W,terminal},~,#W}#[default]'
+# Resolve the foreground process from each pane's TTY. This unwraps generic
+# launchers such as node, bun, or Python without consulting the typed window
+# metadata or its initial command.
+set -g @dotfiles_window_label '#("$HOME/bin/tmux-window-program" #{pane_tty})'

@@ -2,8 +2,9 @@
 
 set -euo pipefail
 
-export TODO_DIR="$PWD"
+export TODO_DIR="${AGENT_TODO_DIR:-${HOME:?HOME is not set}/.agents/tasks}"
 export TODO_FILE="$TODO_DIR/todo.txt"
 export DONE_FILE="$TODO_DIR/done.txt"
+mkdir -p "$TODO_DIR"
 touch "$TODO_FILE" "$DONE_FILE"
 exec tuxedo "$@"

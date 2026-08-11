@@ -3,6 +3,7 @@
 # history choose its own most recently used surviving session.
 set-option -g detach-on-destroy off
 bind-key -N "Open sesh session picker" s display-popup -EE -w 70% -h 70% -d "#{pane_current_path}" -T "sesh" "$HOME/bin/tmux-sessionizer-zoxide"
+bind-key -N "Open centralized tmux hub" g run-shell "$HOME/bin/tmux-hub open '#{pane_current_path}'"
 bind-key -N "Switch to client-local last session" L switch-client -l
 bind-key -N "New named session" N command-prompt -p "New session:" { new-session -A -s "%%" -c "#{pane_current_path}" }
 bind-key -N "Rename session contextually" '$' command-prompt -F -l -p "Rename #S · #{b:pane_current_path}:" -I '#{?#{m/r:^[0-9]+$,#S},#{s|[-_]+| |:#{b:pane_current_path}},#S}' 'rename-session -t "#{session_id}" -- "%%%"'
@@ -10,6 +11,7 @@ bind-key -N "Close session" X confirm-before -p "Close session #S? (y/n)" { kill
 
 # Ghostty translates its app-local Right Command+S adapter to Shift+F6.
 bind-key -n -N "Open sesh session picker" S-F6 display-popup -EE -w 70% -h 70% -d "#{pane_current_path}" -T "sesh" "$HOME/bin/tmux-sessionizer-zoxide"
+bind-key -n -N "Open centralized tmux hub" S-F8 run-shell "$HOME/bin/tmux-hub open '#{pane_current_path}'"
 # Ghostty/tmux extended-key re-encoding can corrupt paste and Kitty keyboard
 # traffic. Keep recognition available for explicit CSI-u adapters, but do not
 # let tmux broadly rewrite application input. See Ghostty discussion #5924.

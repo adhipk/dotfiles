@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# man-me: name=tmux-command-palette
+# man-me: category=Terminal and Sessions
+# man-me: usage=tmux-command-palette; tmux-command-palette --dump-json; tmux-command-palette --self-test
+# man-me: description=Search live tmux bindings and curated actions with the configured Neovim Telescope UI.
+# man-me: tags=tmux neovim telescope commands keybindings search palette
+
+set -euo pipefail
+
+NVIM_CONFIG="${TMUX_COMMAND_PALETTE_NVIM_CONFIG:-$HOME/.config/nvim}"
+
+run_headless() {
+  local lua_action="$1"
+
+  exec nvim --headless -u NONE \
+    --cmd "set runtimepath+=$NVIM_CONFIG" \
+    -c "lua require('custom.tmux_commands').${lua_action}()" \
+    +qa
+}
+
+execute_file() {
+  local selection_file="$1"
+  local command=""
+
+  if [[ -r "$selection_file" ]]; then
+    IFS= read -r command < "$selection_file" || true
+  fi
+  rm -f "$selection_file"
+  [[ -n "$command" ]] || exit 0
+
+  # Queue both operations in tmux so popup-opening actions run only after the
+  # Telescope popup has closed, while retaining the invoking client context.
+  exec tmux run-shell -C "display-popup -C ; $command"
+}
+
+case "${1:-}" in
+  --dump-json)
+    run_headless dump_json
+    ;;
+  --self-test)
+    run_headless self_test
+    ;;
+  --execute-file)
+    [[ $# -eq 2 ]] || {
+      printf 'tmux-command-palette: --execute-file requires one path\n' >&2
+      exit 2
+    }
+    execute_file "$2"
+    ;;
+  "")
+    ;;
+  *)
+    printf 'tmux-command-palette: unknown option: %s\n' "$1" >&2
+    exit 2
+    ;;
+esac
+
+[[ -n "${TMUX:-}" ]] || {
+  printf 'tmux-command-palette: must run inside tmux\n' >&2
+  exit 1
+}
+
+selection_file=$(mktemp "${TMPDIR:-/tmp}/tmux-command-palette.XXXXXX")
+cleanup_selection=true
+cleanup() {
+  if [[ "$cleanup_selection" == true ]]; then
+    rm -f "$selection_file"
+  fi
+}
+trap cleanup EXIT
+
+TMUX_COMMAND_PALETTE_SELECTION_FILE="$selection_file" \
+  nvim -n --cmd 'set shadafile=NONE' \
+  -c "lua require('custom.tmux_commands').open()"
+
+if [[ -s "$selection_file" ]]; then
+  cleanup_selection=false
+  execute_file "$selection_file"
+fi

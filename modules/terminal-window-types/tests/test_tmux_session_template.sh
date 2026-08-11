@@ -21,8 +21,13 @@ FAILED=0
 export DOTFILES_LIB_DIR="$DOTFILES_DIR/home/dot_local/lib/dotfiles"
 
 cleanup() {
+    local attempt
     tmux -L "$SOCKET_NAME" kill-server >/dev/null 2>&1 || true
-    rm -rf "$TEMP_DIR"
+    for attempt in {1..20}; do
+        rm -rf "$TEMP_DIR" 2>/dev/null || true
+        [[ -e "$TEMP_DIR" ]] || return 0
+        sleep 0.02
+    done
 }
 trap cleanup EXIT
 
@@ -158,7 +163,9 @@ else
 fi
 
 # Keep the isolated server alive with a command session. The hook must skip it.
-PATH="$FAKE_BIN:$PATH" \
+mkdir -p "$TEMP_DIR/home"
+HOME="$TEMP_DIR/home" \
+    PATH="$FAKE_BIN:$PATH" \
     TODO_DIR="$TEMP_DIR/wrong" \
     TODO_FILE="$TEMP_DIR/wrong/todo.txt" \
     DONE_FILE="$TEMP_DIR/wrong/done.txt" \
@@ -199,8 +206,8 @@ assert_equals \
 sleep 0.1
 wait_for_tuxedo_calls 1 || true
 assert_equals \
-    "automatic Tuxedo resolves task files from the session directory" \
-    "$CANONICAL_PROJECT_DIR|$CANONICAL_PROJECT_DIR|$CANONICAL_PROJECT_DIR/todo.txt|$CANONICAL_PROJECT_DIR/done.txt" \
+    "automatic Tuxedo keeps the session directory while opening the global task store" \
+    "$CANONICAL_PROJECT_DIR|$TEMP_DIR/home/.agents/tasks|$TEMP_DIR/home/.agents/tasks/todo.txt|$TEMP_DIR/home/.agents/tasks/done.txt" \
     "$(head -n 1 "$TUXEDO_CALLS_FILE" 2>/dev/null || true)"
 assert_equals \
     "Codex, Neovim, and the todo wrapper run in their windows" \
@@ -212,7 +219,6 @@ assert_equals \
     )"
 echo ""
 echo "Testing typed window creation and cycling..."
-mkdir -p "$TEMP_DIR/home"
 tmux_test set-environment -t ordinary PATH "$FAKE_BIN:$PATH"
 tmux_test set-environment -t ordinary HOME "$TEMP_DIR/home"
 tmux_test set-option -t ordinary default-command \
@@ -414,6 +420,17 @@ assert_equals \
         active_window_id ordinary
     )"
 
+# Older duplicate windows predate the stable type option. Recover their type
+# from the helper-owned numeric suffix so cycling repairs the live metadata.
+tmux_test set-option -wqu -t "$DUPLICATE_TERMINAL_ID" @dotfiles_window_type
+tmux_test select-window -t "$NEW_TERMINAL_ID"
+TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
+    "$TEMPLATE_HELPER" cycle ordinary terminal "$NEW_TERMINAL_ID"
+assert_equals \
+    "terminal cycling repairs and reaches an untagged terminal-2 window" \
+    "$DUPLICATE_TERMINAL_ID|terminal" \
+    "$(active_window_id ordinary)|$(window_type "$DUPLICATE_TERMINAL_ID")"
+
 NEW_NVIM_PANE=$(tmux_test list-panes -t "$NEW_NVIM_ID" -F '#{pane_id}' | head -n 1)
 TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
     "$TEMPLATE_HELPER" duplicate ordinary "$NEW_NVIM_PANE"
@@ -569,8 +586,8 @@ TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
     "$TEMPLATE_HELPER" ensure scratchpad "$PROJECT_DIR"
 wait_for_tuxedo_calls 1 || true
 assert_equals \
-    "explicit ensure starts Tuxedo against the requested session directory" \
-    "$TEMP_DIR/project|$TEMP_DIR/project|$TEMP_DIR/project/todo.txt|$TEMP_DIR/project/done.txt" \
+    "explicit ensure keeps the requested session directory while opening the global task store" \
+    "$TEMP_DIR/project|$TEMP_DIR/home/.agents/tasks|$TEMP_DIR/home/.agents/tasks/todo.txt|$TEMP_DIR/home/.agents/tasks/done.txt" \
     "$(head -n 1 "$TUXEDO_CALLS_FILE" 2>/dev/null || true)"
 assert_equals \
     "explicit ensure mode creates the shared layout idempotently" \

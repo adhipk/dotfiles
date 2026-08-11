@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# man-me: name=daemon
+# man-me: category=Terminal and Sessions
+# man-me: usage=daemon NAME COMMAND [ARG ...]
+# man-me: description=Run a validated background command with durable logs and a tmux log-tail session.
+# man-me: tags=tmux terminal daemon background log logs nohup
+
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: daemon NAME COMMAND [ARG ...]
+
+Runs COMMAND with nohup, writes /tmp/NAME.log and /tmp/NAME.pid, and creates
+a detached daemon-NAME tmux session that follows the log.
+EOF
+}
+
+case "${1:-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  "")
+    usage >&2
+    exit 2
+    ;;
+esac
+
+name="$1"
+shift
+
+if [[ ! "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+  printf 'daemon: NAME must use only letters, numbers, dot, underscore, or dash\n' >&2
+  exit 2
+fi
+
+if [[ $# -eq 0 ]]; then
+  printf 'daemon: COMMAND is required\n' >&2
+  usage >&2
+  exit 2
+fi
+
+log_dir="${DAEMON_LOG_DIR:-/tmp}"
+tmux_bin="${DAEMON_TMUX_BIN:-tmux}"
+log_path="$log_dir/$name.log"
+pid_path="$log_dir/$name.pid"
+session_name="daemon-$name"
+
+mkdir -p "$log_dir"
+nohup "$@" >"$log_path" 2>&1 < /dev/null &
+pid=$!
+printf '%s\n' "$pid" >"$pid_path"
+
+printf 'Started PID %s\n' "$pid"
+printf 'Logs: %s\n' "$log_path"
+
+if ! command -v "$tmux_bin" >/dev/null 2>&1; then
+  printf 'daemon: tmux is unavailable; background command is still running\n' >&2
+  exit 0
+fi
+
+if "$tmux_bin" has-session -t "=$session_name" 2>/dev/null; then
+  printf "Tmux session '%s' already exists\n" "$session_name"
+else
+  printf -v quoted_log_path '%q' "$log_path"
+  "$tmux_bin" new-session -d \
+    -e DOTFILES_TMUX_TEMPLATE=skip \
+    -s "$session_name" \
+    -c "$PWD" \
+    -n logs \
+    "tail -n +1 -F -- $quoted_log_path"
+  printf "Created tmux session '%s' tailing logs\n" "$session_name"
+fi
+
+printf 'Attach with: tmux attach -t %s\n' "$session_name"

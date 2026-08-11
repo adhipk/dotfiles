@@ -1,0 +1,309 @@
+#!/usr/bin/env bash
+# man-me: name=tmux-hub
+# man-me: category=Terminal and Sessions
+# man-me: usage=tmux-hub open [ROOT]; tmux-hub jump SESSION_OR_PANE; tmux-hub close SESSION_ID; tmux-hub open-window SESSION; tmux-hub send PANE; tmux-hub dump-json
+# man-me: description=Open a persistent vanilla-tmux dashboard for session cleanup, repo-grouped agents, attention state, previews, replies, and global todos.
+# man-me: tags=tmux neovim telescope sessions agents approvals preview reply close cleanup todo dashboard
+
+set -euo pipefail
+
+HUB_SESSION="${TMUX_HUB_SESSION:-hub}"
+NVIM_CONFIG="${TMUX_HUB_NVIM_CONFIG:-$HOME/.config/nvim}"
+TMUX_BIN="${TMUX_HUB_TMUX_BIN:-tmux}"
+SELF="${TMUX_HUB_BIN:-$0}"
+
+tmux_command() {
+  if [[ -n "${TMUX_HUB_SOCKET_NAME:-}" ]]; then
+    "$TMUX_BIN" -L "$TMUX_HUB_SOCKET_NAME" "$@"
+  elif [[ -n "${TMUX_HUB_SOCKET_PATH:-}" ]]; then
+    "$TMUX_BIN" -S "$TMUX_HUB_SOCKET_PATH" "$@"
+  else
+    "$TMUX_BIN" "$@"
+  fi
+}
+
+attach_target() {
+  local target="$1"
+  local -a command=("$TMUX_BIN")
+  if [[ -n "${TMUX_HUB_SOCKET_NAME:-}" ]]; then
+    command+=(-L "$TMUX_HUB_SOCKET_NAME")
+  elif [[ -n "${TMUX_HUB_SOCKET_PATH:-}" ]]; then
+    command+=(-S "$TMUX_HUB_SOCKET_PATH")
+  fi
+  command+=(attach-session -t "$target")
+  exec env -u ZDOTDIR -u TMUX -u TMUX_PANE "${command[@]}"
+}
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  tmux-hub open [ROOT]             Create or enter the persistent hub session
+  tmux-hub jump SESSION_OR_PANE    Focus a session or exact agent pane
+  tmux-hub close SESSION_ID         Close an exact non-hub tmux session
+  tmux-hub open-window SESSION     Open a session in a fresh Ghostty window
+  tmux-hub send PANE               Read one prompt from stdin and submit it to an exact pane
+  tmux-hub dashboard               Run the Neovim dashboard (internal)
+  tmux-hub dump-json               Print the live hub inventory as JSON
+  tmux-hub self-test               Test the dashboard parsers
+USAGE
+}
+
+run_headless() {
+  local lua_action="$1"
+
+  exec nvim --headless -u NONE \
+    --cmd "set runtimepath+=$NVIM_CONFIG" \
+    -c "lua require('custom.tmux_hub').${lua_action}()" \
+    +qa
+}
+
+dashboard_command() {
+  if [[ -n "${TMUX_HUB_DASHBOARD_COMMAND:-}" ]]; then
+    printf '%s\n' "$TMUX_HUB_DASHBOARD_COMMAND"
+    return
+  fi
+
+  printf '%q dashboard\n' "$SELF"
+}
+
+resolve_root() {
+  local requested="${1:-}"
+
+  if [[ -z "$requested" && -n "${TMUX:-}" ]]; then
+    requested=$(tmux_command display-message -p -t "${TMUX_PANE:-}" '#{pane_current_path}' 2>/dev/null || true)
+  fi
+  [[ -n "$requested" ]] || requested=$PWD
+  [[ -d "$requested" ]] || {
+    printf 'tmux-hub: root is not a directory: %s\n' "$requested" >&2
+    exit 2
+  }
+  (cd "$requested" && pwd -P)
+}
+
+find_dashboard_window() {
+  tmux_command list-windows -t "=$HUB_SESSION:" -F '#{window_id} #{@dotfiles_hub_window}' 2>/dev/null \
+    | awk '$2 == "1" { print $1; exit }'
+}
+
+ensure_hub() {
+  local root="$1"
+  local command dashboard_window marker
+
+  command=$(dashboard_command)
+  if tmux_command has-session -t "=$HUB_SESSION" 2>/dev/null; then
+    marker=$(tmux_command show-option -qv -t "=$HUB_SESSION:" @dotfiles_hub 2>/dev/null || true)
+    if [[ "$marker" != 1 ]]; then
+      printf 'tmux-hub: session %s already exists and is not managed by tmux-hub\n' "$HUB_SESSION" >&2
+      exit 1
+    fi
+    dashboard_window=$(find_dashboard_window)
+    if [[ -z "$dashboard_window" ]]; then
+      dashboard_window=$(tmux_command new-window -d -P -F '#{window_id}' \
+        -t "=$HUB_SESSION:" -n hub -c "$root" "$command")
+      tmux_command set-option -w -t "$dashboard_window" @dotfiles_hub_window 1
+    fi
+  else
+    dashboard_window=$(tmux_command new-session -d -P -F '#{window_id}' \
+      -s "$HUB_SESSION" -n hub -c "$root" \
+      -e DOTFILES_TMUX_TEMPLATE=skip "$command")
+    # A freshly started tmux server can briefly reject the exact-name (`=hub`)
+    # target even though the new-session command has returned. The literal
+    # session name is unambiguous here because this branch just created it.
+    tmux_command set-option -t "$HUB_SESSION" @dotfiles_hub 1
+    tmux_command set-option -w -t "$dashboard_window" @dotfiles_hub_window 1
+  fi
+
+  tmux_command select-window -t "$dashboard_window"
+  printf '%s\n' "$dashboard_window"
+}
+
+open_hub() {
+  local root dashboard_window
+  root=$(resolve_root "${1:-}")
+  dashboard_window=$(ensure_hub "$root")
+
+  if [[ "${TMUX_HUB_NO_SWITCH:-0}" == 1 ]]; then
+    printf '%s\n' "$dashboard_window"
+  elif [[ -n "${TMUX:-}" ]]; then
+    tmux_command switch-client -t "$dashboard_window"
+  else
+    attach_target "=$HUB_SESSION"
+  fi
+}
+
+resolve_target() {
+  local target="$1"
+  tmux_command display-message -p -t "$target" \
+    "#{session_id}"$'\t'"#{session_name}"$'\t'"#{pane_current_path}"
+}
+
+jump_target() {
+  local target="$1"
+  local details session_id
+  details=$(resolve_target "$target" 2>/dev/null) || {
+    printf 'tmux-hub: no tmux target matches %s\n' "$target" >&2
+    exit 1
+  }
+  IFS=$'\t' read -r session_id _ <<<"$details"
+
+  if [[ "$target" == %* ]]; then
+    tmux_command select-window -t "$target"
+    tmux_command select-pane -t "$target"
+  fi
+
+  if [[ -n "${TMUX:-}" ]]; then
+    tmux_command switch-client -t "$session_id"
+  else
+    attach_target "$session_id"
+  fi
+}
+
+close_session() {
+  local target="$1"
+  local details session_id session_name marker
+
+  [[ "$target" =~ ^\$[0-9]+$ ]] || {
+    printf 'tmux-hub: close requires an exact session ID such as $12\n' >&2
+    return 2
+  }
+
+  details=$(resolve_target "$target" 2>/dev/null) || {
+    printf 'tmux-hub: session no longer exists: %s\n' "$target" >&2
+    return 1
+  }
+  IFS=$'\t' read -r session_id session_name _ <<<"$details"
+  [[ "$session_id" == "$target" ]] || {
+    printf 'tmux-hub: target changed while resolving session %s\n' "$target" >&2
+    return 1
+  }
+
+  marker=$(tmux_command show-option -qv -t "$session_id" @dotfiles_hub 2>/dev/null || true)
+  if [[ "$marker" == 1 || "$session_name" == "$HUB_SESSION" ]]; then
+    printf 'tmux-hub: refusing to close the active session manager: %s\n' "$session_name" >&2
+    return 2
+  fi
+
+  tmux_command kill-session -t "$session_id"
+}
+
+open_window() {
+  local target="$1"
+  local details session_id session_name path server_socket=""
+  local -a attach_command
+
+  details=$(resolve_target "$target" 2>/dev/null) || {
+    printf 'tmux-hub: no tmux session matches %s\n' "$target" >&2
+    exit 1
+  }
+  IFS=$'\t' read -r session_id session_name path <<<"$details"
+  [[ -n "$path" && -d "$path" ]] || path=$HOME
+
+  if [[ -n "${TMUX_HUB_SOCKET_NAME:-}" ]]; then
+    server_socket=""
+  elif [[ -n "${TMUX_HUB_SOCKET_PATH:-}" ]]; then
+    server_socket=$TMUX_HUB_SOCKET_PATH
+  elif [[ -n "${TMUX:-}" ]]; then
+    server_socket=${TMUX%%,*}
+  fi
+
+  attach_command=("$TMUX_BIN")
+  [[ -n "$server_socket" ]] && attach_command+=(-S "$server_socket")
+  [[ -n "${TMUX_HUB_SOCKET_NAME:-}" ]] && attach_command+=(-L "$TMUX_HUB_SOCKET_NAME")
+  attach_command+=(attach-session -t "$session_id")
+
+  if [[ "$(uname -s)" == Darwin ]]; then
+    env -u ZDOTDIR -u TMUX -u TMUX_PANE \
+      "${TMUX_HUB_OPEN_BIN:-open}" -n -a "${TMUX_HUB_GHOSTTY_APP:-Ghostty}" --args \
+      "--working-directory=$path" "--title=tmux · $session_name" -e "${attach_command[@]}"
+  else
+    env -u ZDOTDIR -u TMUX -u TMUX_PANE \
+      "${TMUX_HUB_GHOSTTY_BIN:-ghostty}" \
+      "--working-directory=$path" "--title=tmux · $session_name" -e "${attach_command[@]}" >/dev/null 2>&1 &
+  fi
+}
+
+send_prompt() {
+  local target="$1"
+  local resolved buffer temp_file
+
+  [[ "$target" =~ ^%[0-9]+$ ]] || {
+    printf 'tmux-hub: send requires an exact pane ID such as %%12\n' >&2
+    return 2
+  }
+  resolved=$(tmux_command display-message -p -t "$target" '#{pane_id}' 2>/dev/null) || {
+    printf 'tmux-hub: pane no longer exists: %s\n' "$target" >&2
+    return 1
+  }
+  [[ "$resolved" == "$target" ]] || {
+    printf 'tmux-hub: target changed while resolving pane %s\n' "$target" >&2
+    return 1
+  }
+
+  temp_file=$(mktemp "${TMPDIR:-/tmp}/tmux-hub-reply.XXXXXX")
+  if ! cat >"$temp_file"; then
+    rm -f "$temp_file"
+    printf 'tmux-hub: could not read reply from stdin\n' >&2
+    return 1
+  fi
+  if [[ ! -s "$temp_file" ]]; then
+    rm -f "$temp_file"
+    printf 'tmux-hub: refusing to submit an empty reply\n' >&2
+    return 2
+  fi
+
+  buffer="tmux-hub-reply-$$-${target#%}"
+  if ! tmux_command load-buffer -b "$buffer" "$temp_file"; then
+    rm -f "$temp_file"
+    return 1
+  fi
+  rm -f "$temp_file"
+
+  if ! tmux_command paste-buffer -p -d -b "$buffer" -t "$target"; then
+    tmux_command delete-buffer -b "$buffer" >/dev/null 2>&1 || true
+    return 1
+  fi
+  tmux_command send-keys -t "$target" Enter
+}
+
+command="${1:-open}"
+case "$command" in
+  open)
+    [[ $# -le 2 ]] || { usage >&2; exit 2; }
+    open_hub "${2:-}"
+    ;;
+  dashboard)
+    [[ -n "${TMUX:-}" ]] || { printf 'tmux-hub: dashboard must run inside tmux\n' >&2; exit 1; }
+    export TMUX_HUB_BIN="$SELF"
+    exec nvim -n --cmd 'set shadafile=NONE' -c "lua require('custom.tmux_hub').open()"
+    ;;
+  dump-json|--dump-json)
+    run_headless dump_json
+    ;;
+  self-test|--self-test)
+    run_headless self_test
+    ;;
+  jump|--jump)
+    [[ $# -eq 2 ]] || { usage >&2; exit 2; }
+    jump_target "$2"
+    ;;
+  close|--close)
+    [[ $# -eq 2 ]] || { usage >&2; exit 2; }
+    close_session "$2"
+    ;;
+  open-window|--open-window)
+    [[ $# -eq 2 ]] || { usage >&2; exit 2; }
+    open_window "$2"
+    ;;
+  send)
+    [[ $# -eq 2 ]] || { usage >&2; exit 2; }
+    send_prompt "$2"
+    ;;
+  help|-h|--help)
+    usage
+    ;;
+  *)
+    printf 'tmux-hub: unknown command: %s\n' "$command" >&2
+    usage >&2
+    exit 2
+    ;;
+esac

@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# man-me: name=tmux-window-program
+# man-me: category=Terminal and Sessions
+# man-me: usage=tmux-window-program PANE_TTY
+# man-me: description=Print the real foreground program for a tmux status-line window label.
+# man-me: tags=tmux status toolbar window program process label
+
+set -euo pipefail
+
+basename_without_script_suffix() {
+  local name="${1##*/}"
+
+  case "$name" in
+    *.cjs|*.js|*.mjs|*.py|*.rb|*.ts)
+      name="${name%.*}"
+      ;;
+  esac
+  printf '%s\n' "$name"
+}
+
+runtime_script_label() {
+  local runtime="$1"
+  local arguments="$2"
+  local -a words=()
+  local candidate=""
+  local index
+
+  read -r -a words <<<"$arguments"
+  for ((index = 1; index < ${#words[@]}; index++)); do
+    candidate="${words[$index]}"
+    case "$candidate" in
+      -m|--module)
+        if ((index + 1 < ${#words[@]})); then
+          basename_without_script_suffix "${words[$((index + 1))]}"
+          return 0
+        fi
+        ;;
+      -*)
+        continue
+        ;;
+      *)
+        basename_without_script_suffix "$candidate"
+        return 0
+        ;;
+    esac
+  done
+
+  printf '%s\n' "$runtime"
+}
+
+process_label() {
+  local command_name="${1##*/}"
+  local arguments="${2:-}"
+
+  command_name="${command_name#-}"
+  case "$command_name" in
+    node|nodejs|bun|deno|python|python[0-9]*|Python|Python[0-9]*|ruby|perl)
+      runtime_script_label "$command_name" "$arguments"
+      ;;
+    bash|csh|dash|fish|ksh|sh|tcsh|zsh)
+      # A bare/login shell is an idle terminal. A shell executing a script is
+      # itself a foreground program, so expose the script name when possible.
+      if [[ "$arguments" == "$command_name" || "$arguments" == "-$command_name" \
+          || "$arguments" == */"$command_name" || "$arguments" == */"-$command_name" ]]; then
+        printf '~\n'
+      else
+        runtime_script_label "$command_name" "$arguments"
+      fi
+      ;;
+    *)
+      printf '%s\n' "$command_name"
+      ;;
+  esac
+}
+
+foreground_process() {
+  local pane_tty="${1#/dev/}"
+
+  # The process-group leader whose ID matches the TTY foreground group is the
+  # interactive program the user currently sees. Background helpers spawned by
+  # an agent are deliberately ignored.
+  ps -t "$pane_tty" -o pid= -o pgid= -o tpgid= -o comm= -o args= 2>/dev/null \
+    | awk '$1 == $2 && $1 == $3 {
+        command_name = $4
+        $1 = $2 = $3 = $4 = ""
+        sub(/^[[:space:]]+/, "")
+        print command_name "\t" $0
+        exit
+      }'
+}
+
+main() {
+  local pane_tty="${1:-}"
+  local process=""
+  local command_name=""
+  local arguments=""
+
+  [[ -n "$pane_tty" ]] || {
+    printf '?\n'
+    return 0
+  }
+
+  process=$(foreground_process "$pane_tty" || true)
+  if [[ -z "$process" ]]; then
+    printf '?\n'
+    return 0
+  fi
+
+  IFS=$'\t' read -r command_name arguments <<<"$process"
+  process_label "$command_name" "$arguments"
+}
+
+main "$@"
