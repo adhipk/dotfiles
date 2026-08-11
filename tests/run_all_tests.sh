@@ -43,6 +43,7 @@ TEST_SUITES=(
     "test_tmux_yazi_pane.sh"
     "test_whichkey.sh"
     "test_shortcut_guide.sh"
+    "test_settings.sh"
     "test_source_state.sh"
     "test_default_apps.sh"
     "test_install.sh"

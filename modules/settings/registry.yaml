@@ -1,0 +1,175 @@
+# Declarative catalog of every preference `dotfiles-settings` can change.
+#
+# Each entry maps a public key to a chezmoi data path, the source-state
+# bridges that render it, and the services to reload after a change.
+# `values` constrains input: a static `enum`, or a `provider` with optional
+# `candidates` and `freeText: true` to accept values outside the provider.
+apiVersion: dotfiles/v1
+kind: SettingsRegistry
+schemaVersion: 1
+settings:
+  - key: editor.terminal
+    description: Terminal text editor ($EDITOR and the nvim tmux window command)
+    dataPath: preferences.terminalEditor
+    file: home/.chezmoidata/20-preferences.yaml
+    type: string
+    values:
+      provider: path-commands
+      candidates: [nvim, vim, hx, vi]
+      freeText: true
+    bridges:
+      - home/dot_zshrc.tmpl
+      - home/dot_config/dotfiles/preferences.toml.tmpl
+    reload: []
+  - key: editor.gui
+    description: macOS editor app focused by the @editor hotkey slot
+    dataPath: preferences.guiEditor
+    file: home/.chezmoidata/20-preferences.yaml
+    type: string
+    values:
+      provider: macos-apps
+      freeText: true
+    bridges:
+      - home/dot_config/app-focus/config.toml.tmpl
+    reload: []
+  - key: assistant
+    description: Coding assistant CLI run by the codex tmux window type
+    dataPath: preferences.assistant
+    file: home/.chezmoidata/20-preferences.yaml
+    type: string
+    values:
+      provider: path-commands
+      candidates: [codex, claude, opencode]
+      freeText: true
+    bridges:
+      - home/dot_config/dotfiles/preferences.toml.tmpl
+    reload: []
+  - key: terminal.app
+    description: Terminal app used by app-focus and the alt-backtick hotkey
+    dataPath: preferences.terminalApp
+    file: home/.chezmoidata/20-preferences.yaml
+    type: string
+    values:
+      provider: macos-apps
+      freeText: true
+    bridges:
+      - home/dot_config/app-focus/config.toml.tmpl
+      - home/dot_config/dotfiles/preferences.toml.tmpl
+      - home/dot_skhdrc.tmpl
+    reload: [skhd]
+    regenerate: [shortcuts]
+  - key: hotkeys.slot1
+    description: App focused by alt-1 (@browser resolves the macOS default browser)
+    dataPath: preferences.appSlots.slot1
+    file: home/.chezmoidata/20-preferences.yaml
+    type: string
+    values:
+      provider: macos-apps
+      extra: ["@browser", "@editor"]
+      freeText: true
+    bridges:
+      - home/dot_skhdrc.tmpl
+    reload: [skhd]
+    regenerate: [shortcuts]
+  - key: hotkeys.slot2
+    description: App focused by alt-2 (@editor resolves the configured GUI editor)
+    dataPath: preferences.appSlots.slot2
+    file: home/.chezmoidata/20-preferences.yaml
+    type: string
+    values:
+      provider: macos-apps
+      extra: ["@browser", "@editor"]
+      freeText: true
+    bridges:
+      - home/dot_skhdrc.tmpl
+    reload: [skhd]
+    regenerate: [shortcuts]
+  - key: hotkeys.slot3
+    description: App focused by alt-3
+    dataPath: preferences.appSlots.slot3
+    file: home/.chezmoidata/20-preferences.yaml
+    type: string
+    values:
+      provider: macos-apps
+      extra: ["@browser", "@editor"]
+      freeText: true
+    bridges:
+      - home/dot_skhdrc.tmpl
+    reload: [skhd]
+    regenerate: [shortcuts]
+  - key: hotkeys.slot4
+    description: App focused by alt-4
+    dataPath: preferences.appSlots.slot4
+    file: home/.chezmoidata/20-preferences.yaml
+    type: string
+    values:
+      provider: macos-apps
+      extra: ["@browser", "@editor"]
+      freeText: true
+    bridges:
+      - home/dot_skhdrc.tmpl
+    reload: [skhd]
+    regenerate: [shortcuts]
+  - key: theme.tmuxFlavor
+    description: Catppuccin flavor for the tmux status line
+    dataPath: preferences.theme.tmuxFlavor
+    file: home/.chezmoidata/20-preferences.yaml
+    type: string
+    values:
+      enum: [mocha, macchiato, frappe, latte]
+    bridges:
+      - home/dot_tmux.conf.tmpl
+    reload: [tmux]
+  - key: theme.colorscheme
+    description: Shared terminal colorscheme sourced from ~/.config/colorschemes
+    dataPath: preferences.theme.colorscheme
+    file: home/.chezmoidata/20-preferences.yaml
+    type: string
+    values:
+      provider: colorschemes
+    bridges:
+      - home/dot_config/colorschemes/symlink_colors.sh.tmpl
+    reload: [colors]
+  - key: agent-timer.autoStart
+    description: Arm the agent delivery timer automatically for new sessions
+    dataPath: modules.agentTimer.autoStart
+    file: home/.chezmoidata/10-modules.yaml
+    type: boolean
+    bridges:
+      - home/dot_config/agent-timer/config.toml.tmpl
+      - home/.chezmoiscripts/run_onchange_after_agent-timer-cron.sh.tmpl
+      - home/.chezmoiscripts/run_onchange_before_agent-timer-disable.sh.tmpl
+    reload: []
+  - key: agent-timer.defaultSeconds
+    description: Default agent timer block length in seconds
+    dataPath: modules.agentTimer.defaultSeconds
+    file: home/.chezmoidata/10-modules.yaml
+    type: integer
+    values:
+      min: 60
+      max: 14400
+    bridges:
+      - home/dot_config/agent-timer/config.toml.tmpl
+    reload: []
+  - key: agent-timer.warningSeconds
+    description: Seconds before expiry that the agent timer warns
+    dataPath: modules.agentTimer.warningSeconds
+    file: home/.chezmoidata/10-modules.yaml
+    type: integer
+    values:
+      min: 10
+      max: 3600
+    bridges:
+      - home/dot_config/agent-timer/config.toml.tmpl
+    reload: []
+  - key: agent-timer.expirySound
+    description: macOS system sound played when the agent timer expires
+    dataPath: modules.agentTimer.expirySound
+    file: home/.chezmoidata/10-modules.yaml
+    type: string
+    values:
+      provider: macos-sounds
+      freeText: true
+    bridges:
+      - home/dot_config/agent-timer/config.toml.tmpl
+    reload: []

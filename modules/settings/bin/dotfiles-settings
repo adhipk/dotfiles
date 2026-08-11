@@ -1,0 +1,499 @@
+#!/usr/bin/env bash
+# man-me: name=dotfiles-settings
+# man-me: category=Configuration
+# man-me: usage=dotfiles-settings [pick]; dotfiles-settings list [--json]; dotfiles-settings get KEY [--json]; dotfiles-settings set KEY VALUE [--json] [--no-apply] [--no-reload]; dotfiles-settings validate [--json]
+# man-me: description=Browse and change managed dotfiles preferences with automatic re-render, service reload, and rollback.
+# man-me: tags=settings preferences config editor assistant hotkeys theme fzf
+
+set -euo pipefail
+
+ROOT="${DOTFILES_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
+REGISTRY="${DOTFILES_SETTINGS_REGISTRY:-$ROOT/modules/settings/registry.yaml}"
+DATA_FILE_OVERRIDE="${DOTFILES_SETTINGS_DATA_FILE:-}"
+LIB_DIR="$ROOT/home/dot_local/lib/dotfiles"
+SETTINGS_LOCK_DIR="$ROOT/.dotfiles-settings.lock"
+MODULE_LOCK_DIR="$ROOT/.dotfiles-module.lock"
+COLORSCHEMES_DIR="$ROOT/home/dot_config/colorschemes"
+SHORTCUT_CATALOG="$ROOT/modules/shortcut-guide/bin/shortcut-catalog"
+
+YQ_BIN="${DOTFILES_SETTINGS_YQ_BIN:-yq}"
+JQ_BIN="${DOTFILES_SETTINGS_JQ_BIN:-jq}"
+FZF_BIN="${DOTFILES_SETTINGS_FZF_BIN:-fzf}"
+CHEZMOI_BIN="${DOTFILES_SETTINGS_CHEZMOI_BIN:-chezmoi}"
+TMUX_BIN="${DOTFILES_SETTINGS_TMUX_BIN:-tmux}"
+SKHD_BIN="${DOTFILES_SETTINGS_SKHD_BIN:-skhd}"
+
+die() {
+    printf 'dotfiles-settings: %s\n' "$*" >&2
+    exit 1
+}
+
+warn() {
+    printf 'dotfiles-settings: warning: %s\n' "$*" >&2
+}
+
+need() {
+    command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+registry_entries() {
+    "$YQ_BIN" -o=json -I=0 '.settings // []' "$REGISTRY"
+}
+
+entry_for_key() {
+    local key="$1" entry
+    entry=$(registry_entries | "$JQ_BIN" -c --arg key "$key" '.[] | select(.key == $key)')
+    [[ -n "$entry" ]] || die "unknown setting: $key (see: dotfiles-settings list)"
+    printf '%s\n' "$entry"
+}
+
+entry_field() {
+    "$JQ_BIN" -r "$2" <<<"$1"
+}
+
+data_file_for() {
+    local entry="$1" relative
+    if [[ -n "$DATA_FILE_OVERRIDE" ]]; then
+        printf '%s\n' "$DATA_FILE_OVERRIDE"
+        return 0
+    fi
+    relative=$(entry_field "$entry" '.file')
+    printf '%s/%s\n' "$ROOT" "$relative"
+}
+
+current_value() {
+    local entry="$1" data_file data_path value
+    data_file=$(data_file_for "$entry")
+    data_path=$(entry_field "$entry" '.dataPath')
+    [[ -f "$data_file" ]] || die "missing data file: $data_file"
+    # `//` treats false as falsy, so map null explicitly to keep booleans intact.
+    value=$("$YQ_BIN" -r ".${data_path}" "$data_file")
+    [[ "$value" != "null" ]] || value=""
+    printf '%s\n' "$value"
+}
+
+provider_values() {
+    local entry="$1" provider directory app
+    provider=$(entry_field "$entry" '.values.provider // ""')
+    entry_field "$entry" '.values.extra[]? // empty'
+    case "$provider" in
+        "") ;;
+        path-commands)
+            while IFS= read -r candidate; do
+                [[ -n "$candidate" ]] || continue
+                command -v "$candidate" >/dev/null 2>&1 && printf '%s\n' "$candidate"
+            done < <(entry_field "$entry" '.values.candidates[]? // empty')
+            ;;
+        macos-apps)
+            for directory in /Applications "$HOME/Applications" /System/Applications; do
+                [[ -d "$directory" ]] || continue
+                for app in "$directory"/*.app; do
+                    [[ -e "$app" ]] || continue
+                    app=$(basename "$app")
+                    printf '%s\n' "${app%.app}"
+                done
+            done | sort -u
+            ;;
+        colorschemes)
+            for scheme in "$COLORSCHEMES_DIR"/executable_*.sh; do
+                [[ -e "$scheme" ]] || continue
+                scheme=$(basename "$scheme")
+                scheme="${scheme#executable_}"
+                printf '%s\n' "${scheme%.sh}"
+            done
+            ;;
+        macos-sounds)
+            for sound in /System/Library/Sounds/*.aiff; do
+                [[ -e "$sound" ]] || continue
+                sound=$(basename "$sound")
+                printf '%s\n' "${sound%.aiff}"
+            done
+            ;;
+        *) die "unknown value provider: $provider" ;;
+    esac
+    entry_field "$entry" '.values.enum[]? // empty'
+}
+
+allowed_values() {
+    local entry="$1" type
+    type=$(entry_field "$entry" '.type')
+    if [[ "$type" == "boolean" ]]; then
+        printf 'true\nfalse\n'
+    else
+        provider_values "$entry" | awk 'NF && !seen[$0]++'
+    fi
+}
+
+validate_value() {
+    local entry="$1" value="$2" key type free_text minimum maximum
+    key=$(entry_field "$entry" '.key')
+    type=$(entry_field "$entry" '.type')
+    case "$value" in
+        *$'\n'*|*'"'*|*'\'*) die "$key: value must not contain newlines, quotes, or backslashes" ;;
+    esac
+    case "$type" in
+        boolean)
+            [[ "$value" == "true" || "$value" == "false" ]] || die "$key: value must be true or false"
+            ;;
+        integer)
+            [[ "$value" =~ ^[0-9]+$ ]] || die "$key: value must be a non-negative integer"
+            minimum=$(entry_field "$entry" '.values.min // ""')
+            maximum=$(entry_field "$entry" '.values.max // ""')
+            [[ -z "$minimum" || "$value" -ge "$minimum" ]] || die "$key: value must be at least $minimum"
+            [[ -z "$maximum" || "$value" -le "$maximum" ]] || die "$key: value must be at most $maximum"
+            ;;
+        string)
+            [[ -n "$value" ]] || die "$key: value must not be empty"
+            free_text=$(entry_field "$entry" '.values.freeText // false')
+            if [[ "$free_text" != "true" ]]; then
+                allowed_values "$entry" | grep -Fxq -- "$value" ||
+                    die "$key: '$value' is not an allowed value (see: dotfiles-settings pick)"
+            fi
+            ;;
+        *) die "$key: unsupported type in registry: $type" ;;
+    esac
+}
+
+write_value() {
+    local entry="$1" value="$2" data_file="$3" temp data_path type
+    data_path=$(entry_field "$entry" '.dataPath')
+    type=$(entry_field "$entry" '.type')
+    temp=$(mktemp "${data_file}.tmp.XXXXXX")
+    cp -p "$data_file" "$temp"
+    if [[ "$type" == "string" ]]; then
+        DOTFILES_SETTINGS_VALUE="$value" "$YQ_BIN" -i ".${data_path} = strenv(DOTFILES_SETTINGS_VALUE)" "$temp"
+    else
+        "$YQ_BIN" -i ".${data_path} = ${value}" "$temp"
+    fi
+    mv -f "$temp" "$data_file"
+}
+
+effective_value() {
+    local entry="$1" data_path
+    data_path=$(entry_field "$entry" '.dataPath')
+    "$CHEZMOI_BIN" -S "$ROOT" data --format json 2>/dev/null |
+        "$JQ_BIN" -r ".${data_path} | if . == null then \"\" else tostring end" 2>/dev/null || true
+}
+
+apply_bridges() {
+    local entry="$1" bridge
+    local -a bridges=()
+    while IFS= read -r bridge; do
+        [[ -n "$bridge" ]] || continue
+        bridges+=("$bridge")
+    done < <(entry_field "$entry" '.bridges[]? // empty' | awk '!seen[$0]++')
+    [[ ${#bridges[@]} -gt 0 ]] || die "setting has no target bridges"
+    "$CHEZMOI_BIN" -S "$ROOT" apply --force --source-path "${bridges[@]}"
+}
+
+reload_service() {
+    case "$1" in
+        skhd)
+            if command -v "$SKHD_BIN" >/dev/null 2>&1; then
+                "$SKHD_BIN" --restart-service >/dev/null 2>&1 || warn "skhd restart failed"
+            fi
+            ;;
+        tmux)
+            if command -v "$TMUX_BIN" >/dev/null 2>&1 && "$TMUX_BIN" ls >/dev/null 2>&1; then
+                "$TMUX_BIN" source-file "$HOME/.tmux.conf" >/dev/null 2>&1 || warn "tmux reload failed"
+            fi
+            ;;
+        ghostty)
+            pkill -USR2 -f '/Ghostty[.]app/Contents/MacOS/ghostty([[:space:]]|$)' 2>/dev/null || true
+            ;;
+        colors)
+            if [[ -x "$HOME/bin/reload-colors" ]]; then
+                "$HOME/bin/reload-colors" >/dev/null 2>&1 || warn "reload-colors failed"
+            fi
+            ;;
+        *) warn "unknown reload service: $1" ;;
+    esac
+}
+
+regenerate_artifact() {
+    case "$1" in
+        shortcuts)
+            if [[ -x "$SHORTCUT_CATALOG" ]] && command -v python3 >/dev/null 2>&1; then
+                "$SHORTCUT_CATALOG" update --root "$ROOT" >/dev/null 2>&1 ||
+                    warn "shortcut catalog update failed; run 'make shortcuts-update'"
+            else
+                warn "shortcut-catalog unavailable; run 'make shortcuts-update'"
+            fi
+            ;;
+        *) warn "unknown regenerate target: $1" ;;
+    esac
+}
+
+acquire_lock_for() {
+    local data_file="$1" lock_dir
+    [[ -r "$LIB_DIR/core.sh" && -r "$LIB_DIR/locks.sh" ]] || die "shared dotfiles lock library is unavailable"
+    # shellcheck source=/dev/null
+    source "$LIB_DIR/core.sh"
+    # shellcheck source=/dev/null
+    source "$LIB_DIR/locks.sh"
+    if [[ "$(basename "$data_file")" == "10-modules.yaml" ]]; then
+        lock_dir="$MODULE_LOCK_DIR"
+    else
+        lock_dir="$SETTINGS_LOCK_DIR"
+    fi
+    dotfiles_lock_acquire "$lock_dir" 10000 || die "could not acquire settings lock"
+    ACTIVE_LOCK_DIR="$lock_dir"
+    trap 'release_lock' EXIT
+}
+
+release_lock() {
+    if [[ -n "${ACTIVE_LOCK_DIR:-}" ]]; then
+        dotfiles_lock_release "$ACTIVE_LOCK_DIR" >/dev/null 2>&1 || true
+        ACTIVE_LOCK_DIR=""
+    fi
+}
+
+list_settings() {
+    local json="${1:-}" entry key description value type
+    if [[ "$json" == "--json" ]]; then
+        local rows="[]"
+        while IFS= read -r entry; do
+            value=$(current_value "$entry")
+            rows=$("$JQ_BIN" -c --argjson entry "$entry" --arg value "$value" \
+                '. + [{key: $entry.key, value: $value, type: $entry.type, description: $entry.description}]' <<<"$rows")
+        done < <(registry_entries | "$JQ_BIN" -c '.[]')
+        "$JQ_BIN" -n --argjson settings "$rows" '{schemaVersion: 1, settings: $settings}'
+    else
+        {
+            printf 'KEY\tVALUE\tDESCRIPTION\n'
+            while IFS= read -r entry; do
+                key=$(entry_field "$entry" '.key')
+                description=$(entry_field "$entry" '.description')
+                value=$(current_value "$entry")
+                printf '%s\t%s\t%s\n' "$key" "$value" "$description"
+            done < <(registry_entries | "$JQ_BIN" -c '.[]')
+        } | column -t -s $'\t'
+    fi
+}
+
+get_setting() {
+    local key="$1" json="${2:-}" entry value
+    entry=$(entry_for_key "$key")
+    value=$(current_value "$entry")
+    if [[ "$json" == "--json" ]]; then
+        "$JQ_BIN" -n --arg key "$key" --arg value "$value" \
+            '{schemaVersion: 1, key: $key, value: $value}'
+    else
+        printf '%s\n' "$value"
+    fi
+}
+
+set_setting() {
+    local key="$1" value="$2" json="$3" apply="$4" reload="$5"
+    local entry data_file previous changed backup effective applied=false
+    local -a reloaded=() regenerated=()
+
+    entry=$(entry_for_key "$key")
+    validate_value "$entry" "$value"
+    data_file=$(data_file_for "$entry")
+    [[ -f "$data_file" ]] || die "missing data file: $data_file"
+    [[ "$apply" != "true" ]] || need "$CHEZMOI_BIN"
+
+    acquire_lock_for "$data_file"
+    previous=$(current_value "$entry")
+    if [[ "$previous" == "$value" ]]; then changed=false; else changed=true; fi
+
+    # Keep the backup outside .chezmoidata: chezmoi parses every file in that
+    # directory as data and fails on unknown extensions.
+    backup=$(mktemp "${TMPDIR:-/tmp}/dotfiles-settings-backup.XXXXXX")
+    cp -p "$data_file" "$backup"
+    if ! write_value "$entry" "$value" "$data_file"; then
+        mv -f "$backup" "$data_file"
+        die "failed to update $data_file"
+    fi
+
+    if [[ "$apply" == "true" ]]; then
+        effective=$(effective_value "$entry")
+        if [[ -z "$effective" ]]; then
+            warn "could not verify the effective chezmoi data value for $key"
+        elif [[ "$effective" != "$value" ]]; then
+            mv -f "$backup" "$data_file"
+            die "$key is masked by a machine override in ~/.config/chezmoi (effective value: $effective); edit that data section instead"
+        fi
+        if ! apply_bridges "$entry"; then
+            mv -f "$backup" "$data_file"
+            apply_bridges "$entry" || die "chezmoi apply failed and target rollback also failed"
+            die "chezmoi apply failed; configuration and targets were rolled back"
+        fi
+        applied=true
+        if [[ "$reload" == "true" ]]; then
+            while IFS= read -r service; do
+                [[ -n "$service" ]] || continue
+                reload_service "$service"
+                reloaded+=("$service")
+            done < <(entry_field "$entry" '.reload[]? // empty')
+            while IFS= read -r artifact; do
+                [[ -n "$artifact" ]] || continue
+                regenerate_artifact "$artifact"
+                regenerated+=("$artifact")
+            done < <(entry_field "$entry" '.regenerate[]? // empty')
+        fi
+    fi
+    rm -f "$backup"
+    release_lock
+
+    if [[ "$json" == "--json" ]]; then
+        "$JQ_BIN" -n \
+            --arg key "$key" \
+            --arg previous "$previous" \
+            --arg value "$value" \
+            --argjson changed "$changed" \
+            --argjson applied "$applied" \
+            --arg reloaded "${reloaded[*]:-}" \
+            --arg regenerated "${regenerated[*]:-}" \
+            '{
+              schemaVersion: 1,
+              operation: "settings-set",
+              status: "complete",
+              key: $key,
+              previous: $previous,
+              value: $value,
+              changed: $changed,
+              applied: $applied,
+              reloaded: ($reloaded | split(" ") | map(select(length > 0))),
+              regenerated: ($regenerated | split(" ") | map(select(length > 0)))
+            }'
+    else
+        printf '%s: %s -> %s (applied: %s)\n' "$key" "$previous" "$value" "$applied"
+    fi
+}
+
+validate_registry() {
+    local json="${1:-}" count duplicates entry key relative bridge
+    [[ -f "$REGISTRY" ]] || die "missing registry: $REGISTRY"
+    [[ "$("$YQ_BIN" -r '.apiVersion' "$REGISTRY")" == "dotfiles/v1" ]] || die "registry: unsupported apiVersion"
+    [[ "$("$YQ_BIN" -r '.kind' "$REGISTRY")" == "SettingsRegistry" ]] || die "registry: unsupported kind"
+    [[ "$("$YQ_BIN" -r '.schemaVersion' "$REGISTRY")" == "1" ]] || die "registry: unsupported schemaVersion"
+    count=$(registry_entries | "$JQ_BIN" 'length')
+    [[ "$count" -gt 0 ]] || die "registry: settings must be a non-empty array"
+
+    duplicates=$(registry_entries | "$JQ_BIN" -r '.[].key' | sort | uniq -d)
+    [[ -z "$duplicates" ]] || die "registry: duplicate key: $duplicates"
+
+    while IFS= read -r entry; do
+        key=$(entry_field "$entry" '.key // ""')
+        [[ "$key" =~ ^[a-z0-9]+([.-][a-zA-Z0-9]+)*$ ]] || die "registry: invalid key: $key"
+        [[ -n "$(entry_field "$entry" '.description // ""')" ]] || die "$key: missing description"
+        [[ "$(entry_field "$entry" '.dataPath // ""')" =~ ^[A-Za-z][A-Za-z0-9]*(\.[A-Za-z][A-Za-z0-9]*)*$ ]] ||
+            die "$key: invalid dataPath"
+        case "$(entry_field "$entry" '.type // ""')" in
+            string|boolean|integer) ;;
+            *) die "$key: type must be string, boolean, or integer" ;;
+        esac
+        relative=$(entry_field "$entry" '.file // ""')
+        [[ "$relative" == home/.chezmoidata* && -f "$ROOT/$relative" ]] || die "$key: invalid data file: $relative"
+        if [[ -z "$DATA_FILE_OVERRIDE" ]]; then
+            [[ -n "$(current_value "$entry")" ]] || die "$key: dataPath resolves to nothing in $relative"
+        fi
+        [[ "$(entry_field "$entry" '.bridges | length')" -gt 0 ]] || die "$key: bridges must be a non-empty array"
+        while IFS= read -r bridge; do
+            [[ -n "$bridge" ]] || continue
+            [[ "$bridge" == home/* && -f "$ROOT/$bridge" ]] || die "$key: missing bridge: $bridge"
+        done < <(entry_field "$entry" '.bridges[]? // empty')
+    done < <(registry_entries | "$JQ_BIN" -c '.[]')
+
+    if [[ "$json" == "--json" ]]; then
+        "$JQ_BIN" -n --argjson settingCount "$count" \
+            '{valid: true, apiVersion: "dotfiles/v1", schemaVersion: 1, settingCount: $settingCount}'
+    else
+        printf 'Valid settings registry (%s settings)\n' "$count"
+    fi
+}
+
+pick_settings() {
+    need "$FZF_BIN"
+    local selection key entry current free_text picker_output picker_status query choice value
+    while true; do
+        selection=$(list_settings | tail -n +2 |
+            "$FZF_BIN" --height 40% --reverse --border --prompt='setting> ' \
+                --header='select a setting (esc to quit)') || break
+        key=$(awk '{print $1}' <<<"$selection")
+        [[ -n "$key" ]] || continue
+        entry=$(entry_for_key "$key")
+        current=$(current_value "$entry")
+        free_text=$(entry_field "$entry" '.values.freeText // false')
+
+        picker_status=0
+        picker_output=$(allowed_values "$entry" |
+            "$FZF_BIN" --height 40% --reverse --border --print-query \
+                --prompt="$key> " --header="current: $current (esc to cancel)") || picker_status=$?
+        query=$(sed -n '1p' <<<"$picker_output")
+        choice=$(sed -n '2p' <<<"$picker_output")
+        case "$picker_status" in
+            0) value="${choice:-$query}" ;;
+            1) [[ "$free_text" == "true" && -n "$query" ]] && value="$query" || continue ;;
+            *) continue ;;
+        esac
+        [[ -n "$value" && "$value" != "$current" ]] || continue
+        ( set_setting "$key" "$value" "" "true" "true" ) || true
+    done
+}
+
+usage() {
+    cat <<'EOF'
+Usage:
+  dotfiles-settings [pick]
+  dotfiles-settings list [--json]
+  dotfiles-settings get KEY [--json]
+  dotfiles-settings set KEY VALUE [--json] [--no-apply] [--no-reload]
+  dotfiles-settings validate [--json]
+EOF
+}
+
+need "$YQ_BIN"
+need "$JQ_BIN"
+[[ -f "$REGISTRY" ]] || die "missing settings registry: $REGISTRY"
+
+case "${1:-pick}" in
+    list)
+        shift
+        [[ $# -le 1 && ( $# -eq 0 || "$1" == "--json" ) ]] || die "list accepts only --json"
+        list_settings "${1:-}"
+        ;;
+    get)
+        shift
+        [[ -n "${1:-}" ]] || die "exactly one setting key is required"
+        [[ -z "${2:-}" || ( "$2" == "--json" && -z "${3:-}" ) ]] || die "get accepts one key and optional --json"
+        get_setting "$1" "${2:-}"
+        ;;
+    set)
+        shift
+        [[ -n "${1:-}" && -n "${2:-}" ]] || die "usage: dotfiles-settings set KEY VALUE"
+        setting_key="$1"
+        setting_value="$2"
+        shift 2
+        json=""
+        apply="true"
+        reload="true"
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --json) json="--json"; shift ;;
+                --no-apply) apply="false"; shift ;;
+                --no-reload) reload="false"; shift ;;
+                *) die "unknown option: $1" ;;
+            esac
+        done
+        need "$CHEZMOI_BIN"
+        set_setting "$setting_key" "$setting_value" "$json" "$apply" "$reload"
+        ;;
+    validate)
+        shift
+        [[ $# -le 1 && ( $# -eq 0 || "$1" == "--json" ) ]] || die "validate accepts only --json"
+        validate_registry "${1:-}"
+        ;;
+    pick)
+        pick_settings
+        ;;
+    help|-h|--help)
+        usage
+        ;;
+    *)
+        usage
+        exit 2
+        ;;
+esac

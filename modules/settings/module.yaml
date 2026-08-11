@@ -1,0 +1,38 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: settings
+version: 1.0.0
+description: Central preferences registry with a CLI and fzf picker that re-renders and reloads affected targets on change.
+dataKey: modules.settings
+distribution:
+  standalone: false
+requires:
+  executables:
+    - bash
+    - chezmoi
+    - jq
+    - yq
+optional:
+  executables:
+    - fzf
+state:
+  preserved: []
+  ephemeral: []
+commands:
+  - name: dotfiles-settings
+    source: bin/dotfiles-settings
+    target: ~/bin/dotfiles-settings
+    bridge: home/bin/executable_dotfiles-settings.tmpl
+targets:
+  - service: settings
+    source: bin/dotfiles-settings
+    destination: ~/bin/dotfiles-settings
+    bridge: home/bin/executable_dotfiles-settings.tmpl
+    ownership: exclusive
+  - service: settings
+    source: config/preferences.toml.tmpl
+    destination: ~/.config/dotfiles/preferences.toml
+    bridge: home/dot_config/dotfiles/preferences.toml.tmpl
+    ownership: exclusive
+tests:
+  - tests/test_module.sh

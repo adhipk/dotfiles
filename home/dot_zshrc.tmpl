@@ -1,4 +1,6 @@
 # Daily-driver zsh configuration
+# Rendered by chezmoi as a Go template: literal double curly braces must be
+# escaped or they will break rendering.
 # man-me: name=y
 # man-me: category=Terminal and Sessions
 # man-me: usage=y [ARG ...]
@@ -7,7 +9,7 @@
 typeset -U path fpath
 path=("$HOME/.local/bin" "/opt/homebrew/opt/openjdk/bin" $path)
 export PATH
-export EDITOR=nvim
+export EDITOR={{ .preferences.terminalEditor }}
 export MANPAGER="sh -c 'col -bx | bat --paging=always -l man -p'"
 
 # Keep secrets and machine-specific env out of the repo.

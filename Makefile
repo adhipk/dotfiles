@@ -3,7 +3,7 @@
 # man-me: usage=make test; make install; make diff; make watch; make reload
 # man-me: description=Convenience wrappers for tests, source-state and tmux-plugin installation, diff, watch, reload, and native HUD builds.
 # man-me: tags=make setup test install apply diff watch reload tmux tpm projectdeck whichkey shortcuts
-.PHONY: test test-agent-timer test-dotfiles-lib test-module-lifecycle test-module-integration test-system-uninstall test-dependencies test-control-center test-shortcut-guide test-colorscheme test-configs test-scratchpads test-projects test-hyperspace test-todo test-tmux-session-template test-tmux-workspace test-tmux-which-key test-tmux-persistence test-tmux-border-accent test-tmux-yazi-pane test-source-state test-install test-integration test-whichkey shortcuts-update shortcuts-check install apply apply-debug compile sync diff watch reload clean help build-projectdeck build-whichkey
+.PHONY: test test-agent-timer test-dotfiles-lib test-module-lifecycle test-module-integration test-system-uninstall test-dependencies test-control-center test-shortcut-guide test-settings test-colorscheme test-configs test-scratchpads test-projects test-hyperspace test-todo test-tmux-session-template test-tmux-workspace test-tmux-which-key test-tmux-persistence test-tmux-border-accent test-tmux-yazi-pane test-source-state test-install test-integration test-whichkey shortcuts-update shortcuts-check install apply apply-debug compile sync diff watch reload clean help build-projectdeck build-whichkey
 
 # Default target
 help:
@@ -19,6 +19,7 @@ help:
 	@echo "  make test-dependencies - Run normalized dependency inventory tests"
 	@echo "  make test-control-center - Run native control-center module tests"
 	@echo "  make test-shortcut-guide - Run generated shortcut catalog module tests"
+	@echo "  make test-settings     - Run preferences registry and CLI tests"
 	@echo "  make test-colorscheme  - Run colorscheme tests only"
 	@echo "  make test-configs      - Run config file tests only"
 	@echo "  make test-scratchpads  - Run scratchpad behavior tests only"
@@ -76,6 +77,9 @@ test-control-center:
 
 test-shortcut-guide:
 	@./tests/test_shortcut_guide.sh
+
+test-settings:
+	@./tests/test_settings.sh
 
 test-colorscheme:
 	@./tests/test_colorscheme.sh

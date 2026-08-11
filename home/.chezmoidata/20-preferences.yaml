@@ -1,0 +1,18 @@
+# Checked-in user preference defaults, browsed and changed with
+# `dotfiles-settings` (modules/settings/registry.yaml describes every key).
+# Machine-specific overrides may be supplied from the `data` section of
+# ~/.config/chezmoi/chezmoi.{toml,yaml,json}; config-file data takes
+# precedence over this file.
+preferences:
+  terminalEditor: nvim # $EDITOR and the nvim tmux window command
+  guiEditor: VSCodium # macOS app focused by the @editor slot
+  assistant: codex # agent CLI run by the codex tmux window type
+  terminalApp: Ghostty # app-focus terminal and alt-backtick target
+  appSlots: # alt-1..4 focus targets; @browser/@editor are runtime tokens
+    slot1: "@browser"
+    slot2: "@editor"
+    slot3: "Microsoft Teams"
+    slot4: "Slack"
+  theme:
+    tmuxFlavor: mocha # catppuccin flavor in ~/.tmux.conf
+    colorscheme: catppuccin-mocha # ~/.config/colorschemes/colors.sh symlink target

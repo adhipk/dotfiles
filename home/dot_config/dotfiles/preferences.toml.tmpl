@@ -1,0 +1,3 @@
+{{- if .modules.settings.enabled -}}
+{{ includeTemplate "../modules/settings/config/preferences.toml.tmpl" . }}
+{{- end -}}

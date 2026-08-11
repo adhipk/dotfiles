@@ -1,0 +1,5 @@
+{{- if .modules.settings.enabled -}}
+#!/usr/bin/env bash
+export DOTFILES_DIR={{ .chezmoi.sourceDir | dir | quote }}
+{{ includeTemplate "../modules/settings/bin/dotfiles-settings" . }}
+{{- end -}}

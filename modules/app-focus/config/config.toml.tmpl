@@ -1,0 +1,15 @@
+# Rendered app-focus configuration. `apps` values come from the shared
+# preferences data (change them with `dotfiles-settings`); the remaining
+# values mirror config/defaults.toml, which stays the standalone fallback.
+schema_version = 1
+
+[apps]
+editor = "{{ .preferences.guiEditor }}"
+terminal = "{{ .preferences.terminalApp }}"
+
+[modes]
+state_directory = ".config/skhd"
+zen_blocked_slots = [3, 4, 5]
+
+[integrations]
+notification_command = ".config/skhd/notify.sh"
