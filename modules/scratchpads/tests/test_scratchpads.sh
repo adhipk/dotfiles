@@ -121,6 +121,26 @@ assert_action "switch projects" "visible different-target shortcut switches tmux
 assert_action "focus 188" "different-target switch keeps the scratchpad visible and focused"
 assert_no_action "hide terminal" "different-target switch does not hide the scratchpad"
 
+: > "$ACTIONS_FILE"
+VISIBLE_IDS="299"
+ensure_session_manager_tmux_session() { printf '%s\n' "ensure sessions" >> "$ACTIONS_FILE"; }
+hide_scratchpad_and_restore_focus() { printf '%s\n' "hide $1" >> "$ACTIONS_FILE"; }
+open_session_manager_scratchpad
+assert_action "ensure sessions" "session-manager scratchpad ensures its dedicated tmux template"
+assert_action "hide session_manager" "Fn+P target hides an already-visible session manager"
+
+: > "$ACTIONS_FILE"
+VISIBLE_IDS=""
+close_scratchpads_except_label() { printf '%s\n' "close except $1" >> "$ACTIONS_FILE"; }
+close_duplicate_scratchpads_for_label() { printf '%s\n' "dedupe $1" >> "$ACTIONS_FILE"; }
+open_or_focus_scratchpad_with_profile() {
+  printf '%s\n' "open $1 $2 $3 $5" >> "$ACTIONS_FILE"
+}
+open_session_manager_scratchpad
+assert_action "close except session_manager" "session manager closes other transient scratchpads"
+assert_action "dedupe session_manager" "session manager removes duplicate floating windows"
+assert_action "open session_manager codex $HOME $SCRATCHPADS_COMMAND tmux sessions" "session manager launches its dedicated tmux client"
+
 printf '\n================================\n'
 printf 'Results: %d passed, %d failed\n' "$PASSED" "$FAILED"
 printf '%s\n' '================================'

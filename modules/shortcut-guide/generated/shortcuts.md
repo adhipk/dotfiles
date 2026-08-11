@@ -4,19 +4,30 @@
 
 This catalog is derived from the desired skhd state rendered by `chezmoi -S ROOT cat "$HOME/.skhdrc"`. Shortcut definitions remain in their skhd source fragments and are not duplicated in module manifests.
 
-- Shortcuts: 54
-- Rendered source SHA-256: `628b625a81e369e2aaab4085fdcca651f57f49fefe50b2ccb5aee1cd94d8bd56`
+- Shortcuts: 70
+- Rendered source SHA-256: `af492ea54d09d12cfb022d530e8d95636d3239fd120422168a3504bb8da554b4`
 
 ## Apps & Focus
 
 | Shortcut | Action | Details | Owner |
 | --- | --- | --- | --- |
 | fn , | Open dotfiles scratchpad | Toggle the black terminal scratchpad on the dotfiles tmux session. | [scratchpads](../../scratchpads/README.md) |
-| fn 1 | Open projects scratchpad | Toggle the black terminal scratchpad on the projects tmux session. | [scratchpads](../../scratchpads/README.md) |
+| fn 1 | Focus open tmux window 1 | Focus creation-order slot 1 among open normal tmux Ghostty windows. | [app-focus](../../app-focus/README.md) |
+| fn 2 | Focus open tmux window 2 | Focus creation-order slot 2 among open normal tmux Ghostty windows. | [app-focus](../../app-focus/README.md) |
+| fn 3 | Focus open tmux window 3 | Focus creation-order slot 3 among open normal tmux Ghostty windows. | [app-focus](../../app-focus/README.md) |
+| fn 4 | Focus open tmux window 4 | Focus creation-order slot 4 among open normal tmux Ghostty windows. | [app-focus](../../app-focus/README.md) |
+| fn 5 | Focus open tmux window 5 | Focus creation-order slot 5 among open normal tmux Ghostty windows. | [app-focus](../../app-focus/README.md) |
+| fn 6 | Focus open tmux window 6 | Focus creation-order slot 6 among open normal tmux Ghostty windows. | [app-focus](../../app-focus/README.md) |
+| fn 7 | Focus open tmux window 7 | Focus creation-order slot 7 among open normal tmux Ghostty windows. | [app-focus](../../app-focus/README.md) |
+| fn 8 | Focus open tmux window 8 | Focus creation-order slot 8 among open normal tmux Ghostty windows. | [app-focus](../../app-focus/README.md) |
+| fn 9 | Focus open tmux window 9 | Focus creation-order slot 9 among open normal tmux Ghostty windows. | [app-focus](../../app-focus/README.md) |
+| fn P | Open session manager | Toggle the floating tmux session dashboard and cleanup tools. | [scratchpads](../../scratchpads/README.md) |
+| fn ⇥ | Cycle open tmux windows | Focus the next open normal tmux Ghostty window, wrapping after the last. | [app-focus](../../app-focus/README.md) |
 | R⌘ D | Duplicate current tmux window | Defined in App Focus. Runs only in Ghostty; every other app receives the chord directly. | [terminal-window-types](../../terminal-window-types/README.md) |
+| R⌘ H | Open centralized tmux hub | Defined in App Focus. Runs only in Ghostty; every other app receives the chord directly. | [tmux-sessions](../../tmux-sessions/README.md) |
 | R⌘ R | Rename current tmux window | Defined in App Focus. Runs only in Ghostty; every other app receives the chord directly. | [terminal-window-types](../../terminal-window-types/README.md) |
 | R⌘ S | Open tmux session picker | Defined in App Focus. Runs only in Ghostty; every other app receives the chord directly. | [root](../../../home/dot_skhdrc.tmpl) |
-| R⌘ Space | Open tmux command center | Defined in App Focus. Runs only in Ghostty; every other app receives the chord directly. | [root](../../../home/dot_skhdrc.tmpl) |
+| R⌘ Space | Search tmux commands with Telescope | Defined in App Focus. Runs only in Ghostty; every other app receives the chord directly. | [root](../../../home/dot_skhdrc.tmpl) |
 | ⌃ ⌥ B | Balance windows | Evenly rebalance the current BSP layout. | [window-layout](../../window-layout/README.md) |
 | ⌃ ⌥ G | Toggle BSP / stack layout | Switch the current Space between tiled BSP and stacked layouts. | [window-layout](../../window-layout/README.md) |
 | ⌃ ⌥ O | Rotate layout | Rotate the current BSP tree by 90 degrees. | [window-layout](../../window-layout/README.md) |
@@ -73,6 +84,16 @@ This catalog is derived from the desired skhd state rendered by `chezmoi -S ROOT
 | ⌃ ⌥ N | Move window to a new Space | Create a Space, move the focused window there, and focus it. | [space-display](../../space-display/README.md) |
 | ⌥ K | Close empty Spaces | Remove empty Spaces while keeping at least one available. | [space-display](../../space-display/README.md) |
 | ⌥ N | Create a new Space | Create and focus a Space; move the focused non-scratchpad window when it is safe. | [space-display](../../space-display/README.md) |
+| ⌥ ⌘ N | Open window on a new Space | Run the app’s Command+N action, then move its new window to a new Space. | [space-display](../../space-display/README.md) |
+
+## Capture
+
+| Shortcut | Action | Details | Owner |
+| --- | --- | --- | --- |
+| ⇧ fn 1 | Save full-screen screenshot | Use macOS’ native full-screen capture. | [root](../../../home/dot_skhdrc.tmpl) |
+| ⇧ fn 2 | Copy full-screen screenshot | Copy a full-screen capture to the clipboard. | [root](../../../home/dot_skhdrc.tmpl) |
+| ⇧ fn 3 | Save selection screenshot | Use macOS’ interactive area or window capture. | [root](../../../home/dot_skhdrc.tmpl) |
+| ⇧ fn 4 | Copy selection screenshot | Copy an interactive area or window capture. | [root](../../../home/dot_skhdrc.tmpl) |
 
 ## System
 

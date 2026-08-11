@@ -85,18 +85,20 @@ fi
 
 DEFAULTS=$(SCRATCHPADS_CONFIG_FILE="$MODULE_DIR/config/defaults.toml" bash -c '
   source "$1"
-  printf "%s|%s|%s|%s|%s\n" \
+  printf "%s|%s|%s|%s|%s|%s|%s\n" \
     "$(scratchpads_config_string .paths.dotfiles missing)" \
     "$(scratchpads_config_string .paths.projects missing)" \
     "$(scratchpads_config_string .tmux.terminal_label missing)" \
     "$(scratchpads_config_string .tmux.dotfiles_session missing)" \
-    "$(scratchpads_config_string .tmux.projects_session missing)"
+    "$(scratchpads_config_string .tmux.projects_session missing)" \
+    "$(scratchpads_config_string .tmux.session_manager_label missing)" \
+    "$(scratchpads_config_string .tmux.session_manager_session missing)"
 ' _ "$MODULE_DIR/lib/config.sh")
-if [[ "$DEFAULTS" == "dotfiles|projects|terminal|dotfiles|projects" ]]; then
-  pass "TOML defaults preserve paths, label, and separate tmux sessions"
+if [[ "$DEFAULTS" == "dotfiles|projects|terminal|dotfiles|projects|session_manager|session-manager" ]]; then
+  pass "TOML defaults preserve paths, labels, and separate tmux sessions"
 else
-  fail "TOML defaults preserve paths, label, and separate tmux sessions" \
-    "dotfiles|projects|terminal|dotfiles|projects" "$DEFAULTS"
+  fail "TOML defaults preserve paths, labels, and separate tmux sessions" \
+    "dotfiles|projects|terminal|dotfiles|projects|session_manager|session-manager" "$DEFAULTS"
 fi
 
 cat >"$TEMP_DIR/custom.toml" <<'EOF'
@@ -108,20 +110,24 @@ projects = "/tmp/project-root"
 terminal_label = "panel"
 dotfiles_session = "cfg"
 projects_session = "work"
+session_manager_label = "cleanup"
+session_manager_session = "sessions"
 EOF
 CUSTOM=$(HOME="$TEMP_DIR/config-home" SCRATCHPADS_CONFIG_FILE="$TEMP_DIR/custom.toml" bash -c '
   source "$1"
-  printf "%s|%s|%s|%s\n" \
+  printf "%s|%s|%s|%s|%s|%s\n" \
     "$(scratchpads_home_path "$(scratchpads_config_string .paths.dotfiles missing)")" \
     "$(scratchpads_home_path "$(scratchpads_config_string .paths.projects missing)")" \
     "$(scratchpads_config_string .tmux.terminal_label missing)" \
-    "$(scratchpads_config_string .tmux.projects_session missing)"
+    "$(scratchpads_config_string .tmux.projects_session missing)" \
+    "$(scratchpads_config_string .tmux.session_manager_label missing)" \
+    "$(scratchpads_config_string .tmux.session_manager_session missing)"
 ' _ "$MODULE_DIR/lib/config.sh")
-if [[ "$CUSTOM" == "$TEMP_DIR/config-home/src/dotfiles|/tmp/project-root|panel|work" ]]; then
+if [[ "$CUSTOM" == "$TEMP_DIR/config-home/src/dotfiles|/tmp/project-root|panel|work|cleanup|sessions" ]]; then
   pass "custom TOML overrides paths and tmux identity"
 else
   fail "custom TOML overrides paths and tmux identity" \
-    "$TEMP_DIR/config-home/src/dotfiles|/tmp/project-root|panel|work" "$CUSTOM"
+    "$TEMP_DIR/config-home/src/dotfiles|/tmp/project-root|panel|work|cleanup|sessions" "$CUSTOM"
 fi
 
 assert_contains "$DOTFILES_DIR/home/bin/executable_scratchpads.tmpl" \
@@ -136,6 +142,15 @@ assert_contains "$DOTFILES_DIR/home/dot_yabairc.tmpl" \
 assert_contains "$MODULE_DIR/bin/scratchpads" \
   'if [ -x "$HOME/bin/tmux-session-template" ]' \
   "scratchpads tolerate the optional typed-window command"
+assert_contains "$MODULE_DIR/bin/scratchpads" \
+  'ensure_session_manager_tmux_session' \
+  "scratchpads own the dedicated session-manager template"
+assert_contains "$MODULE_DIR/bin/scratchpads" \
+  'TMUX_HUB_SESSION="$session"' \
+  "session-manager template embeds the live tmux hub"
+assert_contains "$MODULE_DIR/bin/scratchpads" \
+  '@dotfiles_window_type terminal' \
+  "session-manager terminal participates in typed-window shortcuts"
 
 if bash -n "$MODULE_DIR/bin/scratchpads" \
   && bash -n "$MODULE_DIR/bin/toggle_ghostty_quick_terminal.sh" \
@@ -162,7 +177,8 @@ assert_executable "$DESTINATION/.config/skhd/toggle_ghostty_quick_terminal.sh" "
 assert_file "$DESTINATION/.config/scratchpads/config.toml" "enabled profile installs TOML config"
 assert_file "$DESTINATION/.config/scratchpads/config.sh" "enabled profile installs config adapter"
 assert_contains "$DESTINATION/.skhdrc" 'fn - 0x2B : ~/bin/scratchpads open codex' "enabled profile preserves Fn+Comma"
-assert_contains "$DESTINATION/.skhdrc" 'fn - 1 : ~/bin/scratchpads open projects' "enabled profile preserves Fn+1"
+assert_contains "$DESTINATION/.skhdrc" 'fn - p : ~/bin/scratchpads open sessions' "enabled profile binds Fn+P to the session manager"
+assert_not_contains "$DESTINATION/.skhdrc" 'fn - 1 : ~/bin/scratchpads open projects' "enabled profile leaves Fn+1 available for open tmux windows"
 assert_contains "$DESTINATION/.yabairc" 'eval "$("$HOME/bin/scratchpads" rules)"' "enabled profile registers yabai rules through the public command"
 if HOME="$DESTINATION" "$DESTINATION/bin/scratchpads" --help >/dev/null; then
   pass "installed command resolves its managed config adapter"
@@ -181,7 +197,7 @@ assert_absent "$DESTINATION/.config/skhd/toggle_ghostty_quick_terminal.sh" "disa
 assert_absent "$DESTINATION/.config/scratchpads/config.toml" "disabled profile removes TOML config"
 assert_absent "$DESTINATION/.config/scratchpads/config.sh" "disabled profile removes config adapter"
 assert_not_contains "$DESTINATION/.skhdrc" 'scratchpads open codex' "disabled profile removes Fn+Comma"
-assert_not_contains "$DESTINATION/.skhdrc" 'scratchpads open projects' "disabled profile removes Fn+1"
+assert_not_contains "$DESTINATION/.skhdrc" 'scratchpads open projects' "disabled profile keeps the projects scratchpad unbound"
 assert_not_contains "$DESTINATION/.yabairc" 'bin/scratchpads" rules' "disabled profile removes yabai rule registration"
 assert_contains "$DESTINATION/.yabairc" 'rule --remove "scratchpad_terminal"' "disabled profile cleans the current yabai rule"
 assert_contains "$DESTINATION/.skhdrc" 'alt - n : ~/.config/yabai/create-space auto' "disabled profile preserves space management"

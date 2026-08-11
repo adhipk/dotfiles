@@ -1,5 +1,5 @@
 {
-  "renderedSourceSha256": "628b625a81e369e2aaab4085fdcca651f57f49fefe50b2ccb5aee1cd94d8bd56",
+  "renderedSourceSha256": "af492ea54d09d12cfb022d530e8d95636d3239fd120422168a3504bb8da554b4",
   "schemaVersion": 1,
   "shortcuts": [
     {
@@ -9,20 +9,130 @@
       "displayKey": "fn ,",
       "owner": "scratchpads",
       "rawKey": "fn - 0x2B",
-      "sourceSection": "App Focus",
+      "sourceSection": "Focus open normal tmux windows by creation order",
       "stableId": "sha256:d5240ad9df4996aeb168743907973afd9a5183b4f5cd42babb9b65d597a80d91",
       "title": "Open dotfiles scratchpad"
     },
     {
       "category": "Apps & Focus",
-      "command": "~/bin/scratchpads open projects",
-      "detail": "Toggle the black terminal scratchpad on the projects tmux session.",
+      "command": "~/.config/skhd/focus-open-tmux-window.sh 1",
+      "detail": "Focus creation-order slot 1 among open normal tmux Ghostty windows.",
       "displayKey": "fn 1",
-      "owner": "scratchpads",
+      "owner": "app-focus",
       "rawKey": "fn - 1",
-      "sourceSection": "App Focus",
-      "stableId": "sha256:4ecf8d79b10a4db84f81b1ff93be5589b0678c18a1f5f97caeeb1170862d4f80",
-      "title": "Open projects scratchpad"
+      "sourceSection": "Focus open normal tmux windows by creation order",
+      "stableId": "sha256:e788c68dceae3bdb100a71774703480c1e7092bb38c7b15152206cd562587ba8",
+      "title": "Focus open tmux window 1"
+    },
+    {
+      "category": "Apps & Focus",
+      "command": "~/.config/skhd/focus-open-tmux-window.sh 2",
+      "detail": "Focus creation-order slot 2 among open normal tmux Ghostty windows.",
+      "displayKey": "fn 2",
+      "owner": "app-focus",
+      "rawKey": "fn - 2",
+      "sourceSection": "Focus open normal tmux windows by creation order",
+      "stableId": "sha256:52f3f4c266d27bb77c0c27a6b79abef5e905ab0fd0e4b63b3aa78dc13b43d0ba",
+      "title": "Focus open tmux window 2"
+    },
+    {
+      "category": "Apps & Focus",
+      "command": "~/.config/skhd/focus-open-tmux-window.sh 3",
+      "detail": "Focus creation-order slot 3 among open normal tmux Ghostty windows.",
+      "displayKey": "fn 3",
+      "owner": "app-focus",
+      "rawKey": "fn - 3",
+      "sourceSection": "Focus open normal tmux windows by creation order",
+      "stableId": "sha256:2255b6bcc54a5e7a1c7eae9f4539a6f45d03c0add0382b0f112679b2cf257fc0",
+      "title": "Focus open tmux window 3"
+    },
+    {
+      "category": "Apps & Focus",
+      "command": "~/.config/skhd/focus-open-tmux-window.sh 4",
+      "detail": "Focus creation-order slot 4 among open normal tmux Ghostty windows.",
+      "displayKey": "fn 4",
+      "owner": "app-focus",
+      "rawKey": "fn - 4",
+      "sourceSection": "Focus open normal tmux windows by creation order",
+      "stableId": "sha256:42d6bdb94c00f8802ec1cb8cbe7e4c35d13762b58deffbd3510250ef2fa36fd7",
+      "title": "Focus open tmux window 4"
+    },
+    {
+      "category": "Apps & Focus",
+      "command": "~/.config/skhd/focus-open-tmux-window.sh 5",
+      "detail": "Focus creation-order slot 5 among open normal tmux Ghostty windows.",
+      "displayKey": "fn 5",
+      "owner": "app-focus",
+      "rawKey": "fn - 5",
+      "sourceSection": "Focus open normal tmux windows by creation order",
+      "stableId": "sha256:fe35e545c3b37a75b3d4a5d8c418702f97c50a6f0290506eb015be68ac2d08d5",
+      "title": "Focus open tmux window 5"
+    },
+    {
+      "category": "Apps & Focus",
+      "command": "~/.config/skhd/focus-open-tmux-window.sh 6",
+      "detail": "Focus creation-order slot 6 among open normal tmux Ghostty windows.",
+      "displayKey": "fn 6",
+      "owner": "app-focus",
+      "rawKey": "fn - 6",
+      "sourceSection": "Focus open normal tmux windows by creation order",
+      "stableId": "sha256:0456c0677c8fcce327b03a8394123e439d524935f3b9e2b2dd95dd28bfe48392",
+      "title": "Focus open tmux window 6"
+    },
+    {
+      "category": "Apps & Focus",
+      "command": "~/.config/skhd/focus-open-tmux-window.sh 7",
+      "detail": "Focus creation-order slot 7 among open normal tmux Ghostty windows.",
+      "displayKey": "fn 7",
+      "owner": "app-focus",
+      "rawKey": "fn - 7",
+      "sourceSection": "Focus open normal tmux windows by creation order",
+      "stableId": "sha256:987e5c0a571acdb83b94532abda5bb489ddb28ab8af69b9503e7cb3ad8a6ff89",
+      "title": "Focus open tmux window 7"
+    },
+    {
+      "category": "Apps & Focus",
+      "command": "~/.config/skhd/focus-open-tmux-window.sh 8",
+      "detail": "Focus creation-order slot 8 among open normal tmux Ghostty windows.",
+      "displayKey": "fn 8",
+      "owner": "app-focus",
+      "rawKey": "fn - 8",
+      "sourceSection": "Focus open normal tmux windows by creation order",
+      "stableId": "sha256:57cbd7dff92829a7bd37cba47f1aedf1b1177d7c06a58e25ed2e4e571917053b",
+      "title": "Focus open tmux window 8"
+    },
+    {
+      "category": "Apps & Focus",
+      "command": "~/.config/skhd/focus-open-tmux-window.sh 9",
+      "detail": "Focus creation-order slot 9 among open normal tmux Ghostty windows.",
+      "displayKey": "fn 9",
+      "owner": "app-focus",
+      "rawKey": "fn - 9",
+      "sourceSection": "Focus open normal tmux windows by creation order",
+      "stableId": "sha256:c04bd26dbd4ef2b1770575facfce03fda318e9c80f9e7d339c85c9bd232bca0c",
+      "title": "Focus open tmux window 9"
+    },
+    {
+      "category": "Apps & Focus",
+      "command": "~/bin/scratchpads open sessions",
+      "detail": "Toggle the floating tmux session dashboard and cleanup tools.",
+      "displayKey": "fn P",
+      "owner": "scratchpads",
+      "rawKey": "fn - p",
+      "sourceSection": "Focus open normal tmux windows by creation order",
+      "stableId": "sha256:c8c3c2cff3173ad13b749126bf6e5022eb38fa01ca2185a51fe9af6feeac7a12",
+      "title": "Open session manager"
+    },
+    {
+      "category": "Apps & Focus",
+      "command": "~/.config/skhd/focus-open-tmux-window.sh cycle",
+      "detail": "Focus the next open normal tmux Ghostty window, wrapping after the last.",
+      "displayKey": "fn ⇥",
+      "owner": "app-focus",
+      "rawKey": "fn - tab",
+      "sourceSection": "Focus open normal tmux windows by creation order",
+      "stableId": "sha256:b5098b33d4f596978557be06c71e0174ebe2d1ecf2a344ea6a51ab56c5316666",
+      "title": "Cycle open tmux windows"
     },
     {
       "category": "Apps & Focus",
@@ -34,6 +144,17 @@
       "sourceSection": "Ghostty management (right Command)",
       "stableId": "sha256:4661344fb676420761645b67cd20613b017478f6a7510a47ca8e2b658dc963a2",
       "title": "Duplicate current tmux window"
+    },
+    {
+      "category": "Apps & Focus",
+      "command": "skhd -k \"f20\"",
+      "detail": "Defined in App Focus. Runs only in Ghostty; every other app receives the chord directly.",
+      "displayKey": "R⌘ H",
+      "owner": "tmux-sessions",
+      "rawKey": "rcmd - h",
+      "sourceSection": "Ghostty management (right Command)",
+      "stableId": "sha256:1da9db3323bc64c68856009b5e42ecfcaaa408d127bb757e99a7db9b2fb729c8",
+      "title": "Open centralized tmux hub"
     },
     {
       "category": "Apps & Focus",
@@ -66,7 +187,7 @@
       "rawKey": "rcmd - space",
       "sourceSection": "Ghostty management (right Command)",
       "stableId": "sha256:ac48446124896019d79327636f5149951a85e38a5cc285a471c1ba42489ff104",
-      "title": "Open tmux command center"
+      "title": "Search tmux commands with Telescope"
     },
     {
       "category": "Apps & Focus",
@@ -174,7 +295,7 @@
       "displayKey": "⌥ \\",
       "owner": "app-focus",
       "rawKey": "alt - 0x2A",
-      "sourceSection": "App Focus",
+      "sourceSection": "Focus open normal tmux windows by creation order",
       "stableId": "sha256:7eecc38722244fb409b80d95c43bab64b4e57927a1a5f317883df95afeb38141",
       "title": "Toggle presentation mode"
     },
@@ -207,7 +328,7 @@
       "displayKey": "⌥ ⇧ \\",
       "owner": "app-focus",
       "rawKey": "alt + shift - 0x2A",
-      "sourceSection": "App Focus",
+      "sourceSection": "Focus open normal tmux windows by creation order",
       "stableId": "sha256:86992a8015da8e160e6fcdb9b56aa752db482cfa9b5c6bbf1681c0de0b024d6e",
       "title": "Toggle zen mode"
     },
@@ -229,7 +350,7 @@
       "displayKey": "⌥ ⇧ `",
       "owner": "app-focus",
       "rawKey": "alt + shift - 0x32",
-      "sourceSection": "App Focus",
+      "sourceSection": "Focus open normal tmux windows by creation order",
       "stableId": "sha256:8f12663f2fb267c0c81856f05f47086ad5215c732737773b12a6116c866d7ecd",
       "title": "Open a new terminal"
     },
@@ -573,6 +694,61 @@
       "sourceSection": "Create new desktop, moving the focused non-scratchpad window if present",
       "stableId": "sha256:5e4175c295a389352d803581f8612e71238209e4fc329ee9b0be12ced2f855ae",
       "title": "Create a new Space"
+    },
+    {
+      "category": "Spaces & Displays",
+      "command": "~/.config/yabai/create-space new-window",
+      "detail": "Run the app’s Command+N action, then move its new window to a new Space.",
+      "displayKey": "⌥ ⌘ N",
+      "owner": "space-display",
+      "rawKey": "cmd + alt - n",
+      "sourceSection": "Open the app's default new window and move it to a new desktop",
+      "stableId": "sha256:5842355dc4edc832bd90a8fae98c47f726a04b721d49aa4275ca665d23f28da6",
+      "title": "Open window on a new Space"
+    },
+    {
+      "category": "Capture",
+      "command": "skhd -k \"cmd + shift - 3\"",
+      "detail": "Use macOS’ native full-screen capture.",
+      "displayKey": "⇧ fn 1",
+      "owner": "root",
+      "rawKey": "fn + shift - 1",
+      "sourceSection": "Screenshots",
+      "stableId": "sha256:5bbb334676c4a495a7e985279dfcc04dab7401be2f3a94c02d99ba391d847d48",
+      "title": "Save full-screen screenshot"
+    },
+    {
+      "category": "Capture",
+      "command": "skhd -k \"ctrl + cmd + shift - 3\"",
+      "detail": "Copy a full-screen capture to the clipboard.",
+      "displayKey": "⇧ fn 2",
+      "owner": "root",
+      "rawKey": "fn + shift - 2",
+      "sourceSection": "Screenshots",
+      "stableId": "sha256:62a9229aef6099be95177a05ad133c26e75136b1cc2e5a280c1a53af0fecf74a",
+      "title": "Copy full-screen screenshot"
+    },
+    {
+      "category": "Capture",
+      "command": "skhd -k \"cmd + shift - 4\"",
+      "detail": "Use macOS’ interactive area or window capture.",
+      "displayKey": "⇧ fn 3",
+      "owner": "root",
+      "rawKey": "fn + shift - 3",
+      "sourceSection": "Screenshots",
+      "stableId": "sha256:ca9e7cc0ba9840a97db393e1fe714e053fe8cc74f84f0de10f19f98f7985a174",
+      "title": "Save selection screenshot"
+    },
+    {
+      "category": "Capture",
+      "command": "skhd -k \"ctrl + cmd + shift - 4\"",
+      "detail": "Copy an interactive area or window capture.",
+      "displayKey": "⇧ fn 4",
+      "owner": "root",
+      "rawKey": "fn + shift - 4",
+      "sourceSection": "Screenshots",
+      "stableId": "sha256:0f72706c30ca0dff203b75f4e413de115e4c23bdea36bfe578e7d92acb5d3ef2",
+      "title": "Copy selection screenshot"
     },
     {
       "category": "System",

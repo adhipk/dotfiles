@@ -3,12 +3,18 @@
 This module owns the transient Ghostty scratchpad workflow:
 
 - `Fn+Comma` toggles one opaque terminal panel on the `dotfiles` tmux session.
-- `Fn+1` reuses that panel for the separate `projects` tmux session.
+- `Fn+P` toggles a separate opaque session-manager panel. Its dedicated
+  `session-manager` tmux template contains the live hub dashboard and a terminal
+  window for direct `tmux`, `sesh`, and persistence commands.
 - Repeating the active shortcut hides the panel even after focus moved away.
 - Concurrent launches are serialized and same-title launch-race duplicates are
   removed without touching ordinary Ghostty windows.
 - `scratchpads open quick` and the legacy quick-terminal helper remain
   available as a bottom-third terminal scratchpad.
+- `scratchpads open projects` remains available as an explicit command, but
+  `Fn+1..9` belongs to open normal tmux window focus.
+- `scratchpads open sessions` opens the same manager without synthesizing the
+  hotkey.
 
 Chezmoi keeps the public `~/bin/scratchpads` path stable through a thin bridge.
 The checked-in TOML defaults are installed at

@@ -1,0 +1,3 @@
+{{- if .modules.appFocus.enabled -}}
+{{ includeTemplate "../modules/app-focus/bin/focus-open-tmux-window.sh" . }}
+{{- end -}}

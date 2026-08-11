@@ -106,6 +106,57 @@ else
   fail "create-space finds and focuses the newly created space" "create, display focus, space 2 focus" "$(cat "$TEMP_DIR/create.log")"
 fi
 
+# Command+Option+n preserves the app's Command+n action and moves the new window.
+cat >"$FAKE_BIN/skhd" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$SPACE_DISPLAY_SKHD_LOG"
+: >"$NEW_WINDOW_STATE"
+EOF
+cat >"$FAKE_BIN/yabai" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  '-m query --windows --window')
+    if [[ -f "$NEW_WINDOW_STATE" ]]; then
+      printf '%s\n' '{"id":42,"app":"Safari","scratchpad":""}'
+    else
+      printf '%s\n' '{"id":41,"app":"Safari","scratchpad":""}'
+    fi
+    ;;
+  '-m query --windows --space') printf '%s\n' '[{"id":41,"scratchpad":""},{"id":42,"scratchpad":""}]' ;;
+  '-m query --displays --display') printf '%s\n' '{"index":1}' ;;
+  '-m query --spaces')
+    if [[ -f "$SPACE_CREATED_STATE" ]]; then
+      printf '%s\n' '[{"uuid":"old","index":1,"display":1},{"uuid":"new","index":2,"display":1}]'
+    else
+      printf '%s\n' '[{"uuid":"old","index":1,"display":1}]'
+    fi
+    ;;
+  '-m space --create') : >"$SPACE_CREATED_STATE"; printf '%s\n' "$*" >>"$SPACE_DISPLAY_LOG" ;;
+  *) printf '%s\n' "$*" >>"$SPACE_DISPLAY_LOG" ;;
+esac
+EOF
+NEW_WINDOW_HOME="$TEMP_DIR/new-window-home"
+mkdir -p "$NEW_WINDOW_HOME/.config/yabai"
+cat >"$NEW_WINDOW_HOME/.config/yabai/close_empty_spaces.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$FAKE_BIN/skhd" "$FAKE_BIN/yabai" "$NEW_WINDOW_HOME/.config/yabai/close_empty_spaces.sh"
+: >"$TEMP_DIR/new-window.log"
+: >"$TEMP_DIR/skhd.log"
+rm -f "$TEMP_DIR/new-window-created" "$TEMP_DIR/new-window-focused"
+HOME="$NEW_WINDOW_HOME" PATH="$FAKE_BIN:$PATH" SPACE_DISPLAY_LOG="$TEMP_DIR/new-window.log" \
+  SPACE_DISPLAY_SKHD_LOG="$TEMP_DIR/skhd.log" SPACE_CREATED_STATE="$TEMP_DIR/new-window-created" \
+  NEW_WINDOW_STATE="$TEMP_DIR/new-window-focused" "$MODULE_DIR/bin/create-space" new-window
+if grep -Fxq -- '-k cmd - n' "$TEMP_DIR/skhd.log" \
+  && grep -Fxq -- '-m window 42 --space 2' "$TEMP_DIR/new-window.log" \
+  && grep -Fxq -- '-m space --focus 2' "$TEMP_DIR/new-window.log" \
+  && grep -Fxq -- '-m window --focus 42' "$TEMP_DIR/new-window.log"; then
+  pass "create-space new-window runs Command+n and moves the newly focused window"
+else
+  fail "create-space new-window runs Command+n and moves the newly focused window" "synthetic Command+n and window 42 on space 2" "$(cat "$TEMP_DIR/skhd.log"; cat "$TEMP_DIR/new-window.log")"
+fi
+
 # Empty-space cleanup deletes high indices first while keeping one occupied space.
 cat >"$FAKE_BIN/yabai" <<'EOF'
 #!/usr/bin/env bash
@@ -202,6 +253,7 @@ for path in bin/bookmarks bin/setup-yabai-sa bin/reset-yabai .config/yabai/bookm
 done
 assert_contains "$DESTINATION/.skhdrc" 'display-move prev' "enabled profile preserves previous-display binding"
 assert_contains "$DESTINATION/.skhdrc" 'create-space auto' "enabled profile preserves Option+n"
+assert_contains "$DESTINATION/.skhdrc" 'cmd + alt - n : ~/.config/yabai/create-space new-window' "enabled profile renders Command+Option+n"
 assert_contains "$DESTINATION/.skhdrc" 'close_empty_spaces.sh' "enabled profile preserves Option+k"
 assert_contains "$DESTINATION/.yabairc" 'yabai --load-sa' "enabled profile loads the scripting addition"
 assert_contains "$DESTINATION/.yabairc" 'space_display_load_sa event=dock_did_restart' "enabled profile reloads SA after Dock restart"
@@ -214,6 +266,7 @@ for path in bin/bookmarks bin/setup-yabai-sa bin/reset-yabai .config/yabai/bookm
 done
 assert_not_contains "$DESTINATION/.skhdrc" 'display-move prev' "disabled profile removes display bindings"
 assert_not_contains "$DESTINATION/.skhdrc" 'create-space auto' "disabled profile removes create binding"
+assert_not_contains "$DESTINATION/.skhdrc" 'create-space new-window' "disabled profile removes new-window binding"
 assert_not_contains "$DESTINATION/.yabairc" 'signal --add label=space_display_load_sa' "disabled profile removes SA signal registration"
 assert_not_contains "$DESTINATION/.yabairc" 'space 1 --label "browser"' "disabled profile removes fixed labels"
 assert_contains "$DESTINATION/.yabairc" 'signal --remove "space_display_load_sa"' "disabled profile cleans the prior SA signal"

@@ -750,6 +750,7 @@ enum ActionDescriber {
         if lower.contains("window --display next") { return info("Move window to next display", "Keep focus on the window after moving it.") }
         if lower.contains("window --display 1") { return info("Move window to display 1", "Move the focused window to the first display and keep focus.") }
         if lower.contains("window --display 2") { return info("Move window to display 2", "Move the focused window to the second display and keep focus.") }
+        if lower.contains("create-space new-window") { return info("Open window on a new Space", "Run the app’s Command+N action, then move its new window to a new Space.") }
         if lower.contains("create-space move-window") { return info("Move window to a new Space", "Create a Space, move the focused window there, and focus it.") }
         if lower.contains("create-space auto") { return info("Create a new Space", "Create and focus a Space; move the focused non-scratchpad window when it is safe.") }
         if lower.contains("close_empty_spaces") { return info("Close empty Spaces", "Remove empty Spaces while keeping at least one available.") }
@@ -763,6 +764,13 @@ enum ActionDescriber {
         }
         if lower.contains("scratchpads open codex") { return info("Open dotfiles scratchpad", "Toggle the black terminal scratchpad on the dotfiles tmux session.") }
         if lower.contains("scratchpads open projects") { return info("Open projects scratchpad", "Toggle the black terminal scratchpad on the projects tmux session.") }
+        if lower.contains("scratchpads open sessions") { return info("Open session manager", "Toggle the floating tmux session dashboard and cleanup tools.") }
+        if lower.contains("focus-open-tmux-window.sh cycle") {
+            return info("Cycle open tmux windows", "Focus the next open normal tmux Ghostty window, wrapping after the last.")
+        }
+        if let number = capture(#"focus-open-tmux-window\.sh\s+(\d+)"#, in: command) {
+            return info("Focus open tmux window \(number)", "Focus creation-order slot \(number) among open normal tmux Ghostty windows.")
+        }
         if lower.contains("presentation toggle") { return info("Toggle presentation mode", "Switch the desktop between normal and presentation behavior.") }
         if lower.contains("zen toggle") { return info("Toggle zen mode", "Temporarily disable distracting app-focus shortcuts.") }
         if lower.contains("terminal new") { return info("Open a new terminal", "Create a normal Ghostty window on the focused Space.") }

@@ -15,6 +15,7 @@ fi
 source "$APP_FOCUS_CONFIG_LIB"
 
 APP_MRU_DIR="${APP_MRU_DIR:-$(app_focus_state_directory)/app-mru}"
+APP_MRU_SUPPRESS_FOCUS_FILE="${APP_MRU_SUPPRESS_FOCUS_FILE:-$APP_MRU_DIR/.suppress-focus}"
 
 app_mru_require_tools() {
   if ! command -v yabai >/dev/null 2>&1; then
@@ -158,6 +159,40 @@ app_mru_record_focus() {
   app_mru_write_stack "$state_file" "${next[@]}"
 }
 
+app_mru_suppress_focus_updates_until() {
+  local expected_id="$1"
+  local directory expires temporary
+
+  directory=$(dirname "$APP_MRU_SUPPRESS_FOCUS_FILE")
+  mkdir -p "$directory"
+  expires=$(($(date +%s) + 2))
+  temporary="$APP_MRU_SUPPRESS_FOCUS_FILE.$$"
+  printf '%s %s\n' "$expected_id" "$expires" >"$temporary"
+  mv -f "$temporary" "$APP_MRU_SUPPRESS_FOCUS_FILE"
+}
+
+app_mru_focus_update_is_suppressed() {
+  local focused_id="$1"
+  local expected_id expires now
+
+  [[ -f "$APP_MRU_SUPPRESS_FOCUS_FILE" ]] || return 1
+  read -r expected_id expires <"$APP_MRU_SUPPRESS_FOCUS_FILE" || {
+    rm -f "$APP_MRU_SUPPRESS_FOCUS_FILE"
+    return 1
+  }
+
+  now=$(date +%s)
+  if [[ "$expires" =~ ^[0-9]+$ ]] && ((now <= expires)); then
+    if [[ "$focused_id" == "$expected_id" ]]; then
+      rm -f "$APP_MRU_SUPPRESS_FOCUS_FILE"
+    fi
+    return 0
+  fi
+
+  rm -f "$APP_MRU_SUPPRESS_FOCUS_FILE"
+  return 1
+}
+
 app_mru_update_from_focus() {
   local focused_json app wid
 
@@ -175,6 +210,10 @@ app_mru_update_from_focus() {
     | .id // empty
   ' <<<"$focused_json")
 
+  if [[ -n "$wid" ]] && app_mru_focus_update_is_suppressed "$wid"; then
+    return 0
+  fi
+
   app_mru_record_focus "$app" "$wid"
 }
 
@@ -190,6 +229,8 @@ app_mru_focus_window() {
     '[.[] | select(.id == $win_id)] | first | .space // empty' <<<"$windows_json")
   target_display=$(jq -r --argjson win_id "$win_id" \
     '[.[] | select(.id == $win_id)] | first | .display // empty' <<<"$windows_json")
+
+  app_mru_suppress_focus_updates_until "$win_id"
 
   if [[ -n "$target_space" && "$target_space" != "$current_space" ]]; then
     yabai -m space --focus "$target_space"
@@ -227,11 +268,8 @@ app_mru_cycle() {
   local app="$1"
   local launch_cmd="${2:-}"
   local presentation_mode="${3:-false}"
-  local focused_id
   local -a stack=()
-  local index=-1
   local next_id=""
-  local i
 
   stack=()
   while IFS= read -r id; do
@@ -248,8 +286,6 @@ app_mru_cycle() {
     return 0
   fi
 
-  focused_id=$(yabai -m query --windows --window 2>/dev/null | jq -r '.id // empty' || true)
-
   if app_mru_focused_is_eligible_for_app "$app"; then
     if [[ "$presentation_mode" == true ]]; then
       return 0
@@ -259,27 +295,14 @@ app_mru_cycle() {
       return 0
     fi
 
-    for i in "${!stack[@]}"; do
-      if [[ "${stack[$i]}" == "$focused_id" ]]; then
-        index=$i
-        break
-      fi
-    done
-
-    if ((index >= 0)); then
-      if ((index + 1 < ${#stack[@]})); then
-        next_id="${stack[$((index + 1))]}"
-      else
-        next_id="${stack[0]}"
-      fi
-    else
-      next_id="${stack[0]}"
-    fi
+    next_id="${stack[$((${#stack[@]} - 1))]}"
   else
     next_id="${stack[0]}"
   fi
 
-  app_mru_focus_window "$next_id"
+  if app_mru_focus_window "$next_id"; then
+    app_mru_record_focus "$app" "$next_id"
+  fi
 }
 
 app_mru_list() {

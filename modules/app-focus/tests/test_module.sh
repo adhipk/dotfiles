@@ -88,6 +88,8 @@ assert_file "$MODULE_DIR/module.yaml" "module manifest exists"
 assert_file "$MODULE_DIR/config/defaults.toml" "module owns standard TOML defaults"
 assert_file "$MODULE_DIR/lib/config.sh" "module owns its config adapter"
 assert_file "$MODULE_DIR/bin/hotkeys" "module owns the action router"
+assert_executable "$MODULE_DIR/bin/focus-open-tmux-window.sh" "module owns the open tmux window focus helper"
+assert_file "$DOTFILES_DIR/home/dot_config/skhd/executable_focus-open-tmux-window.sh.tmpl" "open tmux window focus helper has a thin bridge"
 assert_file "$MODULE_DIR/bin/focus_app.sh" "module owns app resolution and focus policy"
 assert_file "$MODULE_DIR/bin/app-mru.sh" "module owns MRU focus state"
 assert_file "$MODULE_DIR/targets/skhd-apps.conf.tmpl" "module owns app focus bindings"
@@ -228,12 +230,14 @@ case "$*" in
 [
   {"id":100,"app":"Ghostty","space":1,"display":1,"is-minimized":false,"is-hidden":false,"scratchpad":""},
   {"id":200,"app":"Ghostty","space":1,"display":1,"is-minimized":false,"is-hidden":false,"scratchpad":"terminal"},
-  {"id":300,"app":"Ghostty","space":1,"display":1,"is-minimized":false,"is-hidden":false,"scratchpad":null}
+  {"id":300,"app":"Ghostty","space":1,"display":1,"is-minimized":false,"is-hidden":false,"scratchpad":null},
+  {"id":400,"app":"Ghostty","space":1,"display":1,"is-minimized":false,"is-hidden":false,"scratchpad":""}
 ]
 JSON
     ;;
   '-m query --windows --window')
-    printf '%s\n' '{"id":100,"app":"Ghostty","space":1,"display":1,"is-minimized":false,"is-hidden":false,"scratchpad":""}'
+    printf '{"id":%s,"app":"Ghostty","space":1,"display":1,"is-minimized":false,"is-hidden":false,"scratchpad":""}\n' \
+      "${APP_FOCUS_TEST_FOCUSED_ID:-100}"
     ;;
   '-m query --spaces --space') printf '%s\n' '{"index":1}' ;;
   '-m query --displays --display') printf '%s\n' '{"index":1}' ;;
@@ -253,10 +257,10 @@ MRU_ENV=(
 )
 
 MRU_OUTPUT=$(env "${MRU_ENV[@]}" bash -c 'source "$1"; app_mru_list Ghostty' _ "$MODULE_DIR/bin/app-mru.sh")
-if [[ "$MRU_OUTPUT" == $'100\n300' ]]; then
+if [[ "$MRU_OUTPUT" == $'100\n300\n400' ]]; then
   pass "MRU state prunes scratchpads and stale window IDs"
 else
-  fail "MRU state prunes scratchpads and stale window IDs" $'100\n300' "$MRU_OUTPUT"
+  fail "MRU state prunes scratchpads and stale window IDs" $'100\n300\n400' "$MRU_OUTPUT"
 fi
 
 : >"$MRU_LOG"
@@ -268,10 +272,97 @@ else
 fi
 
 env "${MRU_ENV[@]}" bash -c 'source "$1"; app_mru_cycle Ghostty "" false' _ "$MODULE_DIR/bin/app-mru.sh"
-if grep -Fxq -- '-m window --focus 300' "$MRU_LOG"; then
-  pass "normal mode MRU-cycles to the next eligible window"
+if grep -Fxq -- '-m window --focus 400' "$MRU_LOG" \
+  && [[ "$(<"$MRU_STATE/Ghostty.ids")" == $'400\n100\n300' ]]; then
+  pass "normal mode focuses the LRU window and promotes it"
 else
-  fail "normal mode MRU-cycles to the next eligible window" "focus window 300" "$(cat "$MRU_LOG")"
+  fail "normal mode focuses the LRU window and promotes it" \
+    $'focus window 400 and order 400\n100\n300' \
+    "$(cat "$MRU_LOG"; printf 'order: '; tr '\n' ' ' <"$MRU_STATE/Ghostty.ids")"
+fi
+
+if grep -Eq '^400 [0-9]+$' "$MRU_STATE/.suppress-focus"; then
+  pass "MRU cycling suppresses its resulting focus signal"
+else
+  fail "MRU cycling suppresses its resulting focus signal" "target 400 with expiry" "$(cat "$MRU_STATE/.suppress-focus" 2>/dev/null || true)"
+fi
+
+env "${MRU_ENV[@]}" APP_FOCUS_TEST_FOCUSED_ID=400 \
+  bash -c 'source "$1"; app_mru_update_from_focus' _ "$MODULE_DIR/bin/app-mru.sh"
+if [[ "$(<"$MRU_STATE/Ghostty.ids")" == $'400\n100\n300' && ! -e "$MRU_STATE/.suppress-focus" ]]; then
+  pass "programmatic focus preserves the explicit LRU promotion"
+else
+  fail "programmatic focus preserves the explicit LRU promotion" $'400\n100\n300 and no marker' "$(cat "$MRU_STATE/Ghostty.ids"; ls "$MRU_STATE/.suppress-focus" 2>/dev/null || true)"
+fi
+
+env "${MRU_ENV[@]}" APP_FOCUS_TEST_FOCUSED_ID=300 \
+  bash -c 'source "$1"; app_mru_update_from_focus' _ "$MODULE_DIR/bin/app-mru.sh"
+if [[ "$(<"$MRU_STATE/Ghostty.ids")" == $'300\n400\n100' ]]; then
+  pass "manual focus still promotes a window in MRU order"
+else
+  fail "manual focus still promotes a window in MRU order" $'300\n400\n100' "$(<"$MRU_STATE/Ghostty.ids")"
+fi
+
+: >"$MRU_LOG"
+env "${MRU_ENV[@]}" APP_FOCUS_TEST_FOCUSED_ID=300 \
+  bash -c 'source "$1"; app_mru_cycle Ghostty "" false' _ "$MODULE_DIR/bin/app-mru.sh"
+if grep -Fxq -- '-m window --focus 100' "$MRU_LOG" \
+  && [[ "$(<"$MRU_STATE/Ghostty.ids")" == $'100\n300\n400' ]]; then
+  pass "repeated app switching advances through LRU order"
+else
+  fail "repeated app switching advances through LRU order" \
+    $'focus window 100 and order 100\n300\n400' \
+    "$(cat "$MRU_LOG"; printf 'order: '; tr '\n' ' ' <"$MRU_STATE/Ghostty.ids")"
+fi
+
+TMUX_WINDOW_LOG="$TEMP_DIR/tmux-window-yabai.log"
+cat >"$FAKE_BIN/yabai" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  '-m query --windows')
+    cat <<'JSON'
+[
+  {"id":10,"app":"Ghostty","title":"uvx marimo@latest edit","is-minimized":false,"scratchpad":""},
+  {"id":20,"app":"Ghostty","title":"tmux","is-minimized":false,"scratchpad":"terminal"},
+  {"id":50,"app":"Ghostty","title":"tmux","is-minimized":true,"scratchpad":""},
+  {"id":100,"app":"Ghostty","title":"tmux · project","is-minimized":false,"scratchpad":""},
+  {"id":200,"app":"VSCodium","title":"tmux","is-minimized":false,"scratchpad":""}
+]
+JSON
+    ;;
+  '-m query --windows --window')
+    printf '{"id":%s}\n' "${FAKE_CURRENT_WINDOW_ID:-50}"
+    ;;
+  *) printf '%s\n' "$*" >>"$APP_FOCUS_TEST_YABAI_LOG" ;;
+esac
+EOF
+chmod +x "$FAKE_BIN/yabai"
+: >"$TMUX_WINDOW_LOG"
+HOME="$MRU_HOME" PATH="$FAKE_BIN:$PATH" APP_FOCUS_TEST_YABAI_LOG="$TMUX_WINDOW_LOG" \
+  "$MODULE_DIR/bin/focus-open-tmux-window.sh" 1
+HOME="$MRU_HOME" PATH="$FAKE_BIN:$PATH" APP_FOCUS_TEST_YABAI_LOG="$TMUX_WINDOW_LOG" \
+  "$MODULE_DIR/bin/focus-open-tmux-window.sh" 2
+if [[ "$(cat "$TMUX_WINDOW_LOG")" == $'-m window --focus 50\n-m window --focus 100' ]]; then
+  pass "Fn tmux slots use open normal Ghostty windows in creation order"
+else
+  fail "Fn tmux slots use open normal Ghostty windows in creation order" "focus 50 then 100" "$(cat "$TMUX_WINDOW_LOG")"
+fi
+if HOME="$MRU_HOME" PATH="$FAKE_BIN:$PATH" APP_FOCUS_TEST_YABAI_LOG="$TMUX_WINDOW_LOG" \
+  "$MODULE_DIR/bin/focus-open-tmux-window.sh" 3 >/dev/null 2>&1; then
+  fail "Fn tmux slots reject missing open windows" "slot 3 failure" "command succeeded"
+else
+  pass "Fn tmux slots reject missing open windows"
+fi
+
+: >"$TMUX_WINDOW_LOG"
+HOME="$MRU_HOME" PATH="$FAKE_BIN:$PATH" APP_FOCUS_TEST_YABAI_LOG="$TMUX_WINDOW_LOG" \
+  FAKE_CURRENT_WINDOW_ID=50 "$MODULE_DIR/bin/focus-open-tmux-window.sh" cycle
+HOME="$MRU_HOME" PATH="$FAKE_BIN:$PATH" APP_FOCUS_TEST_YABAI_LOG="$TMUX_WINDOW_LOG" \
+  FAKE_CURRENT_WINDOW_ID=100 "$MODULE_DIR/bin/focus-open-tmux-window.sh" cycle
+if [[ "$(cat "$TMUX_WINDOW_LOG")" == $'-m window --focus 100\n-m window --focus 50' ]]; then
+  pass "Fn+Tab cycles and wraps across open normal tmux windows"
+else
+  fail "Fn+Tab cycles and wraps across open normal tmux windows" "focus 100 then 50" "$(cat "$TMUX_WINDOW_LOG")"
 fi
 
 mkdir -p "$DESTINATION"
@@ -284,6 +375,7 @@ fi
 assert_executable "$DESTINATION/bin/hotkeys" "enabled profile installs hotkeys executable"
 assert_executable "$DESTINATION/.config/skhd/focus_app.sh" "enabled profile installs focus helper"
 assert_executable "$DESTINATION/.config/skhd/app-mru.sh" "enabled profile installs MRU helper"
+assert_executable "$DESTINATION/.config/skhd/focus-open-tmux-window.sh" "enabled profile installs open tmux window focus helper"
 assert_file "$DESTINATION/.config/app-focus/config.toml" "enabled profile installs TOML config"
 assert_file "$DESTINATION/.config/app-focus/config.sh" "enabled profile installs config adapter"
 assert_contains "$DESTINATION/.skhdrc" 'alt - 0x32 : ~/.config/skhd/focus_app.sh "Ghostty"' "enabled profile preserves Alt+Backtick"
@@ -291,6 +383,9 @@ assert_contains "$DESTINATION/.skhdrc" 'alt - 1 : ~/bin/hotkeys app-focus 1 "@br
 assert_contains "$DESTINATION/.skhdrc" 'alt - 2 : ~/bin/hotkeys app-focus 2 "@editor"' "enabled profile preserves editor slot"
 assert_contains "$DESTINATION/.skhdrc" 'alt - 3 : ~/bin/hotkeys app-focus 3 "Microsoft Teams"' "enabled profile preserves Teams slot"
 assert_contains "$DESTINATION/.skhdrc" 'alt - 4 : ~/bin/hotkeys app-focus 4 "Slack"' "enabled profile preserves Slack slot"
+assert_contains "$DESTINATION/.skhdrc" 'fn - 1 : ~/.config/skhd/focus-open-tmux-window.sh 1' "enabled profile maps Fn+1 to the first open tmux window"
+assert_contains "$DESTINATION/.skhdrc" 'fn - 9 : ~/.config/skhd/focus-open-tmux-window.sh 9' "enabled profile maps Fn+9 to the ninth open tmux window"
+assert_contains "$DESTINATION/.skhdrc" 'fn - tab : ~/.config/skhd/focus-open-tmux-window.sh cycle' "enabled profile maps Fn+Tab to tmux window cycling"
 assert_contains "$DESTINATION/.skhdrc" 'alt - 0x2A : ~/bin/hotkeys presentation toggle' "enabled profile preserves presentation toggle"
 assert_contains "$DESTINATION/.skhdrc" 'alt + shift - 0x2A : ~/bin/hotkeys zen toggle' "enabled profile preserves zen toggle"
 assert_contains "$DESTINATION/.skhdrc" 'alt + shift - 0x32 : ~/bin/hotkeys terminal new' "enabled profile preserves terminal launch"
@@ -305,12 +400,14 @@ fi
 assert_absent "$DESTINATION/bin/hotkeys" "disabled profile removes hotkeys"
 assert_absent "$DESTINATION/.config/skhd/focus_app.sh" "disabled profile removes focus helper"
 assert_absent "$DESTINATION/.config/skhd/app-mru.sh" "disabled profile removes MRU helper"
+assert_absent "$DESTINATION/.config/skhd/focus-open-tmux-window.sh" "disabled profile removes open tmux window focus helper"
 assert_absent "$DESTINATION/.config/app-focus/config.toml" "disabled profile removes TOML config"
 assert_absent "$DESTINATION/.config/app-focus/config.sh" "disabled profile removes config adapter"
 assert_not_contains "$DESTINATION/.skhdrc" 'hotkeys app-focus' "disabled profile removes app bindings"
 assert_not_contains "$DESTINATION/.skhdrc" 'hotkeys presentation' "disabled profile removes presentation binding"
 assert_not_contains "$DESTINATION/.skhdrc" 'hotkeys zen' "disabled profile removes zen binding"
 assert_not_contains "$DESTINATION/.skhdrc" 'hotkeys terminal new' "disabled profile removes module terminal binding"
+assert_not_contains "$DESTINATION/.skhdrc" 'focus-open-tmux-window.sh' "disabled profile removes Fn tmux window slots"
 assert_not_contains "$DESTINATION/.yabairc" 'signal --add label=app_mru_update' "disabled profile removes MRU registration"
 assert_contains "$DESTINATION/.yabairc" 'signal --remove "app_mru_update"' "disabled profile cleans a previously registered signal"
 assert_contains "$DESTINATION/.skhdrc" 'fn - 0x2B : ~/bin/scratchpads open codex' "disabled profile preserves unrelated scratchpads"

@@ -1,8 +1,8 @@
 apiVersion: dotfiles/v1
 kind: Module
 id: scratchpads
-version: 1.0.0
-description: Provides the reusable Ghostty and yabai scratchpad manager and its Fn shortcuts.
+version: 1.1.0
+description: Provides reusable Ghostty/yabai scratchpads, including the Fn+P tmux session manager.
 dataKey: modules.scratchpads
 distribution:
   standalone: true
@@ -16,6 +16,7 @@ requires:
     - yq
 optional:
   executables:
+    - tmux-hub
     - tmux-session-template
     - tmux-border-accent
 state:

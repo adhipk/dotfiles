@@ -8,7 +8,16 @@ Current shortcuts remain literal:
 - `Alt+Backtick` focuses or MRU-cycles normal Ghostty windows and launches a
   normal terminal when none exists. Scratchpads are never focus candidates.
 - `Alt+1` resolves the current macOS HTTPS handler, `Alt+2` focuses the editor,
-  `Alt+3` focuses Microsoft Teams, and `Alt+4` focuses Slack.
+  `Alt+3` focuses Microsoft Teams, and `Alt+4` focuses Slack. Entering an app
+  restores its most-recent window; repeating its shortcut chooses the
+  least-recently-used eligible window and promotes it, so repeated presses
+  traverse windows by recency. Scratchpads remain excluded. Focus events caused
+  by the shortcut are suppressed briefly so the explicit promotion is not
+  applied twice; manual focus still promotes a window normally.
+- `Fn+1..9` focuses open normal tmux Ghostty windows in creation order.
+  Scratchpads, detached persistent sessions, and non-tmux terminal windows do
+  not consume a slot.
+- `Fn+Tab` cycles forward through those same windows and wraps after the last.
 - `Alt+Backslash` toggles presentation mode. Repeating an app shortcut while
   that app is already focused stays on the current window instead of cycling.
 - `Alt+Shift+Backslash` toggles zen mode. The configured slots `3`, `4`, and
@@ -18,12 +27,13 @@ Current shortcuts remain literal:
 
 ## Boundary
 
-Owned source lives in this folder: `hotkeys`, `focus_app.sh`, `app-mru.sh`, the
-TOML defaults, target-service fragments, and tests. The parent only provides
-stable target bridges and conditional `includeTemplate` calls in `.skhdrc` and
-`.yabairc`. Disabling `modules.appFocus.enabled` removes all exclusive targets
-and rendered bindings; yabai keeps one harmless signal-removal line so a
-previously registered `app_mru_update` hook is cleaned up on reload.
+Owned source lives in this folder: `hotkeys`, `focus_app.sh`, `app-mru.sh`,
+`focus-open-tmux-window.sh`, the TOML defaults, target-service fragments, and
+tests. The parent only provides stable target bridges and conditional
+`includeTemplate` calls in `.skhdrc` and `.yabairc`. Disabling
+`modules.appFocus.enabled` removes all exclusive targets and rendered bindings;
+yabai keeps one harmless signal-removal line so a previously registered
+`app_mru_update` hook is cleaned up on reload.
 
 The shared `~/.config/skhd/notify.sh` helper intentionally remains outside the
 module because other desktop features use it. It is an optional adapter: set

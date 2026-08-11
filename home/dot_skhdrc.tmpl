@@ -1,6 +1,6 @@
 # man-me: name=skhdrc
 # man-me: category=Hotkeys and Keybindings
-# man-me: usage=alt+/; Alt+1..4; Fn+Comma; Fn+1; Right Cmd+D/R/S/Space in Ghostty
+# man-me: usage=alt+/; Alt+1..4; Fn+Comma; Fn+1; Fn+Shift+1..4; Right Control then Vim motion; Right Cmd+D/R/S/Space/H in Ghostty
 # man-me: description=Primary skhd keyboard shortcut map.
 # man-me: tags=hotkeys hotkey keyboard shortcut shortcuts keybinding keybindings keys skhd option fn caps lock karabiner
 # man-me: name=caps lock key
@@ -9,6 +9,12 @@
 # man-me: usage=hold Caps Lock for reserved Hyper; tap Caps Lock for Escape
 # man-me: description=Karabiner emits ctrl+opt+cmd on hold, but the Hyper layer is intentionally unbound.
 # man-me: tags=hotkeys hotkey keyboard shortcut shortcuts keybinding keybindings hyper caps lock karabiner
+# man-me: name=right control leaders
+# man-me: source=home/dot_config/private_karabiner/karabiner.json
+# man-me: category=Hotkeys and Keybindings
+# man-me: usage=tap Right Control outside Ghostty, then h/j/k/l, b/w/e, 0/$, g/G, or {/}; tap Right Control in Ghostty for Ctrl-a
+# man-me: description=Right Control opens a transient Vim motion layer for active text outside Ghostty and remains the tmux leader inside Ghostty; hold it for ordinary Control.
+# man-me: tags=hotkeys keyboard right control leader vim motions text input karabiner tmux ghostty
 # ============================================================
 # Global Option layer — app focus, spaces, windows, and HUD controls.
 # Hyper (ctrl+opt+cmd) is deliberately reserved and has no active bindings.
@@ -60,14 +66,28 @@ rcmd - s [
 ]
 
 rcmd - space [
-    "Ghostty" : skhd -k "f19"  # Open tmux command center
+    "Ghostty" : skhd -k "f19"  # Search tmux commands with Telescope
     * ~
 ]
 
+{{ if .modules.tmuxSessions.enabled }}# dotfiles-owner: tmux-sessions
+rcmd - h [
+    "Ghostty" : skhd -k "f20"  # Open centralized tmux hub
+    * ~
+]
+# dotfiles-owner: root
+{{ end }}
+
 # ============================================================
-# Fn is reserved for transient scratchpads. Use native Cmd+Shift+3/4 for
-# screenshots rather than duplicating them on this layer.
+# Screenshots (Fn+Shift)
+# Fn owns transient scratchpads; its shifted digit layer forwards to the
+# native macOS screenshot shortcuts without colliding with project switching.
 # ============================================================
+
+fn + shift - 1 : skhd -k "cmd + shift - 3"         # Save full-screen screenshot
+fn + shift - 2 : skhd -k "ctrl + cmd + shift - 3"  # Copy full-screen screenshot
+fn + shift - 3 : skhd -k "cmd + shift - 4"         # Save selection screenshot
+fn + shift - 4 : skhd -k "ctrl + cmd + shift - 4"  # Copy selection screenshot
 
 # ============================================================
 # Restart yabai + skhd

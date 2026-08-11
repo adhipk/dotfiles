@@ -33,6 +33,669 @@
                 "type": "basic"
               }
             ]
+          },
+          {
+            "description": "Right Control: tmux prefix on tap in Ghostty",
+            "manipulators": [
+              {
+                "conditions": [
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.mitchellh\\.ghostty$"
+                    ],
+                    "type": "frontmost_application_if"
+                  }
+                ],
+                "from": {
+                  "key_code": "right_control",
+                  "modifiers": {
+                    "optional": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "right_control",
+                    "lazy": true
+                  }
+                ],
+                "to_if_alone": [
+                  {
+                    "key_code": "a",
+                    "modifiers": [
+                      "left_control"
+                    ]
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "Right Control: transient Vim motion leader outside Ghostty",
+            "manipulators": [
+              {
+                "conditions": [
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.mitchellh\\.ghostty$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
+                "from": {
+                  "key_code": "right_control",
+                  "modifiers": {
+                    "optional": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "right_control",
+                    "lazy": true
+                  }
+                ],
+                "to_if_alone": [
+                  {
+                    "set_variable": {
+                      "expression": "system.now.milliseconds + 1200",
+                      "name": "vim_motion_leader_expiration"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "expression": "vim_motion_leader_expiration > system.now.milliseconds",
+                    "type": "expression_if"
+                  },
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.mitchellh\\.ghostty$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
+                "from": {
+                  "key_code": "h",
+                  "modifiers": {
+                    "optional": [
+                      "left_shift",
+                      "right_shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "left_arrow"
+                  },
+                  {
+                    "set_variable": {
+                      "expression": "system.now.milliseconds + 800",
+                      "name": "vim_motion_leader_expiration"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "expression": "vim_motion_leader_expiration > system.now.milliseconds",
+                    "type": "expression_if"
+                  },
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.mitchellh\\.ghostty$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
+                "from": {
+                  "key_code": "j",
+                  "modifiers": {
+                    "optional": [
+                      "left_shift",
+                      "right_shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "down_arrow"
+                  },
+                  {
+                    "set_variable": {
+                      "expression": "system.now.milliseconds + 800",
+                      "name": "vim_motion_leader_expiration"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "expression": "vim_motion_leader_expiration > system.now.milliseconds",
+                    "type": "expression_if"
+                  },
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.mitchellh\\.ghostty$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
+                "from": {
+                  "key_code": "k",
+                  "modifiers": {
+                    "optional": [
+                      "left_shift",
+                      "right_shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "up_arrow"
+                  },
+                  {
+                    "set_variable": {
+                      "expression": "system.now.milliseconds + 800",
+                      "name": "vim_motion_leader_expiration"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "expression": "vim_motion_leader_expiration > system.now.milliseconds",
+                    "type": "expression_if"
+                  },
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.mitchellh\\.ghostty$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
+                "from": {
+                  "key_code": "l",
+                  "modifiers": {
+                    "optional": [
+                      "left_shift",
+                      "right_shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "right_arrow"
+                  },
+                  {
+                    "set_variable": {
+                      "expression": "system.now.milliseconds + 800",
+                      "name": "vim_motion_leader_expiration"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "expression": "vim_motion_leader_expiration > system.now.milliseconds",
+                    "type": "expression_if"
+                  },
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.mitchellh\\.ghostty$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
+                "from": {
+                  "key_code": "b",
+                  "modifiers": {
+                    "optional": [
+                      "left_shift",
+                      "right_shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "left_arrow",
+                    "modifiers": [
+                      "left_option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "expression": "system.now.milliseconds + 800",
+                      "name": "vim_motion_leader_expiration"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "expression": "vim_motion_leader_expiration > system.now.milliseconds",
+                    "type": "expression_if"
+                  },
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.mitchellh\\.ghostty$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
+                "from": {
+                  "key_code": "w",
+                  "modifiers": {
+                    "optional": [
+                      "left_shift",
+                      "right_shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "right_arrow",
+                    "modifiers": [
+                      "left_option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "expression": "system.now.milliseconds + 800",
+                      "name": "vim_motion_leader_expiration"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "expression": "vim_motion_leader_expiration > system.now.milliseconds",
+                    "type": "expression_if"
+                  },
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.mitchellh\\.ghostty$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
+                "from": {
+                  "key_code": "e",
+                  "modifiers": {
+                    "optional": [
+                      "left_shift",
+                      "right_shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "right_arrow",
+                    "modifiers": [
+                      "left_option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "expression": "system.now.milliseconds + 800",
+                      "name": "vim_motion_leader_expiration"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "expression": "vim_motion_leader_expiration > system.now.milliseconds",
+                    "type": "expression_if"
+                  },
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.mitchellh\\.ghostty$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
+                "from": {
+                  "key_code": "0"
+                },
+                "to": [
+                  {
+                    "key_code": "left_arrow",
+                    "modifiers": [
+                      "left_command"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "expression": "system.now.milliseconds + 800",
+                      "name": "vim_motion_leader_expiration"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "expression": "vim_motion_leader_expiration > system.now.milliseconds",
+                    "type": "expression_if"
+                  },
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.mitchellh\\.ghostty$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
+                "from": {
+                  "key_code": "4",
+                  "modifiers": {
+                    "mandatory": [
+                      "shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "right_arrow",
+                    "modifiers": [
+                      "left_command"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "expression": "system.now.milliseconds + 800",
+                      "name": "vim_motion_leader_expiration"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "expression": "vim_motion_leader_expiration > system.now.milliseconds",
+                    "type": "expression_if"
+                  },
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.mitchellh\\.ghostty$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
+                "from": {
+                  "key_code": "g"
+                },
+                "to": [
+                  {
+                    "key_code": "up_arrow",
+                    "modifiers": [
+                      "left_command"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "expression": "system.now.milliseconds + 800",
+                      "name": "vim_motion_leader_expiration"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "expression": "vim_motion_leader_expiration > system.now.milliseconds",
+                    "type": "expression_if"
+                  },
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.mitchellh\\.ghostty$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
+                "from": {
+                  "key_code": "g",
+                  "modifiers": {
+                    "mandatory": [
+                      "shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "down_arrow",
+                    "modifiers": [
+                      "left_command"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "expression": "system.now.milliseconds + 800",
+                      "name": "vim_motion_leader_expiration"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "expression": "vim_motion_leader_expiration > system.now.milliseconds",
+                    "type": "expression_if"
+                  },
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.mitchellh\\.ghostty$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
+                "from": {
+                  "key_code": "open_bracket",
+                  "modifiers": {
+                    "mandatory": [
+                      "shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "up_arrow",
+                    "modifiers": [
+                      "left_option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "expression": "system.now.milliseconds + 800",
+                      "name": "vim_motion_leader_expiration"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "expression": "vim_motion_leader_expiration > system.now.milliseconds",
+                    "type": "expression_if"
+                  },
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.mitchellh\\.ghostty$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
+                "from": {
+                  "key_code": "close_bracket",
+                  "modifiers": {
+                    "mandatory": [
+                      "shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "down_arrow",
+                    "modifiers": [
+                      "left_option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "expression": "system.now.milliseconds + 800",
+                      "name": "vim_motion_leader_expiration"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "expression": "vim_motion_leader_expiration > system.now.milliseconds",
+                    "type": "expression_if"
+                  },
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.mitchellh\\.ghostty$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
+                "from": {
+                  "key_code": "left_shift",
+                  "modifiers": {
+                    "optional": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "from_event": true
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "expression": "vim_motion_leader_expiration > system.now.milliseconds",
+                    "type": "expression_if"
+                  },
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.mitchellh\\.ghostty$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
+                "from": {
+                  "key_code": "right_shift",
+                  "modifiers": {
+                    "optional": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "from_event": true
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "expression": "vim_motion_leader_expiration > system.now.milliseconds",
+                    "type": "expression_if"
+                  },
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.mitchellh\\.ghostty$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
+                "from": {
+                  "key_code": "escape",
+                  "modifiers": {
+                    "optional": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "vim_motion_leader_expiration",
+                      "value": 0
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "expression": "vim_motion_leader_expiration > system.now.milliseconds",
+                    "type": "expression_if"
+                  },
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.mitchellh\\.ghostty$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
+                "from": {
+                  "any": "key_code",
+                  "modifiers": {
+                    "optional": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "vim_motion_leader_expiration",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "from_event": true
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
           }
         ]
       },

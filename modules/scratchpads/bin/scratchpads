@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # man-me: name=scratchpads
 # man-me: category=Window and Display
-# man-me: usage=scratchpads open quick; scratchpads open codex; scratchpads open projects; scratchpads close; scratchpads rules; scratchpads debug
+# man-me: usage=scratchpads open quick; scratchpads open codex; scratchpads open projects; scratchpads open sessions; scratchpads close; scratchpads rules; scratchpads debug
 # man-me: description=Ghostty and yabai scratchpad manager.
 # man-me: tags=scratchpad scratchpads ghostty yabai window terminal
 
@@ -31,6 +31,9 @@ SCRATCHPAD_DOTFILES_DIR="${SCRATCHPAD_DOTFILES_DIR:-$(scratchpads_home_path "$(s
 SCRATCHPAD_PROJECTS_DIR="${SCRATCHPAD_PROJECTS_DIR:-$(scratchpads_home_path "$(scratchpads_config_string '.paths.projects' 'projects')")}"
 SCRATCHPAD_DOTFILES_TMUX_SESSION="${SCRATCHPAD_DOTFILES_TMUX_SESSION:-$(scratchpads_config_string '.tmux.dotfiles_session' 'dotfiles')}"
 SCRATCHPAD_PROJECTS_TMUX_SESSION="${SCRATCHPAD_PROJECTS_TMUX_SESSION:-$(scratchpads_config_string '.tmux.projects_session' 'projects')}"
+SCRATCHPAD_SESSION_MANAGER_LABEL="${SCRATCHPAD_SESSION_MANAGER_LABEL:-$(scratchpads_config_string '.tmux.session_manager_label' 'session_manager')}"
+SCRATCHPAD_SESSION_MANAGER_TMUX_SESSION="${SCRATCHPAD_SESSION_MANAGER_TMUX_SESSION:-$(scratchpads_config_string '.tmux.session_manager_session' 'session-manager')}"
+TMUX_HUB="${TMUX_HUB_CMD:-$HOME/bin/tmux-hub}"
 SCRATCHPADS_COMMAND="${SCRATCHPADS_COMMAND:-$SCRIPT_DIR/${BASH_SOURCE[0]##*/}}"
 SCRATCHPAD_TMUX_CLIENT_OPTION="@scratchpads_terminal_client"
 SCRATCHPAD_TMUX_TARGET_OPTION="@scratchpads_terminal_target"
@@ -43,9 +46,11 @@ Usage:
   scratchpads open quick
   scratchpads open codex
   scratchpads open projects
+  scratchpads open sessions
   scratchpads tmux dotfiles
   scratchpads tmux projects
   scratchpads tmux nvim
+  scratchpads tmux sessions
   scratchpads close
   scratchpads debug
   scratchpads rules
@@ -563,6 +568,9 @@ scratchpad_profile_for_label() {
     projects_tmux)
       printf '%s\n' "codex"
       ;;
+    "$SCRATCHPAD_SESSION_MANAGER_LABEL")
+      printf '%s\n' "codex"
+      ;;
     quick_terminal)
       printf '%s\n' "bottom"
       ;;
@@ -693,6 +701,7 @@ print_static_rules() {
   printf 'yabai -m rule --remove "scratchpad_codex_dotfiles" >/dev/null 2>&1 || true\n'
   printf 'yabai -m rule --remove "scratchpad_projects_tmux" >/dev/null 2>&1 || true\n'
   print_rule_for_label "$SCRATCHPAD_TERMINAL_LABEL"
+  print_rule_for_label "$SCRATCHPAD_SESSION_MANAGER_LABEL"
   print_rule_for_label "quick_terminal"
 }
 
@@ -1022,6 +1031,36 @@ ensure_projects_tmux_session() {
     || true
 }
 
+ensure_session_manager_tmux_session() {
+  local session="$SCRATCHPAD_SESSION_MANAGER_TMUX_SESSION"
+  local hub_window
+  local terminal_window
+
+  if ! command -v tmux >/dev/null 2>&1; then
+    printf 'scratchpads: tmux is required for the session manager.\n' >&2
+    return 1
+  fi
+  if [ ! -x "$TMUX_HUB" ]; then
+    printf 'scratchpads: tmux hub not found: %s\n' "$TMUX_HUB" >&2
+    return 1
+  fi
+
+  hub_window=$(
+    TMUX_HUB_SESSION="$session" \
+      TMUX_HUB_NO_SWITCH=1 \
+      "$TMUX_HUB" open "$HOME"
+  )
+
+  terminal_window=$(tmux list-windows -t "=$session:" -F '#{window_id} #{window_name}' 2>/dev/null \
+    | awk '$2 == "terminal" { print $1; exit }')
+  if [ -z "$terminal_window" ]; then
+    terminal_window=$(tmux new-window -d -P -F '#{window_id}' -t "=$session:" -n terminal -c "$HOME")
+  fi
+  tmux set-option -w -t "$terminal_window" @dotfiles_window_type terminal
+
+  tmux select-window -t "$hub_window" >/dev/null 2>&1 || true
+}
+
 tmux_target_session_for() {
   case "$1" in
     codex|dotfiles)
@@ -1149,6 +1188,40 @@ attach_projects_tmux_session() {
   attach_tmux_session "$SCRATCHPAD_PROJECTS_TMUX_SESSION" "$target"
 }
 
+attach_session_manager_tmux_session() {
+  ensure_session_manager_tmux_session
+
+  if [ -n "${TMUX:-}" ]; then
+    exec tmux switch-client -t "=$SCRATCHPAD_SESSION_MANAGER_TMUX_SESSION"
+  fi
+
+  exec tmux attach -t "=$SCRATCHPAD_SESSION_MANAGER_TMUX_SESSION"
+}
+
+open_session_manager_scratchpad() {
+  local label="$SCRATCHPAD_SESSION_MANAGER_LABEL"
+  local visible_ids
+  local attach_command
+
+  ensure_session_manager_tmux_session
+
+  visible_ids=$(scratchpad_visible_ids "$label" 2>/dev/null || true)
+  if [ -n "$visible_ids" ]; then
+    hide_scratchpad_and_restore_focus "$label" || true
+    return 0
+  fi
+
+  close_scratchpads_except_label "$label"
+  close_duplicate_scratchpads_for_label "$label"
+  printf -v attach_command '%q tmux sessions' "$SCRATCHPADS_COMMAND"
+  open_or_focus_scratchpad_with_profile \
+    "$label" \
+    "codex" \
+    "$HOME" \
+    "" \
+    "$attach_command"
+}
+
 open_projects_tmux_scratchpad() {
   open_terminal_tmux_scratchpad "projects"
 }
@@ -1225,6 +1298,8 @@ debug_state() {
     printf 'dotfiles_tmux_session=%s\n' "$SCRATCHPAD_DOTFILES_TMUX_SESSION"
     printf 'projects_dir=%s\n' "$SCRATCHPAD_PROJECTS_DIR"
     printf 'projects_tmux_session=%s\n' "$SCRATCHPAD_PROJECTS_TMUX_SESSION"
+    printf 'session_manager_label=%s\n' "$SCRATCHPAD_SESSION_MANAGER_LABEL"
+    printf 'session_manager_tmux_session=%s\n' "$SCRATCHPAD_SESSION_MANAGER_TMUX_SESSION"
     printf '\nfocused_window:\n'
     if query_focused_window_json >/dev/null 2>&1; then
       query_focused_window_json | jq '{id, app, title, scratchpad, is_visible: ."is-visible", has_focus: ."has-focus"}'
@@ -1261,6 +1336,10 @@ main() {
       acquire_scratchpad_open_lock "$SCRATCHPAD_TERMINAL_LABEL" || return 0
       open_projects_tmux_scratchpad
       ;;
+    open:sessions)
+      acquire_scratchpad_open_lock "$SCRATCHPAD_SESSION_MANAGER_LABEL" || return 0
+      open_session_manager_scratchpad
+      ;;
     tmux:projects)
       attach_projects_tmux_session "projects"
       ;;
@@ -1269,6 +1348,9 @@ main() {
       ;;
     tmux:nvim)
       attach_projects_tmux_session "nvim"
+      ;;
+    tmux:sessions)
+      attach_session_manager_tmux_session
       ;;
     close:)
       close_all_scratchpads

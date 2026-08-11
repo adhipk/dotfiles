@@ -20,6 +20,7 @@ state:
   preserved: []
   ephemeral:
     - ~/.config/skhd/app-mru
+    - ~/.config/skhd/app-mru/.suppress-focus
     - ~/.config/skhd/presentation_mode
     - ~/.config/skhd/zen_mode
 commands:
@@ -44,7 +45,12 @@ targets:
     bridge: home/dot_config/skhd/executable_app-mru.sh.tmpl
     ownership: exclusive
   - service: app-focus
-    source: config/defaults.toml
+    source: bin/focus-open-tmux-window.sh
+    destination: ~/.config/skhd/focus-open-tmux-window.sh
+    bridge: home/dot_config/skhd/executable_focus-open-tmux-window.sh.tmpl
+    ownership: exclusive
+  - service: app-focus
+    source: config/config.toml.tmpl
     destination: ~/.config/app-focus/config.toml
     bridge: home/dot_config/app-focus/config.toml.tmpl
     ownership: exclusive
