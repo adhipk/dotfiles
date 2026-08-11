@@ -6,7 +6,7 @@ This repository is a chezmoi source state for a macOS workstation. Files under
 
 ## Installed Commands
 
-These commands are installed into `~/bin`, which `home/dot_zshrc` adds to
+These commands are installed into `~/bin`, which `home/dot_zshrc.tmpl` adds to
 `PATH`.
 
 | Command | Purpose | Source |
@@ -15,9 +15,11 @@ These commands are installed into `~/bin`, which `home/dot_zshrc` adds to
 | `projects-pick` | Disabled companion for `projects pick`. | [`modules/projects/bin/projects-pick`](modules/projects/bin/projects-pick) |
 | `bookmarks` | Legacy space bookmarks (superseded by `projects`). | [`modules/space-display/bin/bookmarks`](modules/space-display/bin/bookmarks) |
 | `default-apps` | Inspect and change macOS default handlers for file extensions and URL schemes. | [`adhipk/macos-default-apps`](https://github.com/adhipk/macos-default-apps) |
+| `daemon` | Run a validated background command with durable PID/log files and a bare tmux log-tail session. | [`modules/tmux-sessions/bin/daemon`](modules/tmux-sessions/bin/daemon) |
 | `dotfiles-control-center` | Open the native module, dependency, and backed-up uninstall manager. | [`modules/dotfiles-control-center/bin/dotfiles-control-center`](modules/dotfiles-control-center/bin/dotfiles-control-center) |
 | `dotfiles-deps` | Aggregate dependency status, manager update checks, reproducible snapshots, and safe immutable Git-pin enforcement. | [`modules/dependencies/bin/dotfiles-deps`](modules/dependencies/bin/dotfiles-deps) |
 | `dotfiles-module` | Validate modules and plan or execute enable, disable, uninstall, and purge lifecycle actions. | [`modules/module-lifecycle/bin/dotfiles-module`](modules/module-lifecycle/bin/dotfiles-module) |
+| `dotfiles-settings` | Browse and change managed preferences (editor, assistant, hotkey apps, theme) with an fzf picker and automatic re-render, reload, and rollback. | [`modules/settings/bin/dotfiles-settings`](modules/settings/bin/dotfiles-settings) |
 | `dotfiles-uninstall` | Plan, execute, or restore a backed-up whole-system dotfiles removal. | [`modules/system-uninstall/bin/dotfiles-uninstall`](modules/system-uninstall/bin/dotfiles-uninstall) |
 | `gh-create-repo` | Edit repository settings as YAML, then run the matching `gh repo create` command. | [`adhipk/gh-create-repo`](https://github.com/adhipk/gh-create-repo) |
 | `man-me` | Generate a categorized reference for personal commands, bins, shell functions, and desktop helpers. | [`home/bin/executable_man-me`](home/bin/executable_man-me) |
@@ -28,7 +30,8 @@ These commands are installed into `~/bin`, which `home/dot_zshrc` adds to
 | `reset-yabai` | Reinstall and pin the yabai formula declared by `Brewfile`, then delegate checksum-scoped scripting-addition setup. This uses `sudo` and changes Homebrew packages and `/etc/sudoers.d/yabai`. | [`modules/space-display/bin/reset-yabai`](modules/space-display/bin/reset-yabai) |
 | `shortcut-catalog` | Regenerate or verify deterministic JSON/Markdown from rendered desired-state skhd bindings and module owners. | [`modules/shortcut-guide/bin/shortcut-catalog`](modules/shortcut-guide/bin/shortcut-catalog) |
 | `setup-yabai-sa` | Authorize the currently installed yabai binary with a checksum-scoped sudoers rule, load its scripting addition, and restart the service after the required SIP setup. | [`modules/space-display/bin/setup-yabai-sa`](modules/space-display/bin/setup-yabai-sa) |
-| `todo` | Open Tuxedo on `./todo.txt`, or run a Tuxedo CLI command against the current working directory's task file with serialized agent writes. | [`adhipk/tuxedo-project-todo`](https://github.com/adhipk/tuxedo-project-todo) |
+| `todo` | Open Tuxedo on the machine-wide agent queue, run serialized Tuxedo commands, or manage stable task IDs and handoffs. | [`adhipk/tuxedo-project-todo`](https://github.com/adhipk/tuxedo-project-todo) |
+| `tmux-hub` | Open the persistent vanilla-tmux agent dashboard with repository groups, attention state, selected-pane preview, explicit replies, sessions, and global todos. | [`modules/tmux-sessions/bin/tmux-hub`](modules/tmux-sessions/bin/tmux-hub) |
 | `tmux-session-picker` | Open sesh's built-in interactive picker for existing tmux sessions. | [`modules/tmux-sessions/bin/tmux-session-picker`](modules/tmux-sessions/bin/tmux-session-picker) |
 | `tmux-session-template` | Apply and navigate the standard `terminal:0`, `codex:1`, `nvim:2`, and `tuxedo:3` tmux window types. The new-session hook calls guarded `auto`, scratchpads call `ensure`, and `duplicate` keeps the source pane's directory. | [`modules/terminal-window-types/bin/tmux-session-template`](modules/terminal-window-types/bin/tmux-session-template) |
 | `tmux-workspace` | Validate, plan, open, apply, or explicitly repair import-free React-like `.tmux.tsx` session layouts while preserving healthy running panes. | [`modules/tmux-sessions/bin/tmux-workspace`](modules/tmux-sessions/bin/tmux-workspace) |
@@ -99,17 +102,21 @@ remote, and push options. It requires `gh` and `yq`, both installed from the
 ```bash
 todo
 todo ls --json
-todo add "(B) 2026-07-10 Implement the outcome +dotfiles @agent id:UUID owner:codex"
-todo do 1
+todo add "(B) 2026-07-10 Implement the outcome +dotfiles @agent id:UUID owner:codex repo:/absolute/path status:ready"
+todo task-status UUID running
+todo handoff put UUID result.md
+todo task-done UUID
 todo archive
 ```
 
-With no arguments, `todo` opens Tuxedo's TUI on `./todo.txt`. Arguments are
+With no arguments, `todo` opens Tuxedo's TUI on
+`~/.agents/tasks/todo.txt`. Arguments are
 passed to Tuxedo's todo.txt-compatible CLI with `TODO_DIR`, `TODO_FILE`, and
-`DONE_FILE` resolved from the current working directory. The wrapper initializes
-that directory's task files and holds an agent-write lock around CLI operations.
-Completed entries stay in `todo.txt` until `todo archive` is run explicitly.
-The command implementation and its locking tests live in the pinned
+`DONE_FILE` resolved from the shared store. The wrapper initializes the task and
+handoff files and holds one machine-wide agent-write lock around operations.
+Stable-ID commands update tasks safely across repositories, and handoff commands
+atomically store downstream context. Completed entries stay in `todo.txt` until
+`todo archive` is run explicitly. The command implementation and its locking tests live in the pinned
 `tuxedo-project-todo` checkout; these dotfiles own only the two links used by
 `todo` and native `chezmoi todo` dispatch.
 
@@ -146,12 +153,17 @@ and removal boundary.
 
 ## Shell Commands
 
+The tmux sessions module installs this shell-independent command:
+
+| Command | Usage | Purpose |
+| --- | --- | --- |
+| `daemon` | `daemon NAME COMMAND [ARG ...]` | Run a background command with `nohup`, write `/tmp/NAME.log` and `/tmp/NAME.pid`, and create a `daemon-NAME` tmux session that tails the log. |
+
 [`home/dot_config/zsh/zshrc.commands`](home/dot_config/zsh/zshrc.commands)
-defines these shell functions:
+also defines these shell functions:
 
 | Function | Usage | Purpose |
 | --- | --- | --- |
-| `daemon` | `daemon NAME COMMAND [ARG ...]` | Run a background command with `nohup`, write `/tmp/NAME.log` and `/tmp/NAME.pid`, and create a `daemon-NAME` tmux session that tails the log. |
 | `tms` | `tms [SESSION] [DIRECTORY]` | Create a detached tmux session without switching to it. The defaults are the current directory name and current directory. |
 
 [`home/dot_zshrc`](home/dot_zshrc) adds the `y [ARG ...]` shell function, which
@@ -185,6 +197,14 @@ same four-window template as the terminal scratchpads: `terminal` at `0`,
 is preserved as-is. Compound/orchestrated creators that add their own windows
 or queue index-targeted tmux commands must opt out on their `new-session` call
 with `-e DOTFILES_TMUX_TEMPLATE=skip`; `hs-*` sessions are also excluded.
+
+`tmux-hub open [ROOT]` creates or enters one bare `hub` session on the normal
+tmux server. Its Neovim dashboard derives `WAIT`/`ERR`/`READY`/`WORK` from
+visible panes, groups agents by repository, follows the selected row with a live
+pane preview, and joins sessions with todos from open project roots. Enter jumps
+or folds, `Space` explicitly replies to a selected non-working agent through an
+exact tmux pane ID, and `o` opens its session in a fresh Ghostty client. The hub
+has no daemon, private socket, database, or automatic terminal-input path.
 
 `tmux-workspace open project --root DIR` builds the managed project layout from
 `~/.config/tmux/layouts/project.tmux.tsx`. The custom Bun JSX runtime supports
@@ -261,6 +281,7 @@ Installed below `~/.config/skhd/`:
 | Helper | Purpose |
 | --- | --- |
 | [`app-mru.sh`](modules/app-focus/bin/app-mru.sh) | Track and cycle non-scratchpad application windows in most-recently-used order. Updated on `window_focused` via yabai. |
+| [`focus-open-tmux-window.sh SLOT\|cycle`](modules/app-focus/bin/focus-open-tmux-window.sh) | Focus an open normal tmux Ghostty window by its `Fn+1..9` creation-order slot, or cycle forward for `Fn+Tab`. |
 | [`focus_app.sh APP`](modules/app-focus/bin/focus_app.sh) | Focus, MRU-cycle, or launch an application. `@browser` resolves the macOS HTTPS handler, `@editor` uses the standard app-focus TOML default, and terminal fallback creates a normal window instead of activating a scratchpad. |
 | [`hotkeys`](modules/app-focus/bin/hotkeys) | Route the app-focus, presentation, zen, and normal-terminal actions. Zen mode blocks the configured slots `3..5`; terminal, browser, and editor focus remain active. New terminal windows are pinned back to the originating yabai display and space. |
 | [`media_key.sh ACTION`](home/dot_config/skhd/executable_media_key.sh) | Send a macOS media key event. Supported actions are `brightness_down`, `brightness_up`, `mission_control`, `launchpad`, `dictation`, `do_not_disturb`, `previous`, `play_pause`, `next`, `mute`, `volume_down`, and `volume_up`. |
@@ -312,10 +333,12 @@ operations to these shortcuts:
 | Hyper | Reserved and intentionally unbound; ProjectDeck/project-context shortcuts are dormant. |
 | `Ctrl+Alt+n` | Move the current window to a new labeled space. |
 | `Alt+n` | Create and focus a new space, moving the focused non-scratchpad window there only when another non-scratchpad window remains on the current space. |
+| `Cmd+Alt+n` | Run the active app's normal `Cmd+n`, then move the new window to a newly created space. |
 | `Alt+k` | Close empty spaces. |
 | `Alt+Backtick`, `Alt+1..4` | Focus Ghostty, the default browser, the configured editor, Teams, or Slack. Repeat to MRU-cycle that app's non-scratchpad windows only. |
 | `Fn+Comma` | Open the opaque black terminal scratchpad and switch its tmux client to `dotfiles`, with `terminal`, `codex`, `nvim`, and `tuxedo` windows. |
-| `Fn+1` | Open the same opaque black terminal scratchpad and switch its tmux client to `projects`, with `terminal`, `codex`, `nvim`, and `tuxedo` windows. |
+| `Fn+1..9` | Focus open normal tmux Ghostty windows in creation order; scratchpads, detached sessions, and non-tmux terminal windows do not consume slots. |
+| `Fn+Tab` | Cycle forward through those same open tmux windows, wrapping after the last. |
 | `Cmd+Backtick`, `Cmd+1`, `Cmd+2`, `Cmd+3` in Ghostty | Cycle `terminal`, `codex`, `nvim`, or `tuxedo` tmux windows by type, including renamed duplicates. |
 | `Cmd+B`, `Cmd+Shift+B` in Ghostty | Toggle one Yazi side pane or open/select its dedicated tmux window in the active directory. |
 | `Right Cmd+D` in Ghostty | Duplicate the current typed tmux window in the same directory; copies receive `terminal-2`, `codex-2`, `nvim-2`, `tuxedo-2`, and advancing suffixes. |

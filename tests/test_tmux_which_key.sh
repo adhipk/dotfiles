@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Tests for the repo-owned tmux-which-key command center.
+# Tests for the Telescope tmux command palette and its curated action catalog.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOTFILES_DIR="$(dirname "$TEST_DIR")"
@@ -15,6 +15,8 @@ chezmoi \
     apply --exclude=scripts,externals --force >/dev/null
 CONFIG="$RENDER_HOME/.config/tmux/which-key.yaml"
 TMUX_CONFIG="$RENDER_HOME/.tmux.conf"
+PALETTE="$RENDER_HOME/bin/tmux-command-palette"
+PALETTE_LUA="$DOTFILES_DIR/nvim/lua/custom/tmux_commands.lua"
 GENERATED="$TEMP_DIR/init.tmux"
 SOCKET_NAME="dotfiles-which-key-test-$$"
 
@@ -68,7 +70,7 @@ assert_not_contains() {
 }
 
 echo "================================"
-echo "Tmux Command Center Tests"
+echo "Tmux Telescope Command Palette Tests"
 echo "================================"
 
 if [[ -f "$CONFIG" ]]; then
@@ -104,11 +106,11 @@ else
     fail "generated command center loads in tmux" "source exit 0" "$SOURCE_OUTPUT"
 fi
 
-# Ghostty/skhd send F16-F19, which xterm-compatible terminal protocols expose
-# to tmux as Shift+F4 through Shift+F7. Parse the actual bridge declarations so
+# Ghostty/skhd send F16-F20, which xterm-compatible terminal protocols expose
+# to tmux as Shift+F4 through Shift+F8. Parse the actual bridge declarations so
 # unsupported tmux key names fail this suite instead of failing only at reload.
 LAYER_SOURCE_OUTPUT=$(
-    grep -E '^bind-key -n -N .*S-F[4-7]' "$TMUX_CONFIG" \
+    grep -E '^bind-key -n -N .*S-F[4-8]' "$TMUX_CONFIG" \
         | tmux -L "$SOCKET_NAME" source-file - 2>&1
 )
 LAYER_SOURCE_STATUS=$?
@@ -118,59 +120,43 @@ else
     fail "Right Command terminal bridge loads in tmux" "source exit 0" "$LAYER_SOURCE_OUTPUT"
 fi
 
-PREFIX_BINDING=$(tmux -L "$SOCKET_NAME" list-keys -T prefix Space 2>/dev/null || true)
-assert_contains "Ctrl-a Space opens the command center" "display-menu" "$PREFIX_BINDING"
-
-# Loading generated tmux source only validates the stored strings. Drive the
-# actual key sequence through a pseudo-terminal so deferred submenu commands
-# are expanded and parsed exactly as they are for an interactive client.
-MENU_RUNTIME_LOG="$TEMP_DIR/menu-runtime.log"
-if WK_SOCKET_NAME="$SOCKET_NAME" /usr/bin/expect >"$MENU_RUNTIME_LOG" 2>&1 <<'EOF'
-log_user 0
-set timeout 5
-set env(TMUX) ""
-set env(TERM) "xterm-256color"
-
-spawn tmux -L $env(WK_SOCKET_NAME) attach-session -t command-center
-after 300
-send -- "\002"
-after 100
-send -- " "
-expect {
-    -re {Syntax error|[Nn]ot enough arguments} {
-        puts "root menu failed to parse"
-        exit 2
-    }
-    -re {Sessions} {}
-    timeout {
-        puts "root menu did not open"
-        exit 3
-    }
-}
-
-after 100
-send -- "s"
-expect {
-    -re {Syntax error|[Nn]ot enough arguments} {
-        puts "Sessions submenu failed to parse"
-        exit 4
-    }
-    -re {New named session} {}
-    timeout {
-        puts "Sessions submenu did not open"
-        exit 5
-    }
-}
-exit 0
-EOF
-then
-    pass "Sessions submenu parses when displayed"
+PALETTE_SOURCE_OUTPUT=$(
+    grep -E '^bind-key -N .* Space display-popup' "$TMUX_CONFIG" \
+        | tmux -L "$SOCKET_NAME" source-file - 2>&1
+)
+PALETTE_SOURCE_STATUS=$?
+if [[ "$PALETTE_SOURCE_STATUS" -eq 0 ]]; then
+    pass "Ctrl-a Space Telescope binding loads in tmux"
 else
-    fail \
-        "Sessions submenu parses when displayed" \
-        "interactive menu opens without a parser error" \
-        "$(cat "$MENU_RUNTIME_LOG")"
+    fail "Ctrl-a Space Telescope binding loads in tmux" "source exit 0" "$PALETTE_SOURCE_OUTPUT"
 fi
+
+PREFIX_BINDING=$(tmux -L "$SOCKET_NAME" list-keys -T prefix Space 2>/dev/null || true)
+assert_contains "Ctrl-a Space opens the Telescope palette" "display-popup" "$PREFIX_BINDING"
+assert_contains "Ctrl-a Space launches the managed palette" "tmux-command-palette" "$PREFIX_BINDING"
+
+LEGACY_BINDING=$(tmux -L "$SOCKET_NAME" list-keys -T prefix F12 2>/dev/null || true)
+assert_contains "legacy display-menu stays off Space" "display-menu" "$LEGACY_BINDING"
+
+if [[ -x "$PALETTE" ]]; then
+    pass "Telescope palette launcher is installed"
+else
+    fail "Telescope palette launcher is installed" "executable $PALETTE" "missing"
+fi
+
+SELF_TEST_OUTPUT=$(TMUX_COMMAND_PALETTE_NVIM_CONFIG="$DOTFILES_DIR/nvim" "$PALETTE" --self-test 2>&1)
+if [[ "$SELF_TEST_OUTPUT" == "tmux command palette self-test: 8 passed" ]]; then
+    pass "Telescope palette parser self-test passes"
+else
+    fail "Telescope palette parser self-test passes" "8 passed" "$SELF_TEST_OUTPUT"
+fi
+
+assert_contains "palette uses the real Telescope picker" "require 'telescope.pickers'" "$(cat "$PALETTE_LUA")"
+assert_contains "palette search includes actual command text" "item.command" "$(cat "$PALETTE_LUA")"
+assert_contains "palette previews the selected tmux command" "Actual tmux command" "$(cat "$PALETTE_LUA")"
+assert_contains "palette explicitly focuses Telescope's prompt" "focus_palette_prompt" "$(cat "$PALETTE_LUA")"
+assert_contains "palette handles terminal Enter and Escape process-wide" "vim.on_key" "$(cat "$PALETTE_LUA")"
+assert_contains "palette exits its dedicated Neovim process" "qa!" "$(cat "$PALETTE_LUA")"
 
 PROBE="$TEMP_DIR/tmux-workspace-probe"
 PROBE_ARGS="$TEMP_DIR/probe-args"
@@ -192,6 +178,7 @@ fi
 
 SESSIONS=$(tmux -L "$SOCKET_NAME" show-options -gv @wk_menu_sessions 2>/dev/null || true)
 assert_contains "session menu opens the sesh picker" "tmux-sessionizer-zoxide" "$SESSIONS"
+assert_contains "session menu opens the centralized hub" "tmux-hub open" "$SESSIONS"
 assert_contains "session menu uses client-local tmux history" "switch-client -l" "$SESSIONS"
 assert_contains "session menu navigates previous sessions" "switch-client -p" "$SESSIONS"
 assert_contains "session menu navigates next sessions" "switch-client -n" "$SESSIONS"

@@ -28,6 +28,11 @@ TMUX_CONFIG="$RENDER_HOME/.tmux.conf"
 TMUX_BORDER_ACCENT="$DOTFILES_DIR/modules/appearance-pip/bin/tmux-border-accent"
 TMUX_WORKSPACE="$DOTFILES_DIR/modules/tmux-sessions/bin/tmux-workspace"
 TMUX_WHICH_KEY="$RENDER_HOME/.config/tmux/which-key.yaml"
+TMUX_COMMAND_PALETTE="$RENDER_HOME/bin/tmux-command-palette"
+TMUX_COMMAND_PALETTE_LUA="$DOTFILES_DIR/nvim/lua/custom/tmux_commands.lua"
+TMUX_HUB="$RENDER_HOME/bin/tmux-hub"
+TMUX_HUB_LUA="$DOTFILES_DIR/nvim/lua/custom/tmux_hub.lua"
+DAEMON_COMMAND="$RENDER_HOME/bin/daemon"
 SESH_CONFIG="$DOTFILES_DIR/modules/tmux-sessions/config/sesh.toml"
 GHOSTTY_CONFIG="$RENDER_HOME/Library/Application Support/com.mitchellh.ghostty/config"
 TMUX_YAZI_HELPER="$DOTFILES_DIR/modules/tmux-yazi/bin/tmux-yazi-pane"
@@ -36,6 +41,7 @@ SCRATCHPADS="$DOTFILES_DIR/modules/scratchpads/bin/scratchpads"
 QUICK_TERMINAL="$DOTFILES_DIR/modules/scratchpads/bin/toggle_ghostty_quick_terminal.sh"
 CREATE_SPACE="$DOTFILES_DIR/modules/space-display/bin/create-space"
 DISPLAY_MOVE="$DOTFILES_DIR/modules/space-display/bin/display-move"
+FOCUS_OPEN_TMUX_WINDOW="$DOTFILES_DIR/modules/app-focus/bin/focus-open-tmux-window.sh"
 SHORTCUT_LAUNCHER="$DOTFILES_DIR/modules/shortcut-guide/bin/show_keys.sh"
 NVIM_INIT="$DOTFILES_DIR/nvim/init.lua"
 RENDER_MARKDOWN_CONFIG="$DOTFILES_DIR/nvim/lua/custom/plugins/render-markdown.lua"
@@ -149,6 +155,73 @@ else
 fi
 
 assert_not_contains "$KARABINER_CONFIG" "nvim_caps_lock_control" "Karabiner has no Neovim-specific Caps Lock mode"
+if jq -e '
+    .profiles[] | select(.selected == true)
+    | [.complex_modifications.rules[]
+        | select(.description == "Right Control: tmux prefix on tap in Ghostty")
+        | .manipulators[]
+      ] as $tmux
+    | [.complex_modifications.rules[]
+        | select(.description == "Right Control: transient Vim motion leader outside Ghostty")
+        | .manipulators[]
+      ] as $vim
+    | ($tmux | length) == 1
+      and ($tmux[0].to[0].key_code == "right_control")
+      and ($tmux[0].to[0].lazy == true)
+      and ($tmux[0].to_if_alone[0].key_code == "a")
+      and ($tmux[0].to_if_alone[0].modifiers == ["left_control"])
+      and ($tmux[0].conditions[0].type == "frontmost_application_if")
+      and ($tmux[0].conditions[0].bundle_identifiers == ["^com\\.mitchellh\\.ghostty$"])
+      and ([$vim[] | select(.from.key_code == "right_control")] | length == 1)
+      and ([$vim[] | select(.from.key_code == "right_control")][0].to[0].key_code == "right_control")
+      and ([$vim[] | select(.from.key_code == "right_control")][0].to[0].lazy == true)
+      and ([$vim[] | select(.from.key_code == "right_control")][0].to_if_alone[0].set_variable.expression == "system.now.milliseconds + 1200")
+      and ([$vim[] | select(.from.key_code == "right_control")][0].conditions[0].type == "frontmost_application_unless")
+      and ([$vim[] | select(.from.key_code == "right_control")][0].conditions[0].bundle_identifiers == ["^com\\.mitchellh\\.ghostty$"])
+  ' "$KARABINER_CONFIG" >/dev/null; then
+    echo "  ✓ Right Control selects the tmux or Vim leader by frontmost app"
+    ((PASSED++))
+else
+    echo "  ✗ Right Control must tap Ctrl+A in Ghostty, open Vim motions elsewhere, and remain Control when held"
+    ((FAILED++))
+fi
+if jq -e '
+    .profiles[] | select(.selected == true)
+    | [.complex_modifications.rules[]
+        | select(.description == "Right Control: transient Vim motion leader outside Ghostty")
+        | .manipulators[]
+      ] as $vim
+    | {
+        h: ([$vim[] | select(.from.key_code == "h")][0].to[0].key_code),
+        j: ([$vim[] | select(.from.key_code == "j")][0].to[0].key_code),
+        k: ([$vim[] | select(.from.key_code == "k")][0].to[0].key_code),
+        l: ([$vim[] | select(.from.key_code == "l")][0].to[0].key_code),
+        b: ([$vim[] | select(.from.key_code == "b")][0].to[0]),
+        w: ([$vim[] | select(.from.key_code == "w")][0].to[0]),
+        zero: ([$vim[] | select(.from.key_code == "0")][0].to[0]),
+        dollar: ([$vim[] | select(.from.key_code == "4" and .from.modifiers.mandatory == ["shift"])][0].to[0]),
+        top: ([$vim[] | select(.from.key_code == "g" and (.from | has("modifiers") | not))][0].to[0]),
+        bottom: ([$vim[] | select(.from.key_code == "g" and .from.modifiers.mandatory == ["shift"])][0].to[0])
+      } as $motion
+    | ($motion.h == "left_arrow")
+      and ($motion.j == "down_arrow")
+      and ($motion.k == "up_arrow")
+      and ($motion.l == "right_arrow")
+      and ($motion.b.key_code == "left_arrow" and $motion.b.modifiers == ["left_option"])
+      and ($motion.w.key_code == "right_arrow" and $motion.w.modifiers == ["left_option"])
+      and ($motion.zero.key_code == "left_arrow" and $motion.zero.modifiers == ["left_command"])
+      and ($motion.dollar.key_code == "right_arrow" and $motion.dollar.modifiers == ["left_command"])
+      and ($motion.top.key_code == "up_arrow" and $motion.top.modifiers == ["left_command"])
+      and ($motion.bottom.key_code == "down_arrow" and $motion.bottom.modifiers == ["left_command"])
+      and ([$vim[] | select(.from.key_code == "escape")][0].to[0].set_variable.value == 0)
+      and ([$vim[] | select(.from.any == "key_code")][0].to[1].from_event == true)
+  ' "$KARABINER_CONFIG" >/dev/null; then
+    echo "  ✓ Vim leader exposes guarded character, word, line, document, and cancel motions"
+    ((PASSED++))
+else
+    echo "  ✗ Vim leader motion map or safe pass-through cancellation is incomplete"
+    ((FAILED++))
+fi
 assert_not_contains "$NVIM_INIT" "nvim_caps_lock_control" "Neovim does not toggle a Caps Lock mode"
 assert_not_contains "$NVIM_INIT" "karabiner_cli" "Neovim does not mutate Karabiner state"
 assert_contains "$NVIM_INIT" "vim.keymap.set('n', 'd', '\"_d'" "Delete uses Lua keymap to avoid yanking"
@@ -196,6 +269,7 @@ assert_not_contains "$SKHDRC" "\.config/yabai/projects " "Project-context comman
 assert_not_contains "$SKHDRC" "^ctrl + alt + cmd" "Hyper has no active global bindings"
 assert_not_contains "$SKHDRC" "ctrl + alt + shift - 1.*window --space 1" "Mission Control index moves removed"
 assert_contains "$SKHDRC" "alt - n.*create-space auto" "Alt+n creates a new space and conditionally moves a focused non-scratchpad window"
+assert_contains "$SKHDRC" "cmd + alt - n.*create-space new-window" "Cmd+Alt+n opens the app default window and moves it to a new space"
 assert_contains "$SKHDRC" "ctrl + alt - n.*create-space move-window" "Ctrl+Alt+n moves the focused window to a new space"
 assert_contains "$CREATE_SPACE" "before_uuids" "create-space snapshots spaces before creation"
 assert_contains "$CREATE_SPACE" "space --focus.*new_index" "create-space focuses the newly created space"
@@ -203,6 +277,8 @@ assert_contains "$CREATE_SPACE" "scratchpad_label" "create-space ignores focused
 assert_contains "$CREATE_SPACE" "movable_windows.*-gt 1" "create-space auto mode keeps the only normal window on its current space"
 assert_contains "$CREATE_SPACE" "capture_focused_window_for_move true" "create-space auto mode requires another normal window before moving"
 assert_contains "$CREATE_SPACE" "capture_focused_window_for_move false" "create-space move-window mode can still force a focused window move"
+assert_contains "$CREATE_SPACE" 'skhd -k "cmd - n"' "create-space new-window mode preserves the app default Cmd+n action"
+assert_contains "$CREATE_SPACE" 'current_window_id.*!=.*previous_window_id' "create-space waits for the newly focused window before moving it"
 assert_contains "$CREATE_SPACE" "move_focused_window=true" "create-space can mark a focused regular window for moving"
 assert_not_contains "$CREATE_SPACE" "YABAI_SPACE_WALLPAPER" "create-space has no wallpaper assignment controls"
 assert_not_contains "$CREATE_SPACE" "set picture of current desktop" "create-space does not apply wallpapers"
@@ -212,7 +288,14 @@ assert_contains "$SKHDRC" "alt - 3.*hotkeys app-focus 3.*Microsoft Teams" "Alt+3
 assert_contains "$SKHDRC" "alt - 4.*hotkeys app-focus 4.*Slack" "Alt+4 Slack focus goes through zen gate"
 assert_not_contains "$SKHDRC" "^alt - 5" "Alt+5 remains unbound"
 assert_contains "$SKHDRC" "fn - 0x2B.*scratchpads open codex" "Fn+Comma opens the Codex dotfiles scratchpad"
-assert_contains "$SKHDRC" "fn - 1.*scratchpads open projects" "Fn+1 opens the projects tmux scratchpad"
+assert_contains "$SKHDRC" "fn - 1.*focus-open-tmux-window.sh 1" "Fn+1 focuses the first open tmux window"
+assert_contains "$SKHDRC" "fn - 9.*focus-open-tmux-window.sh 9" "Fn+9 focuses the ninth open tmux window"
+assert_contains "$SKHDRC" "fn - tab.*focus-open-tmux-window.sh cycle" "Fn+Tab cycles open tmux windows"
+assert_not_contains "$SKHDRC" "fn - 1.*scratchpads open projects" "Fn+1 no longer targets the projects scratchpad"
+assert_contains "$FOCUS_OPEN_TMUX_WINDOW" 'select((.scratchpad // "") == "")' "Fn tmux slots exclude scratchpads"
+assert_contains "$FOCUS_OPEN_TMUX_WINDOW" 'test("^tmux( · .+)?$")' "Fn tmux slots exclude non-tmux terminal windows"
+assert_contains "$FOCUS_OPEN_TMUX_WINDOW" "sort_by(.id)" "Fn tmux slots use stable window creation order"
+assert_contains "$FOCUS_OPEN_TMUX_WINDOW" 'current_index + 1' "Fn+Tab advances from the focused tmux window"
 assert_not_contains "$SKHDRC" "alt - 0x2B.*scratchpads open codex" "Alt+Comma no longer opens the Codex dotfiles scratchpad"
 assert_not_contains "$SKHDRC" "alt - l.*scratchpads open projects" "Alt+L no longer opens the projects tmux scratchpad"
 assert_contains "$SKHDRC" "alt + shift - 0x2A.*hotkeys zen toggle" "Alt+Shift+Backslash toggles zen mode"
@@ -226,15 +309,19 @@ assert_contains "$SKHDRC" 'rcmd - s \[' "Right Command+S enters the Ghostty mana
 assert_contains "$SKHDRC" '"Ghostty" : skhd -k "f18"' "Right Command+S emits synthetic F18 in Ghostty"
 assert_contains "$SKHDRC" 'rcmd - space \[' "Right Command+Space enters the Ghostty management layer"
 assert_contains "$SKHDRC" '"Ghostty" : skhd -k "f19"' "Right Command+Space emits synthetic F19 in Ghostty"
-assert_count "$SKHDRC" '^rcmd -' 4 "Right Command owns only the four Ghostty management actions"
-assert_count "$SKHDRC" '^[[:space:]]*\* ~$' 4 "Every right-Command management chord passes through outside Ghostty"
+assert_count "$SKHDRC" '^rcmd -' 5 "Right Command owns only the five Ghostty management actions"
+assert_count "$SKHDRC" '^[[:space:]]*\* ~$' 5 "Every right-Command management chord passes through outside Ghostty"
 assert_not_contains "$SKHDRC" '^lcmd -' "Left Command remains application-local"
 assert_contains "$SHORTCUT_LAUNCHER" 'app="$HOME/.config/skhd/whichkey"' "Shortcut guide launcher keeps the stable live path"
 assert_contains "$SHORTCUT_LAUNCHER" 'source_file=.*WhichKey.swift' "Shortcut guide launcher lazily rebuilds stale source"
 assert_contains "$SHORTCUT_LAUNCHER" 'action="${1:-toggle}"' "Shortcut guide launcher separates open, close, and toggle actions"
 assert_contains "$SHORTCUT_LAUNCHER" 'whichkey-launch.lock' "Shortcut guide launcher prevents duplicate app races"
-assert_count "$SKHDRC" "^fn -" 2 "Fn is reserved for the two scratchpads"
-assert_not_contains "$SKHDRC" '^fn - [234]' "Fn no longer duplicates native screenshot shortcuts"
+assert_count "$SKHDRC" "^fn -" 12 "Unshifted Fn owns two scratchpads, nine tmux slots, and tmux cycling"
+assert_count "$SKHDRC" "^fn + shift -" 4 "Fn+Shift owns the four capture commands"
+assert_contains "$SKHDRC" '^fn + shift - 1 : skhd -k "cmd + shift - 3"' "Fn+Shift+1 saves a full-screen screenshot"
+assert_contains "$SKHDRC" '^fn + shift - 2 : skhd -k "ctrl + cmd + shift - 3"' "Fn+Shift+2 copies a full-screen screenshot"
+assert_contains "$SKHDRC" '^fn + shift - 3 : skhd -k "cmd + shift - 4"' "Fn+Shift+3 saves a selection screenshot"
+assert_contains "$SKHDRC" '^fn + shift - 4 : skhd -k "ctrl + cmd + shift - 4"' "Fn+Shift+4 copies a selection screenshot"
 
 assert_contains "$HOTKEYS" "ZEN_MODE_FILE=.*zen_mode" "hotkeys stores zen mode state"
 assert_contains "$APP_FOCUS_DEFAULTS" "zen_blocked_slots = \[3, 4, 5\]" "app-focus defaults disable slots 3-5 in zen mode"
@@ -336,11 +423,13 @@ assert_contains "$TMUX_CONFIG" 'status-left.*E:@dotfiles_status_accent.*▌' "tm
 assert_contains "$TMUX_CONFIG" "status-right ''" "tmux omits status telemetry modules"
 assert_contains "$TMUX_CONFIG" "window-status-activity-style default" "tmux keeps activity alerts pill-free"
 assert_contains "$TMUX_CONFIG" "window-status-bell-style default" "tmux keeps bell alerts pill-free"
-assert_contains "$TMUX_CONFIG" "window-status-format.*terminal.*~.*#W" "tmux renders stable app labels and shortens terminal to tilde"
-assert_contains "$TMUX_CONFIG" "window-status-current-format.*terminal.*~.*#W" "tmux highlights the current stable app label"
+assert_contains "$TMUX_CONFIG" '@dotfiles_window_label.*tmux-window-program.*pane_tty' "tmux derives window labels from each pane foreground process"
+assert_not_contains "$TMUX_CONFIG" '@dotfiles_window_label.*dotfiles_window_type' "tmux toolbar labels do not depend on typed window metadata"
+assert_contains "$TMUX_CONFIG" '@dotfiles_window_accent.*window_index.*@thm_mauve.*@thm_flamingo' "tmux gives window indices distinct colors from a twelve-color palette"
+assert_contains "$TMUX_CONFIG" 'window-status-format.*E:@dotfiles_window_accent.*E:@dotfiles_window_label' "tmux renders each live program label in its window color"
+assert_contains "$TMUX_CONFIG" 'window-status-current-format.*E:@dotfiles_window_accent},bold.*E:@dotfiles_window_label' "tmux marks the current live program label in bold"
 assert_contains "$TMUX_CONFIG" 'window-status-separator.*@thm_surface_1.*·' "tmux separates window labels with a quiet centered dot"
-assert_contains "$TMUX_CONFIG" 'window-status-current-format.*fg=#{E:@dotfiles_status_accent},bold.*#W.*default' "tmux colors the active app label without a background block"
-assert_not_contains "$TMUX_CONFIG" 'window-status-current-format.*bg=#{E:@dotfiles_status_accent}' "tmux avoids a full-height active-window capsule"
+assert_not_contains "$TMUX_CONFIG" 'window-status-current-format.*bg=#{E:@dotfiles_window_accent}' "tmux avoids a full-height active-window capsule"
 assert_not_contains "$TMUX_CONFIG" 'window-status-format.*•' "tmux does not prefix every inactive label with a floating bullet"
 assert_contains "$TMUX_CONFIG" "bind-key , command-prompt.*dotfiles_window_type.*codex.*#T,#W.*rename-window" "tmux seeds typed Codex renames from the Codex pane title"
 assert_file_exists "$TMUX_BORDER_ACCENT" "tmux border accent helper exists"
@@ -362,7 +451,24 @@ assert_contains "$TMUX_CONFIG" "C-S-3.*tmux-session-template new.*tuxedo" "Ctrl+
 assert_contains "$TMUX_CONFIG" 'S-F4.*tmux-session-template duplicate.*session_id.*pane_id' "terminal F16 duplicates the current tmux window for Right Command"
 assert_contains "$TMUX_CONFIG" 'S-F5.*command-prompt.*Rename window' "terminal F17 renames the current tmux window for Right Command"
 assert_contains "$TMUX_CONFIG" 'S-F6.*tmux-sessionizer-zoxide' "terminal F18 opens the sesh picker for Right Command"
-assert_contains "$TMUX_CONFIG" 'S-F7.*show-wk-menu-root' "terminal F19 opens the tmux command center for Right Command"
+assert_contains "$TMUX_CONFIG" 'bind-key -N "Search tmux commands with Telescope" Space display-popup.*tmux-command-palette' "Ctrl-a Space opens the Telescope tmux command palette"
+assert_contains "$TMUX_CONFIG" 'S-F7.*display-popup.*tmux-command-palette' "terminal F19 opens the Telescope tmux command palette for Right Command"
+assert_contains "$TMUX_CONFIG" 'bind-key -N "Open centralized tmux hub" g.*tmux-hub open' "Ctrl-a g opens the centralized tmux hub"
+assert_contains "$TMUX_CONFIG" 'S-F8.*tmux-hub open' "terminal F20 opens the centralized tmux hub for Right Command"
+assert_file_exists "$TMUX_COMMAND_PALETTE" "clean render installs the tmux command palette launcher"
+assert_file_exists "$TMUX_COMMAND_PALETTE_LUA" "Neovim owns the Telescope tmux command picker"
+assert_contains "$TMUX_COMMAND_PALETTE" "TMUX_COMMAND_PALETTE_SELECTION_FILE" "palette launcher hands the selected command back after its popup closes"
+assert_contains "$TMUX_COMMAND_PALETTE_LUA" "require 'telescope.pickers'" "tmux command search uses the real configured Telescope picker"
+assert_contains "$TMUX_COMMAND_PALETTE_LUA" "Actual tmux command" "Telescope previews the command that will run"
+assert_contains "$TMUX_COMMAND_PALETTE_LUA" "tmux.*list-keys.*prefix" "Telescope reads live prefix bindings"
+assert_file_exists "$TMUX_HUB" "clean render installs the centralized tmux hub"
+assert_file_exists "$TMUX_HUB_LUA" "Neovim owns the live tmux hub dashboard"
+assert_contains "$TMUX_HUB" "DOTFILES_TMUX_TEMPLATE=skip" "hub session stays bare instead of receiving typed template windows"
+assert_contains "$TMUX_HUB_LUA" "Approval requests" "hub dashboard exposes approval requests"
+assert_contains "$TMUX_HUB_LUA" "Global todos" "hub dashboard exposes the machine-wide todo queue"
+assert_contains "$TMUX_HUB" "close requires an exact session ID" "hub closes sessions by immutable ID"
+assert_contains "$TMUX_HUB_LUA" "Tab marks multiple" "hub exposes confirmed multi-session cleanup"
+assert_file_exists "$DAEMON_COMMAND" "clean render installs daemon as a shell-independent command"
 assert_contains "$TMUX_CONFIG" "bind-key '|'.*split-window -h.*pane_current_path" "tmux directly splits a cwd-preserving pane to the right"
 assert_contains "$TMUX_CONFIG" "bind-key '-'.*split-window -v.*pane_current_path" "tmux directly splits a cwd-preserving pane below"
 assert_contains "$TMUX_CONFIG" "tmux-plugins/tmux-resurrect" "tmux declares session persistence"
@@ -390,9 +496,11 @@ assert_contains "$TMUX_TEMPLATE_HELPER" "new-window -d -P" "tmux captures duplic
 assert_contains "$TMUX_TEMPLATE_HELPER" "allows_legacy_index_migration" "tmux protects the new Tuxedo slot during template upgrades"
 assert_contains "$SCRATCHPADS" "open:codex" "scratchpads supports Codex dotfiles scratchpad"
 assert_contains "$SCRATCHPADS" "open:projects" "scratchpads supports projects tmux scratchpad"
+assert_contains "$SCRATCHPADS" "open:sessions" "scratchpads supports the session-manager scratchpad"
 assert_contains "$SCRATCHPADS" "SCRATCHPAD_TERMINAL_LABEL" "scratchpads uses one terminal scratchpad window"
 assert_contains "$SCRATCHPADS" "SCRATCHPAD_DOTFILES_TMUX_SESSION" "scratchpads declares the dotfiles tmux session"
 assert_contains "$SCRATCHPADS" "SCRATCHPAD_PROJECTS_TMUX_SESSION" "scratchpads declares the projects tmux session"
+assert_contains "$SCRATCHPADS" "SCRATCHPAD_SESSION_MANAGER_TMUX_SESSION" "scratchpads declares the session-manager tmux template"
 assert_not_contains "$SCRATCHPADS" "SCRATCHPAD_TMUX_SESSION=" "scratchpads does not use one shared tmux session"
 assert_contains "$SCRATCHPADS" "scratchpad_codex_dotfiles" "scratchpads removes the stale Codex scratchpad rule"
 assert_contains "$SCRATCHPADS" "scratchpad_projects_tmux" "scratchpads removes the stale projects scratchpad rule"
@@ -404,6 +512,8 @@ assert_contains "$SCRATCHPADS" "infer_terminal_scratchpad_client" "scratchpads r
 assert_contains "$SCRATCHPADS" "client_session" "scratchpads infers the terminal client from scratchpad sessions"
 assert_contains "$SCRATCHPADS" "attach_dotfiles_tmux_session" "Codex scratchpad attaches to the dotfiles tmux session"
 assert_contains "$SCRATCHPADS" "attach_projects_tmux_session.*nvim" "Projects scratchpad can attach to the nvim tmux window"
+assert_contains "$SCRATCHPADS" "attach_session_manager_tmux_session" "session-manager scratchpad attaches to its dedicated tmux template"
+assert_contains "$SKHDRC" "fn - p.*scratchpads open sessions" "Fn+P opens the floating session manager"
 assert_contains "$SCRATCHPADS" "close_scratchpads_except_label" "scratchpads closes other scratchpad windows before opening"
 assert_contains "$SCRATCHPADS" "close_duplicate_scratchpads_for_label" "scratchpads closes duplicate scratchpad windows"
 assert_contains "$SCRATCHPADS" "close_duplicate_scratchpad_title_windows" "scratchpads removes same-title unlabeled launch-race windows"
@@ -471,6 +581,8 @@ else
     echo "    Actual: $APP_MRU_OUTPUT"
     ((FAILED++))
 fi
+assert_contains "$APP_MRU" "APP_MRU_SUPPRESS_FOCUS_FILE" "App MRU tracks focus events caused by its own cycle"
+assert_contains "$APP_MRU" "app_mru_focus_update_is_suppressed" "App MRU preserves cycle order across programmatic focus signals"
 
 # Test reload shortcut
 assert_contains "$SKHDRC" "alt - r.*restart-service" "Reload shortcut exists"

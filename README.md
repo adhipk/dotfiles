@@ -21,12 +21,12 @@ home/
 ├── dot_config/
 │   ├── opencode/                     # OpenCode bridge to shared agent instructions
 │   ├── symlink_nvim.tmpl              # ~/.config/nvim -> repository nvim/
-│   ├── karabiner/                     # Caps Lock Hyper/Escape remap configuration
+│   ├── karabiner/                     # Caps Lock and Right Control leader configuration
 │   ├── sesh/                          # Session picker configuration
 │   ├── skhd/                         # skhd helper scripts
 │   ├── yabai/                        # stable bridges to modular yabai helpers
 │   ├── yazi/                         # Yazi configuration
-│   ├── tmux/                         # tmux configuration
+│   ├── tmux/                         # tmux configuration and command catalog
 │   └── zsh/                          # zsh support files
 ├── dot_skhdrc
 ├── dot_yabairc
@@ -47,7 +47,7 @@ On this checkout:
 `bootstrap.sh` installs Homebrew dependencies from `Brewfile`, including Bun,
 Python, Tuxedo, the Codex CLI, and the desktop app; applies this repository with
 `./install.sh`; clones and pins the declared utility projects below
-`~/projects`; installs the declared tmux plugins and command center; builds the
+`~/projects`; installs the declared tmux plugins and searchable command catalog; builds the
 shortcut guide; and starts the yabai and skhd launch services.
 
 A real `./install.sh` or `make install` reloads the active tmux server and sends
@@ -201,29 +201,40 @@ skills and `home/dot_agents/docs/` for centralized agent-readable
 documentation. Managed symlinks expose the same `AGENTS.md` as Codex's
 `~/.codex/AGENTS.md`, Claude Code's `~/.claude/CLAUDE.md`, and OpenCode's
 `~/.config/opencode/AGENTS.md`, so every installed agent receives one policy.
-The managed OpenCode configuration also points its personal agent at todo.txt
-and removes the former Todoist-specific task prompt.
+The global `$todo` skill maps `@todo` requests into repo-targeted dependency
+graphs and durable agent handoffs. The managed OpenCode configuration uses the
+same shared task policy and removes the former Todoist-specific task prompt.
 
 ## Canonical Tasks
 
-Todo.txt is the task system of record. Each project or tmux session working
-directory owns its `./todo.txt` and `./done.txt`. The managed `todo` command
-from the pinned `tuxedo-project-todo` checkout resolves those paths from the
-caller's current directory and serializes agent CLI operations; running it
-without arguments opens Tuxedo there.
+Todo.txt is the task system of record. Every repository and agent shares
+`~/.agents/tasks/todo.txt`, `done.txt`, `handoffs/`, and one write lock. The
+managed `todo` command from the pinned `tuxedo-project-todo` checkout resolves
+that store independently of the caller's working directory; running it without
+arguments opens Tuxedo on the global queue.
+
+Long-running Tuxedo views and read-only commands do not hold the agent mutation
+lock; only short one-shot writes are serialized. The managed
+`~/.config/git/ignore` excludes legacy repo-local `todo.txt`, `done.txt`,
+`handoffs/`, and `.agent-write-lock/` state machine-wide, so repositories do
+not need task-specific ignore rules.
 
 ```bash
 todo
 todo ls --json
-todo add "(B) $(date +%F) Describe the outcome +project @agent id:$(uuidgen) owner:codex"
-todo do 1
+todo add "(B) $(date +%F) Describe the outcome +project @agent id:$(uuidgen) owner:codex repo:$PWD status:ready"
+todo task-status UUID running
+todo handoff get UUID
+todo task-done UUID
 ```
 
 Tuxedo does not auto-archive completed entries. Use `todo archive` explicitly
-when you want to move completed lines to `done.txt`. Agent guidance requires a
-fresh task-number lookup before numbered mutations because todo.txt numbers are
-physical line positions. Tmux-accessible apps inherit the session's working
-directory unless another root is requested explicitly.
+when you want to move completed lines to `done.txt`. Stable-ID wrapper commands
+avoid leaking physical todo.txt line numbers into concurrent agent workflows.
+An `@todo` request uses the global `$todo` skill to add a shared `flow:`, infer
+`depends:` edges, run ready agents, and copy each completed handoff into its
+dependents. Tmux-accessible apps still inherit the session's working directory
+unless another root is requested explicitly.
 
 ## Shell Secrets
 
@@ -269,22 +280,31 @@ bundle ID.
 - hold `caps lock`: emit the currently reserved Hyper chord (`ctrl + opt + cmd`); no active shortcuts consume it
 - Option-centered chords are the sparse global layer for app focus plus macOS window, space, HUD, and reload actions
 - Left Command remains application-local; Ghostty uses `cmd + backtick/1/2/3` to cycle terminal/Codex/Neovim/Tuxedo tmux windows by type and `cmd + b` / `cmd + shift + b` for Yazi views
-- Right Command is a deliberately small Ghostty-only maintenance layer: `right cmd + d` duplicates the current typed tmux window, `right cmd + r` renames it, `right cmd + s` opens sesh, and `right cmd + space` opens the command center; the same right-side chords pass through in other apps, and sided Option is reserved
+- Right Command is a deliberately small Ghostty-only maintenance layer: `right cmd + d` duplicates the current typed tmux window, `right cmd + r` renames it, `right cmd + s` opens sesh, `right cmd + space` searches tmux commands in Telescope, and `right cmd + h` opens the vanilla-tmux agent hub with repository groups, attention state, pane preview, and explicit replies; the same right-side chords pass through in other apps, and sided Option is reserved
 - Control is the terminal layer: `ctrl + 0/1/2/3` cycles typed windows, `ctrl + shift + 0/1/2/3` creates them, and `ctrl + a` enters tmux's prefix namespace
-- Fn is reserved for transient scratchpads; native macOS screenshot chords remain on `cmd + shift + 3/4`
+- outside Ghostty, tap `right control` to open a transient Vim layer for the active text input: `h/j/k/l` move by character/line, `b/w/e` by word, `0/$` to line bounds, `g/G` to document bounds, and `{`/`}` by paragraph; supported Shift-modified motions select text, while Escape, an unrelated key, or the timeout exits the layer
+- Fn owns the dotfiles scratchpad on comma, the floating session manager on `p`, and dynamic open tmux window slots on `1..9`; native macOS screenshot chords remain on `cmd + shift + 3/4`
 - `alt + n`: create and focus a space, moving the focused non-scratchpad window there only when the current space has another non-scratchpad window
+- `cmd + alt + n`: run the active app's normal `cmd + n`, then move the new window to a newly created space
 - `alt + backtick`: focus non-scratchpad Ghostty windows, skipping task windows titled like `nvim`, `vim`, `codex`, `claude`, or Codex's `Action Required` status
-- `alt + 1..4`: focus browser, editor, Teams, or Slack
+- `alt + 1..4`: focus browser, editor, Teams, or Slack; entering an app restores
+  its most-recent window, while repeated presses select and promote its
+  least-recently-used eligible window
 - normal Ghostty windows use a transparent background and keep their tmux-colored JankyBorder; scratchpads are borderless, opaque black panels with balanced terminal padding, rounded corners, and a native shadow
 - ordinary new tmux sessions start with `terminal` at `0`, `codex` at `1`, `nvim` at `2`, and `tuxedo` at `3`; command sessions and managed `hs-*` sessions are left unchanged
 - `ctrl + 0/1/2/3` in tmux cycles windows by `terminal`/`codex`/`nvim`/`tuxedo` type; `ctrl + shift + 0/1/2/3` creates that type in the current pane's directory and switches to it, while `ctrl + 4..9` remains direct index switching
-- `ctrl + a`, then `space`, opens the repo-owned command center for session/window/pane lifecycle, saved state, and React-like workspace layouts
-- `ctrl + a`, then `L`, and the command center's Sessions > Last action use tmux's per-client history; closing a session keeps the client inside tmux and selects a surviving session instead of detaching
+- `ctrl + a`, then `space`, opens the real Neovim Telescope UI over live tmux bindings and the curated session/window/pane, saved-state, and React-like workspace actions; search matches descriptions, shortcuts, and actual tmux command text
+- `ctrl + a`, then `g`, or `right cmd + h`, opens the persistent `hub` tmux session: its live Neovim dashboard starts with a compact project, agent, todo, and stale-session overview; complete inventories remain available through searchable drilldowns
+- tap `right control` in Ghostty for the same tmux prefix as `ctrl + a`; then press `s` for Sesh or `space` for Telescope command search (holding Right Control still behaves as Control, matching the global Vim leader behavior outside Ghostty)
+- `ctrl + a`, then `L`, and the searchable `Sessions › Last` action use tmux's per-client history; closing a session keeps the client inside tmux and selects a surviving session instead of detaching
 - `tmux-workspace open project --root DIR` builds the managed `.tmux.tsx` project layout; applying it again preserves running panes, while `repair --yes` rebuilds only drifted managed windows and `--adopt` is required before taking over a same-named unmanaged session
-- the minimal tmux bar stays at the bottom and centers `~ · codex · nvim · tuxedo`; its left label substitutes the active folder for generated numeric sessions and omits redundant `session · folder` pairs; the foreground-only active label and normal focused Ghostty borders share each session's accent, while scratchpads suppress their border; `Ctrl-a ,` renames a tab and starts Codex renames from its pane title
+- the minimal tmux bar stays at the bottom and centers labels resolved from each active pane's real foreground process (`~` for a bare shell, with generic Node/Bun/Python launchers unwrapped to the CLI they run); a twelve-color Catppuccin rotation distinguishes window indices and bold marks the current one; its left label substitutes the active folder for generated numeric sessions and omits redundant `session · folder` pairs; normal focused Ghostty borders keep the session accent while scratchpads suppress their border; `Ctrl-a ,` renames a tab and starts Codex renames from its pane title
 - `right cmd + d` or Command Center > Windows > Duplicate creates another typed terminal/Codex/Neovim/Tuxedo window in the active pane's directory, gives it a readable numeric suffix, and keeps type cycling intact
 - `fn + comma`: open the black terminal scratchpad and switch to the `dotfiles` tmux session with `terminal`, `codex`, `nvim`, and `tuxedo` windows
-- `fn + 1`: open the same black terminal scratchpad and switch to the `projects` tmux session with `terminal`, `codex`, `nvim`, and `tuxedo` windows
+- `fn + p`: open the black session-manager scratchpad with the high-level operations overview and a terminal window; use `a`/`t`/`s` for full inventories, `x` for one confirmed close, or `X` to mark and close several stale sessions
+- `fn + 1..9`: focus open normal tmux Ghostty windows in creation order; detached persistent sessions, scratchpads, and non-tmux terminal windows are skipped
+- `fn + tab`: cycle forward through those same open tmux windows and wrap after the last
+- `fn + shift + 1/2/3/4`: save full screen, copy full screen, save a selection, or copy a selection using the native macOS screenshot flow
 - `option + shift + arrows` or `option + shift + h/j/k/u` resizes the current macOS window; `option + shift + [` / `]` moves it between displays
 - The disabled Projects module owns ProjectDeck and the project-context CLI; `modules/projects/bin/projects` and `make build-projectdeck` remain available for explicit experiments without installing global commands
 - broader tmux lifecycle actions stay discoverable under `ctrl + a` and `ctrl + a`, then `space`, rather than occupying Hyper

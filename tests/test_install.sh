@@ -249,10 +249,16 @@ assert_contains "$COLD_HOME/.agents/AGENTS.md" "Canonical Task Tracking" "clean 
 assert_contains "$COLD_HOME/.agents/AGENTS.md" "Time-boxed Delivery" "clean apply installs global checkpoint behavior"
 assert_contains "$COLD_HOME/.agents/AGENTS.md" "Checkpoint expiry is never a termination condition" "clean apply installs recurring checkpoint behavior"
 assert_contains "$COLD_HOME/.agents/AGENTS.md" "ordinary untimed agent behavior" "clean apply makes the optional timer fail open"
+assert_contains "$COLD_HOME/.agents/AGENTS.md" "~/.agents/tasks/todo.txt" "clean apply installs the global task-store policy"
+assert_contains "$COLD_HOME/.config/git/ignore" '^todo\.txt$' "clean apply globally ignores legacy repo-local todo ledgers"
+assert_contains "$COLD_HOME/.config/git/ignore" '^\.agent-write-lock/$' "clean apply globally ignores legacy repo-local agent locks"
+assert_contains "$COLD_HOME/.agents/AGENTS.md" 'user request beginning with `@todo`' "clean apply installs @todo orchestration policy"
+assert_contains "$COLD_HOME/.agents/skills/todo/SKILL.md" "Global Todo Orchestrator" "clean apply installs the global todo skill"
+assert_contains "$COLD_HOME/.agents/skills/todo/references/task-contract.md" "Global agent task contract" "clean apply installs the todo dependency and handoff contract"
 assert_symlink_target "$COLD_HOME/.codex/AGENTS.md" "$COLD_HOME/.agents/AGENTS.md" "clean apply links Codex to shared agent guidance"
 assert_symlink_target "$COLD_HOME/.claude/CLAUDE.md" "$COLD_HOME/.agents/AGENTS.md" "clean apply links Claude to shared agent guidance"
 assert_symlink_target "$COLD_HOME/.config/opencode/AGENTS.md" "$COLD_HOME/.agents/AGENTS.md" "clean apply links OpenCode to shared agent guidance"
-assert_contains "$COLD_HOME/.config/opencode/opencode.json" "active project's todo\\.txt" "clean apply configures the OpenCode personal agent for project-local todo.txt"
+assert_contains "$COLD_HOME/.config/opencode/opencode.json" "machine-wide agent queue" "clean apply configures the OpenCode personal agent for the shared queue"
 assert_not_contains "$COLD_HOME/.config/opencode/opencode.json" 'Todoist' "clean apply removes OpenCode's Todoist task guidance"
 assert_symlink_target "$COLD_HOME/bin/todo" "$COLD_HOME/projects/tuxedo-project-todo/bin/todo" "clean apply links the canonical todo wrapper to its pinned project"
 assert_symlink_target "$COLD_HOME/bin/chezmoi-todo" "$COLD_HOME/projects/tuxedo-project-todo/bin/todo" "clean apply links chezmoi plugin dispatch to the pinned todo project"
@@ -283,7 +289,9 @@ assert_executable "$COLD_HOME/bin/tmux-session-template" "clean apply installs t
 assert_executable "$COLD_HOME/bin/tmux-session-picker" "clean apply installs the sesh tmux-session picker"
 assert_executable "$COLD_HOME/bin/tmux-sessionizer" "clean apply installs the general sesh sessionizer"
 assert_executable "$COLD_HOME/bin/tmux-sessionizer-zoxide" "clean apply installs the project-aware sesh sessionizer"
+assert_executable "$COLD_HOME/bin/tmux-hub" "clean apply installs the centralized tmux hub"
 assert_executable "$COLD_HOME/bin/tmux-workspace" "clean apply installs the declarative tmux workspace helper"
+assert_executable "$COLD_HOME/bin/daemon" "clean apply installs daemon as a shell-independent command"
 assert_executable "$COLD_HOME/bin/tmux-border-accent" "clean apply installs the tmux border helper"
 assert_executable "$COLD_HOME/bin/tmux-yazi-pane" "clean apply installs the tmux Yazi helper"
 assert_executable "$COLD_HOME/bin/setup-yabai-sa" "clean apply installs the yabai scripting-addition setup helper"
@@ -297,6 +305,7 @@ assert_not_contains "$COLD_HOME/bin/tmux-session-template" "[Aa]writ" "clean app
 assert_missing "$COLD_HOME/bin/awrit" "clean apply does not install an Awrit launcher"
 assert_contains "$COLD_HOME/bin/tmux-session-template" "duplicate_window_type" "clean apply installs typed tmux duplication"
 assert_contains "$COLD_HOME/.tmux.conf" 'S-F4.*tmux-session-template duplicate' "clean apply installs the Right Command duplicate bridge"
+assert_contains "$COLD_HOME/.tmux.conf" 'S-F8.*tmux-hub open' "clean apply installs the Right Command hub bridge"
 assert_contains "$COLD_HOME/.tmux.conf" '^set-option -g detach-on-destroy off$' "clean apply keeps tmux attached across session destruction"
 assert_contains "$COLD_HOME/.tmux.conf" 'L switch-client -l' "clean apply keeps last-session selection local to each tmux client"
 assert_contains "$COLD_HOME/.tmux.conf" 'Rename #S · #{b:pane_current_path}' "clean apply installs the contextual session rename prompt"
@@ -313,13 +322,20 @@ assert_contains "$COLD_HOME/.config/tmux/which-key.yaml" "cycle.*tuxedo" "clean 
 assert_contains "$COLD_HOME/.config/tmux/which-key.yaml" "new.*tuxedo" "clean apply installs command-center Tuxedo creation"
 assert_not_contains "$COLD_HOME/.config/tmux/which-key.yaml" "[Aa]writ" "clean apply omits command-center Awrit actions"
 assert_contains "$COLD_HOME/.config/tmux/which-key.yaml" "tmux-sessionizer-zoxide" "clean apply points the command center at the built-in sesh picker"
+assert_contains "$COLD_HOME/.config/tmux/which-key.yaml" "tmux-hub open" "clean apply exposes the centralized hub in command search"
 assert_contains "$COLD_HOME/.config/sesh/sesh.toml" '^\[tui\]$' "clean apply installs the managed sesh picker config"
 assert_contains "$COLD_HOME/.config/sesh/sesh.toml" '^strict_mode = true$' "clean apply installs strict sesh config validation"
 assert_not_contains "$COLD_HOME/.config/sesh/sesh.toml" '^\[default_session\]$' "clean apply does not install a default sesh layout"
 assert_not_contains "$COLD_HOME/.config/sesh/sesh.toml" '^\[\[window\]\]$' "clean apply does not install mutable sesh window templates"
 assert_not_contains "$COLD_HOME/.config/sesh/sesh.toml" '^\[\[session\]\]$' "clean apply does not install sessions that can mutate the caller"
-assert_contains "$COLD_HOME/.skhdrc" "scratchpads open projects" "clean apply installs project scratchpad bindings"
+assert_contains "$COLD_HOME/.skhdrc" "focus-open-tmux-window.sh 1" "clean apply installs open tmux window Fn slots"
+assert_contains "$COLD_HOME/.skhdrc" "focus-open-tmux-window.sh cycle" "clean apply installs Fn+Tab tmux window cycling"
+assert_contains "$COLD_HOME/.skhdrc" "fn - p.*scratchpads open sessions" "clean apply installs the Fn+P session manager"
+assert_not_contains "$COLD_HOME/.skhdrc" "fn - 1.*scratchpads open projects" "clean apply leaves the projects scratchpad off Fn+1"
+assert_contains "$COLD_HOME/bin/scratchpads" "SCRATCHPAD_SESSION_MANAGER_TMUX_SESSION" "clean apply installs the session-manager tmux template"
+assert_contains "$COLD_HOME/bin/tmux-hub" "close requires an exact session ID" "clean apply installs safe hub session closure"
 assert_contains "$COLD_HOME/.skhdrc" 'rcmd - d \[' "clean apply installs the Ghostty-only Right Command layer"
+assert_contains "$COLD_HOME/.skhdrc" 'rcmd - h \[' "clean apply installs the Right Command hub chord"
 assert_contains "$COLD_HOME/.skhdrc" '^[[:space:]]*\* ~$' "clean apply preserves Right Command passthrough outside Ghostty"
 assert_not_contains "$COLD_HOME/.skhdrc" '^ctrl + alt + cmd' "clean apply reserves the global Hyper layer"
 assert_not_contains "$COLD_HOME/.skhdrc" '\.config/yabai/projects ' "clean apply leaves project contexts dormant"
@@ -606,6 +622,25 @@ if jq -e '
     ((PASSED++))
 else
     echo "  ✗ clean apply did not reconstruct the unconditional Caps Lock mapping"
+    ((FAILED++))
+fi
+
+if jq -e '
+    .profiles[] | select(.selected == true)
+    | [.complex_modifications.rules[]
+        | select(.description == "Right Control: transient Vim motion leader outside Ghostty")
+        | .manipulators[]
+      ] as $vim
+    | ([$vim[] | select(.from.key_code == "right_control")][0].to_if_alone[0].set_variable.expression == "system.now.milliseconds + 1200")
+      and ([$vim[] | select(.from.key_code == "h")][0].to[0].key_code == "left_arrow")
+      and ([$vim[] | select(.from.key_code == "w")][0].to[0].modifiers == ["left_option"])
+      and ([$vim[] | select(.from.key_code == "0")][0].to[0].modifiers == ["left_command"])
+      and ([$vim[] | select(.from.any == "key_code")][0].to[1].from_event == true)
+' "$COLD_HOME/.config/karabiner/karabiner.json" >/dev/null; then
+    echo "  ✓ clean apply installs the transient Right Control Vim motion leader"
+    ((PASSED++))
+else
+    echo "  ✗ clean apply did not reconstruct the Vim motion leader"
     ((FAILED++))
 fi
 
