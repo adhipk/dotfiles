@@ -22,10 +22,11 @@ Chezmoi applies it to `~/.agents`.
 
 ## Canonical Task Tracking
 
-- The current project or tmux session working directory owns its durable `./todo.txt` and `./done.txt`. Run the managed `todo` wrapper from that root for every read and write; never use raw redirects or bare `tuxedo`. The wrapper pins Tuxedo to that directory and serializes agent mutations.
-- At the start of nontrivial change work, inspect `todo ls --json` from the active project root. Reuse an open matching task or add one line per distinct deliverable using a priority, creation date, `+project`, `@agent`, stable `id:<uuid>`, and `owner:<agent>`. Do not create entries for trivial read-only questions.
-- Re-resolve a task's current number immediately before changing it. After validation succeeds, run `todo do N`; never archive automatically.
-- Keep blocked tasks open with `status:blocked` and a concise reason. Do not modify unrelated tasks.
+- The machine-wide `~/.agents/tasks/todo.txt`, `done.txt`, and `handoffs/` directory are the durable task source of truth for every repository. Run the managed `todo` wrapper from any working directory for every read and write; never use raw redirects or bare `tuxedo`. The wrapper pins Tuxedo to that shared store; persistent Tuxedo views and reads are lock-free, while short mutations are serialized.
+- At the start of nontrivial change work, resolve `repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"` and inspect only its open tasks with `todo ls "repo:$repo_root" --json | jq '[.[] | select(.done == false)]'`. Do not load the unfiltered machine-wide queue into a project context unless the user explicitly asks for a cross-repository view. Reuse an open task only when it covers the same outcome and repository, or add one line per distinct deliverable using a priority, creation date, `+project`, `@agent`, stable `id:<uuid>`, `owner:<agent>`, and absolute `repo:<path>`. Do not create entries for trivial read-only questions.
+- Prefer stable-ID mutations: `todo task-status ID STATUS`, `todo handoff get ID`, and, after validation succeeds, `todo task-done ID`. Never archive automatically.
+- Keep blocked tasks open with `status:blocked` and a concise failure handoff. Do not modify unrelated tasks.
+- Treat a user request beginning with `@todo` as an invocation of the global `$todo` skill. It creates repo-targeted tasks under one `flow:`, infers the dependency DAG, delegates ready work when the harness supports agents, and copies each dependency's durable handoff into downstream prompts.
 - Ephemeral plans may support execution, but they never replace, duplicate, or split from the canonical todo.txt state.
 - When an app is made accessible through tmux, launch it in the same working directory as the session's existing windows unless the user explicitly requests another root.
 

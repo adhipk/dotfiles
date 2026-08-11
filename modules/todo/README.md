@@ -24,8 +24,10 @@ this adapter never copies or modifies it. Use the external project's
 command behavior.
 
 Disabling `modules.todo` removes both managed symlinks while preserving the
-external checkout and every project's cwd-relative `todo.txt` and `done.txt`
-ledgers. `.agent-write-lock` remains transient command-owned state.
+external checkout and the machine-wide `~/.agents/tasks` ledger and handoffs.
+The shared `.agent-write-lock` remains transient command-owned state. It is
+held only around short mutations; persistent Tuxedo views and read-only
+commands stay available while agents write.
 
 ## Chezmoi integration
 
@@ -48,5 +50,6 @@ continues rendering safely after this adapter module is removed.
 ```
 
 The contract test renders both symlinks in an isolated home, verifies direct
-and native `chezmoi todo` dispatch, checks disable-time data preservation, and
-proves the disabled parent remains healthy after removing the module folder.
+and native `chezmoi todo` dispatch, checks shared-store preservation when
+disabled, and proves the disabled parent remains healthy after removing the
+module folder.

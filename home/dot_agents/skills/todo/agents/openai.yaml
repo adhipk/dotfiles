@@ -1,0 +1,4 @@
+interface:
+  display_name: "Global Todo Orchestrator"
+  short_description: "Dispatch dependency-aware tasks across repos"
+  default_prompt: "Use $todo to split this request into repo-targeted agent tasks and orchestrate their handoffs."

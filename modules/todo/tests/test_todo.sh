@@ -51,12 +51,12 @@ render_parent() {
 
 printf '%s\n' '=============================' 'todo Adapter Contract Tests' '============================='
 
-manifest_values="$(yq -r '[.id, .dataKey, .distribution.chezmoiCommand, .state.preserved[0], .state.preserved[1], .state.ephemeral[0]] | join("|")' "$MODULE_DIR/module.yaml" 2>/dev/null || true)"
-if [[ "$manifest_values" == 'todo|modules.todo|todo|./todo.txt|./done.txt|./.agent-write-lock' ]]; then
+manifest_values="$(yq -r '[.id, .dataKey, .distribution.chezmoiCommand, .state.preserved[0], .state.preserved[1], .state.preserved[2], .state.ephemeral[0]] | join("|")' "$MODULE_DIR/module.yaml" 2>/dev/null || true)"
+if [[ "$manifest_values" == 'todo|modules.todo|todo|~/.agents/tasks/todo.txt|~/.agents/tasks/done.txt|~/.agents/tasks/handoffs|~/.agents/tasks/.agent-write-lock' ]]; then
   pass "manifest preserves todo identity, dispatch, and state contract"
 else
   fail "manifest preserves todo identity, dispatch, and state contract" \
-    'todo|modules.todo|todo|./todo.txt|./done.txt|./.agent-write-lock' "$manifest_values"
+    'todo|modules.todo|todo|~/.agents/tasks/todo.txt|~/.agents/tasks/done.txt|~/.agents/tasks/handoffs|~/.agents/tasks/.agent-write-lock' "$manifest_values"
 fi
 
 rendered_path="$(HOME="$DESTINATION" chezmoi -S "$DOTFILES_DIR" -D "$DESTINATION" execute-template <"$MODULE_DIR/targets/todo-path.tmpl")"
@@ -121,8 +121,11 @@ else
   fail "chezmoi todo dispatches through the external command" "$PROJECT_DIR|plugin-dispatch" "$(tail -n 1 "$CALLS_FILE")"
 fi
 
-printf 'keep todo\n' >"$PROJECT_DIR/todo.txt"
-printf 'keep done\n' >"$PROJECT_DIR/done.txt"
+SHARED_STORE="$DESTINATION/.agents/tasks"
+mkdir -p "$SHARED_STORE/handoffs"
+printf 'keep todo\n' >"$SHARED_STORE/todo.txt"
+printf 'keep done\n' >"$SHARED_STORE/done.txt"
+printf 'keep handoff\n' >"$SHARED_STORE/handoffs/task.md"
 if render_parent false; then
   pass "disabled parent render succeeds"
 else
@@ -135,10 +138,12 @@ if [[ -x "$EXTERNAL_COMMAND" ]]; then
 else
   fail "disabled module preserves the external checkout" "external command present" "external command missing"
 fi
-if [[ "$(cat "$PROJECT_DIR/todo.txt")" == 'keep todo' && "$(cat "$PROJECT_DIR/done.txt")" == 'keep done' ]]; then
-  pass "disabled module preserves project task ledgers"
+if [[ "$(cat "$SHARED_STORE/todo.txt")" == 'keep todo' ]] \
+  && [[ "$(cat "$SHARED_STORE/done.txt")" == 'keep done' ]] \
+  && [[ "$(cat "$SHARED_STORE/handoffs/task.md")" == 'keep handoff' ]]; then
+  pass "disabled module preserves the shared task store"
 else
-  fail "disabled module preserves project task ledgers" "both ledger contents" "ledger missing or changed"
+  fail "disabled module preserves the shared task store" "ledgers and handoff contents" "shared state missing or changed"
 fi
 
 REMOVAL_REPO="$TEMP_DIR/removal-repo"

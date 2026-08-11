@@ -1,0 +1,9 @@
+**/.claude/settings.local.json
+
+# Agent task state is centralized under ~/.agents/tasks. Ignore legacy or
+# accidentally created repository-local ledgers everywhere without requiring
+# one .gitignore edit per checkout.
+todo.txt
+done.txt
+.agent-write-lock/
+handoffs/

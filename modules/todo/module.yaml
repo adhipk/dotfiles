@@ -1,8 +1,8 @@
 apiVersion: dotfiles/v1
 kind: Module
 id: todo
-version: 1.1.0
-description: Conditional adapters for the independently distributed Tuxedo project todo command.
+version: 1.2.0
+description: Conditional adapters for the independently distributed machine-wide agent todo command.
 dataKey: modules.todo
 distribution:
   standalone: false
@@ -15,10 +15,11 @@ requires:
     - tuxedo
 state:
   preserved:
-    - ./todo.txt
-    - ./done.txt
+    - ~/.agents/tasks/todo.txt
+    - ~/.agents/tasks/done.txt
+    - ~/.agents/tasks/handoffs
   ephemeral:
-    - ./.agent-write-lock
+    - ~/.agents/tasks/.agent-write-lock
 commands:
   - name: todo
     source: targets/todo-path.tmpl
