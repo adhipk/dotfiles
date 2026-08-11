@@ -1,0 +1,3 @@
+{{- if .modules.qutebrowser.enabled -}}
+{{ includeTemplate "../modules/qutebrowser/config/config.py" . }}
+{{- end -}}

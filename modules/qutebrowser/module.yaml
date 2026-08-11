@@ -1,0 +1,26 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: qutebrowser
+version: 1.0.0
+description: Adds a Chrome-familiar macOS shortcut layer without replacing qutebrowser's native keyboard bindings.
+dataKey: modules.qutebrowser
+distribution:
+  standalone: true
+  platform: macos
+requires:
+  executables: []
+state:
+  preserved:
+    - ~/.qutebrowser/bookmarks
+    - ~/.qutebrowser/greasemonkey
+    - ~/.qutebrowser/quickmarks
+    - ~/Library/Application Support/qutebrowser
+  ephemeral: []
+targets:
+  - service: qutebrowser
+    source: config/config.py
+    destination: ~/.qutebrowser/config.py
+    bridge: home/private_dot_qutebrowser/config.py.tmpl
+    ownership: exclusive
+tests:
+  - tests/test_module.sh

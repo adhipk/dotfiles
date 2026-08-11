@@ -13,6 +13,8 @@ modules:
     enabled: true
   dotfilesControlCenter:
     enabled: true
+  settings:
+    enabled: true
   shortcutGuide:
     enabled: true
   appFocus:
@@ -52,6 +54,8 @@ modules:
   ghCreateRepo:
     enabled: true
   macosDefaultApps:
+    enabled: true
+  qutebrowser:
     enabled: true
   projects:
     enabled: false
