@@ -59,6 +59,7 @@ echo "================================"
 
 assert_file "$MODULE_DIR/module.yaml" "module manifest exists"
 assert_file "$MODULE_DIR/bin/tmux-yazi-pane" "module owns its runtime command"
+assert_file "$MODULE_DIR/bin/tmux-yazi-open" "module owns its Neovim opener"
 assert_file "$MODULE_DIR/targets/tmux.conf.tmpl" "module owns its tmux bindings"
 assert_file "$MODULE_DIR/targets/ghostty.conf.tmpl" "module owns its Ghostty bindings"
 assert_file "$MODULE_DIR/targets/tmux-which-key-new-window.yaml.tmpl" "module owns its Yazi window menu item"
@@ -73,6 +74,9 @@ fi
 assert_contains "$DOTFILES_DIR/home/bin/executable_tmux-yazi-pane.tmpl" \
     'includeTemplate "../modules/tmux-yazi/bin/tmux-yazi-pane"' \
     "stable command path is a thin module bridge"
+assert_contains "$DOTFILES_DIR/home/bin/executable_tmux-yazi-open.tmpl" \
+    'includeTemplate "../modules/tmux-yazi/bin/tmux-yazi-open"' \
+    "Neovim opener path is a thin module bridge"
 assert_contains "$DOTFILES_DIR/home/dot_tmux.conf.tmpl" \
     'includeTemplate "../modules/tmux-yazi/targets/tmux.conf.tmpl"' \
     "tmux mounts the module through one binding fragment"
@@ -95,6 +99,11 @@ if [[ -x "$DESTINATION/bin/tmux-yazi-pane" ]]; then
 else
     fail "enabled profile installs the helper as executable" "executable helper" "missing or not executable"
 fi
+if [[ -x "$DESTINATION/bin/tmux-yazi-open" ]]; then
+    pass "enabled profile installs the Neovim opener as executable"
+else
+    fail "enabled profile installs the Neovim opener as executable" "executable helper" "missing or not executable"
+fi
 if HOME="$DESTINATION" "$DESTINATION/bin/tmux-yazi-pane" --help >/dev/null 2>&1; then
     pass "installed helper resolves its managed standard-library dependencies"
 else
@@ -113,6 +122,7 @@ chezmoi \
     apply --exclude=scripts,externals --force >/dev/null
 
 assert_absent "$DESTINATION/bin/tmux-yazi-pane" "disabled profile removes the previously installed helper"
+assert_absent "$DESTINATION/bin/tmux-yazi-open" "disabled profile removes the previously installed Neovim opener"
 
 if ! rg -q 'tmux-yazi-pane|Open Yazi|Toggle Yazi|tuxedo yazi' "$DESTINATION/.tmux.conf"; then
     pass "disabled profile removes tmux integrations"

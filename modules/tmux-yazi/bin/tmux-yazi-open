@@ -1,0 +1,173 @@
+#!/usr/bin/env bash
+# man-me: name=tmux-yazi-open
+# man-me: category=Terminal and Sessions
+# man-me: usage=tmux-yazi-open FILE...
+# man-me: description=Open files from the tmux Yazi pane in this session's Neovim window.
+# man-me: tags=tmux yazi nvim file open editor
+
+set -euo pipefail
+
+DOTFILES_LIB_DIR="${DOTFILES_LIB_DIR:-$HOME/.local/lib/dotfiles}"
+for library in core.sh tmux.sh; do
+  if [[ ! -r "$DOTFILES_LIB_DIR/$library" ]]; then
+    printf 'tmux-yazi-open: required dotfiles library not found: %s\n' "$DOTFILES_LIB_DIR/$library" >&2
+    exit 1
+  fi
+  # shellcheck source=/dev/null
+  source "$DOTFILES_LIB_DIR/$library"
+done
+
+if [[ -n "${TMUX_YAZI_OPEN_SOCKET:-}" && -z "${DOTFILES_TMUX_SOCKET_NAME:-}" ]]; then
+  export DOTFILES_TMUX_SOCKET_NAME="$TMUX_YAZI_OPEN_SOCKET"
+fi
+
+WINDOW_TYPE_OPTION="@dotfiles_window_type"
+TEMPLATE_HELPER="${TMUX_SESSION_TEMPLATE_BIN:-$HOME/bin/tmux-session-template}"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  tmux-yazi-open FILE...
+
+Open FILEs as tabs in the current tmux session's running Neovim window.
+If the session has no running typed Neovim window, create one first.
+EOF
+}
+
+nvim_windows() {
+  local session_id="$1"
+
+  dotfiles_tmux_cmd list-windows -t "$session_id" \
+    -F "#{window_id}|#{${WINDOW_TYPE_OPTION}}|#{window_name}" \
+    | awk -F '|' '$2 == "nvim" || ($2 == "" && $3 ~ /^nvim(-[0-9]+)?$/) { print $1 }'
+}
+
+nvim_pane_in_window() {
+  local window_id="$1"
+
+  dotfiles_tmux_cmd list-panes -t "$window_id" -F '#{pane_id}|#{pane_current_command}|#{pane_active}' \
+    | awk -F '|' '$2 == "nvim" { if ($3 == "1") { print $1; exit } if (first == "") first = $1 } END { if (first != "") print first }' \
+    | head -n 1
+}
+
+find_running_nvim() {
+  local session_id="$1"
+  local window_id
+  local pane_id
+
+  while IFS= read -r window_id; do
+    [[ -n "$window_id" ]] || continue
+    pane_id=$(nvim_pane_in_window "$window_id")
+    if [[ -n "$pane_id" ]]; then
+      dotfiles_tmux_cmd set-option -wq -t "$window_id" "$WINDOW_TYPE_OPTION" nvim
+      printf '%s|%s\n' "$window_id" "$pane_id"
+      return 0
+    fi
+  done < <(nvim_windows "$session_id")
+
+  return 1
+}
+
+ensure_running_nvim() {
+  local session_id="$1"
+  local source_pane="$2"
+  local target=""
+  local attempt
+
+  target=$(find_running_nvim "$session_id" || true)
+  if [[ -n "$target" ]]; then
+    printf '%s\n' "$target"
+    return 0
+  fi
+
+  [[ -x "$TEMPLATE_HELPER" ]] || {
+    printf 'tmux-yazi-open: tmux session template helper not found: %s\n' "$TEMPLATE_HELPER" >&2
+    return 1
+  }
+  "$TEMPLATE_HELPER" new "$session_id" nvim "$source_pane"
+
+  for attempt in {1..40}; do
+    target=$(find_running_nvim "$session_id" || true)
+    if [[ -n "$target" ]]; then
+      printf '%s\n' "$target"
+      return 0
+    fi
+    sleep 0.05
+  done
+
+  printf 'tmux-yazi-open: Neovim did not become ready in session %s\n' "$session_id" >&2
+  return 1
+}
+
+absolute_path() {
+  local path="$1"
+  local directory
+  local base
+
+  [[ ! "$path" =~ [[:cntrl:]] ]] || {
+    printf 'tmux-yazi-open: filenames containing control characters are not supported\n' >&2
+    return 1
+  }
+  if [[ "$path" == /* ]]; then
+    printf '%s\n' "$path"
+    return 0
+  fi
+
+  directory=$(dirname -- "$path")
+  base=$(basename -- "$path")
+  directory=$(cd "$directory" && pwd -P)
+  printf '%s/%s\n' "$directory" "$base"
+}
+
+open_file_in_nvim() {
+  local pane_id="$1"
+  local path="$2"
+  local escaped
+  local command
+
+  escaped=${path//\'/\'\'}
+  command=":execute 'tab drop ' . fnameescape('$escaped')"
+  dotfiles_tmux_cmd send-keys -t "$pane_id" Escape Escape
+  dotfiles_tmux_cmd send-keys -t "$pane_id" -l "$command"
+  dotfiles_tmux_cmd send-keys -t "$pane_id" Enter
+}
+
+main() {
+  local source_pane="${TMUX_PANE:-}"
+  local session_id
+  local target
+  local window_id
+  local nvim_pane
+  local file
+  local path
+
+  case "${1:-}" in
+    -h|--help|help)
+      usage
+      return 0
+      ;;
+  esac
+  [[ $# -gt 0 ]] || {
+    usage >&2
+    return 2
+  }
+  [[ -n "$source_pane" ]] || {
+    printf 'tmux-yazi-open: TMUX_PANE is required\n' >&2
+    return 2
+  }
+  dotfiles_require_command "${DOTFILES_TMUX_BIN:-tmux}" || return
+
+  session_id=$(dotfiles_tmux_cmd display-message -p -t "$source_pane" '#{session_id}')
+  target=$(ensure_running_nvim "$session_id" "$source_pane")
+  IFS='|' read -r window_id nvim_pane <<<"$target"
+
+  for file in "$@"; do
+    path=$(absolute_path "$file")
+    open_file_in_nvim "$nvim_pane" "$path"
+  done
+
+  dotfiles_tmux_cmd select-pane -t "$nvim_pane" >/dev/null
+  dotfiles_tmux_cmd select-window -t "$window_id" >/dev/null
+}
+
+main "$@"

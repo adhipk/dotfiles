@@ -106,7 +106,7 @@ toggle_side_pane() {
       -c "$directory" \
       -t "$source_pane" \
       -P -F '#{pane_id}' \
-      yazi "$directory"
+      env EDITOR="$HOME/bin/tmux-yazi-open" yazi "$directory"
   )
   [[ -n "$new_pane" ]] || {
     printf 'tmux-yazi-pane: tmux did not return the new pane id.\n' >&2

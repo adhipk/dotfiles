@@ -1,0 +1,7 @@
+[mgr]
+show_hidden = true
+
+[open]
+prepend_rules = [
+	{ url = "*", use = "edit" },
+]

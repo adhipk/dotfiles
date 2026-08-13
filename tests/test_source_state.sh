@@ -126,6 +126,7 @@ for file in \
     dot_config/yazi/init.lua \
     dot_config/yazi/keymap.toml \
     dot_config/yazi/package.toml \
+    dot_config/yazi/yazi.toml \
     dot_config/symlink_nvim.tmpl; do
     assert_file_exists "$DOTFILES_DIR/home/$file" "$file is declared"
 done
@@ -162,6 +163,8 @@ else
 fi
 assert_contains "$DOTFILES_DIR/home/dot_config/symlink_nvim.tmpl" '\.chezmoi\.sourceDir }}/../nvim' "Neovim config links to the repository checkout"
 assert_file_exists "$DOTFILES_DIR/nvim/init.lua" "Neovim config is stored in the repository"
+assert_contains "$DOTFILES_DIR/nvim/init.lua" "<leader>sh.*builtin.find_files { hidden = true }" "Neovim leader search hidden includes dotfiles"
+assert_contains "$DOTFILES_DIR/nvim/init.lua" "<leader>sm.*builtin.help_tags.*\[S\]earch \[M\]anual" "Neovim exposes help tags as leader search manual"
 assert_contains "$DOTFILES_DIR/home/dot_config/private_karabiner/karabiner.json" 'Caps Lock: Hyper on hold, Escape on tap' "Karabiner declares one global Caps Lock behavior"
 assert_contains "$DOTFILES_DIR/home/dot_config/private_karabiner/karabiner.json" 'Right Control: transient Vim motion leader outside Ghostty' "Karabiner declares the global Vim motion leader"
 assert_contains "$DOTFILES_DIR/home/dot_config/private_karabiner/karabiner.json" 'vim_motion_leader_expiration > system.now.milliseconds' "Vim motions are bounded by a native Karabiner timeout"
@@ -193,6 +196,8 @@ assert_contains "$DOTFILES_DIR/Brewfile" 'cask "slack"' "Slack is declared for i
 assert_contains "$DOTFILES_DIR/Brewfile" 'brew "starship"' "Starship prompt is declared in Brewfile"
 assert_contains "$DOTFILES_DIR/home/dot_config/yazi/package.toml" "orhnk/system-clipboard" "Yazi system clipboard plugin is declared"
 assert_contains "$DOTFILES_DIR/home/dot_config/yazi/keymap.toml" "plugin system-clipboard" "Yazi system clipboard keymap is declared"
+assert_contains "$DOTFILES_DIR/home/dot_config/yazi/yazi.toml" 'show_hidden = true' "Yazi shows hidden files by default"
+assert_contains "$DOTFILES_DIR/home/dot_config/yazi/yazi.toml" 'url = "\*", use = "edit"' "Yazi routes opened files through its editor"
 assert_contains "$DOTFILES_DIR/home/dot_config/zsh/zshrc.commands" "svg-png()" "svg-png shell helper is declared"
 assert_contains "$DOTFILES_DIR/home/.chezmoiexternal.toml.tmpl" 'tmux/plugins/tpm' "TPM is declared as a chezmoi external"
 assert_contains "$DOTFILES_DIR/install.sh" 'install_tmux_plugins' "installer provisions TPM-managed tmux plugins"
@@ -465,6 +470,7 @@ assert_file_missing "$DOTFILES_DIR/modules/todo/bin/todo" "todo implementation i
 assert_file_exists "$TMUX_YAZI_MODULE/module.yaml" "tmux-yazi module manifest is declared"
 assert_file_exists "$TMUX_YAZI_MODULE/README.md" "tmux-yazi module documents its boundary"
 assert_file_exists "$TMUX_YAZI_MODULE/tests/test_tmux_yazi_pane.sh" "tmux-yazi module owns its behavior test"
+assert_file_exists "$TMUX_YAZI_MODULE/tests/test_tmux_yazi_open.sh" "tmux-yazi module owns its Neovim opener test"
 assert_contains "$TMUX_YAZI_MODULE/module.yaml" '^apiVersion: dotfiles/v1$' "tmux-yazi uses the dotfiles module contract"
 assert_contains "$TMUX_YAZI_MODULE/module.yaml" 'standalone: true' "tmux-yazi declares standalone distribution"
 assert_contains "$TMUX_YAZI_MODULE/module.yaml" 'libraries:' "tmux-yazi declares its public standard-library dependency"
@@ -472,6 +478,7 @@ assert_contains "$TMUX_YAZI_MODULE/module.yaml" 'preserved: \[\]' "tmux-yazi dec
 assert_contains "$TMUX_YAZI_MODULE/module.yaml" 'tmux-pane-option:@dotfiles_yazi_side' "tmux-yazi declares its ephemeral pane marker"
 assert_contains "$DOTFILES_DIR/home/bin/executable_tmux-yazi-pane.tmpl" 'if \.modules\.tmuxYazi\.enabled' "tmux-yazi command follows module enablement"
 assert_contains "$DOTFILES_DIR/home/bin/executable_tmux-yazi-pane.tmpl" 'includeTemplate "../modules/tmux-yazi/bin/tmux-yazi-pane"' "tmux-yazi command is a thin chezmoi bridge"
+assert_contains "$DOTFILES_DIR/home/bin/executable_tmux-yazi-open.tmpl" 'includeTemplate "../modules/tmux-yazi/bin/tmux-yazi-open"' "tmux-yazi Neovim opener is a thin chezmoi bridge"
 assert_not_contains "$DOTFILES_DIR/home/bin/executable_tmux-yazi-pane.tmpl" '@dotfiles_yazi_side' "tmux-yazi bridge does not duplicate implementation"
 assert_contains "$TMUX_YAZI_MODULE/bin/tmux-yazi-pane" 'source "[$]DOTFILES_LIB_DIR/[$]library"' "tmux-yazi consumes the public standard library"
 assert_not_contains "$TMUX_YAZI_MODULE/bin/tmux-yazi-pane" '^tmux_cmd()' "tmux-yazi does not duplicate standard tmux routing"

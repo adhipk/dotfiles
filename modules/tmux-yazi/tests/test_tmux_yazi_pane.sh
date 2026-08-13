@@ -13,6 +13,7 @@ FAKE_BIN="$TEMP_DIR/bin"
 PROJECT_DIR="$TEMP_DIR/project's folder"
 TMUX_CONFIG="$TEMP_DIR/tmux.conf"
 ENTRY_LOG="$TEMP_DIR/yazi-entry.log"
+EDITOR_LOG="$TEMP_DIR/yazi-editor.log"
 
 PASSED=0
 FAILED=0
@@ -80,6 +81,7 @@ mkdir -p "$FAKE_BIN" "$PROJECT_DIR"
 cat > "$FAKE_BIN/yazi" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "${1:-}" > "$TMUX_YAZI_TEST_ENTRY_LOG"
+printf '%s\n' "${EDITOR:-}" > "$TMUX_YAZI_TEST_EDITOR_LOG"
 exec sleep 300
 EOF
 chmod +x "$FAKE_BIN/yazi"
@@ -109,6 +111,7 @@ PATH="$FAKE_BIN:$PATH" tmux -L "$SOCKET_NAME" -f "$TMUX_CONFIG" \
     new-session -d -s bootstrap "sleep 300"
 tmux_test set-environment -g PATH "$FAKE_BIN:$PATH"
 tmux_test set-environment -g TMUX_YAZI_TEST_ENTRY_LOG "$ENTRY_LOG"
+tmux_test set-environment -g TMUX_YAZI_TEST_EDITOR_LOG "$EDITOR_LOG"
 tmux_test new-session -d -s toggle -n main -c "$PROJECT_DIR"
 
 MAIN_PANE=$(tmux_test list-panes -t '=toggle:main' -F '#{pane_id}')
@@ -121,6 +124,7 @@ assert_equals "first toggle creates exactly one side pane" "2:1" "$(pane_count '
 assert_equals "new Yazi pane is focused" "$SIDE_PANE" "$(tmux_test list-panes -t '=toggle:main' -F '#{?pane_active,#{pane_id},}' | sed '/^$/d')"
 assert_equals "Yazi inherits a path containing spaces and quotes" "$(cd "$PROJECT_DIR" && pwd -P)" "$(tmux_test display-message -p -t "$SIDE_PANE" '#{pane_current_path}')"
 assert_equals "Yazi receives the current folder as its entry" "$(cd "$PROJECT_DIR" && pwd -P)" "$(cat "$ENTRY_LOG")"
+assert_equals "Yazi uses the session Neovim opener" "$HOME/bin/tmux-yazi-open" "$(cat "$EDITOR_LOG")"
 assert_equals "Yazi side pane spans the full window height" "$(tmux_test display-message -p -t "$MAIN_PANE" '#{pane_height}')" "$(tmux_test display-message -p -t "$SIDE_PANE" '#{pane_height}')"
 
 WINDOW_WIDTH=$(tmux_test display-message -p -t "$MAIN_PANE" '#{window_width}')

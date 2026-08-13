@@ -10,6 +10,7 @@ requires:
   executables:
     - bash
     - tmux
+    - tmux-session-template
     - yazi
   libraries:
     - core.sh
@@ -24,6 +25,10 @@ commands:
     source: bin/tmux-yazi-pane
     target: ~/bin/tmux-yazi-pane
     bridge: home/bin/executable_tmux-yazi-pane.tmpl
+  - name: tmux-yazi-open
+    source: bin/tmux-yazi-open
+    target: ~/bin/tmux-yazi-open
+    bridge: home/bin/executable_tmux-yazi-open.tmpl
 targets:
   - service: tmux
     source: targets/tmux.conf.tmpl
@@ -58,3 +63,4 @@ targets:
 tests:
   - tests/test_module.sh
   - tests/test_tmux_yazi_pane.sh
+  - tests/test_tmux_yazi_open.sh
