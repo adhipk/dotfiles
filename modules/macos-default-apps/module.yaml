@@ -15,6 +15,9 @@ requires:
 optional:
   executables:
     - duti
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
 state:
   preserved: []
   ephemeral: []

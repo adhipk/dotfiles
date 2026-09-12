@@ -1,0 +1,3 @@
+{{- if .modules.notifications.enabled -}}
+{{ includeTemplate "../modules/notifications/lib/config.sh" . }}
+{{- end -}}

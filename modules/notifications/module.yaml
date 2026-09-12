@@ -1,0 +1,63 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: notifications
+version: 1.0.0
+description: Provides reliable shared macOS desktop notifications and their machine context contract.
+dataKey: modules.notifications
+distribution:
+  standalone: true
+  platform: macos
+requires:
+  executables:
+    - bash
+    - osascript
+    - yq
+optional:
+  executables:
+    - terminal-notifier
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
+state:
+  preserved: []
+  ephemeral: []
+commands:
+  - name: desktop-notify
+    source: bin/desktop-notify
+    target: ~/bin/desktop-notify
+actions:
+  - id: test-notification
+    label: Test desktop notification
+    description: Send one notice through the configured notification backend.
+    command: ~/bin/desktop-notify
+    arguments:
+      - Dotfiles notifications
+      - Notification delivery is working
+targets:
+  - service: notifications
+    source: bin/desktop-notify
+    destination: ~/bin/desktop-notify
+    bridge: home/bin/executable_desktop-notify.tmpl
+    ownership: exclusive
+  - service: notifications
+    source: bin/desktop-notify
+    destination: ~/.config/skhd/notify.sh
+    bridge: home/dot_config/skhd/executable_notify.sh.tmpl
+    ownership: exclusive
+  - service: notifications
+    source: config/config.toml.tmpl
+    destination: ~/.config/notifications/config.toml
+    bridge: home/dot_config/notifications/config.toml.tmpl
+    ownership: exclusive
+  - service: notifications
+    source: lib/config.sh
+    destination: ~/.config/notifications/config.sh
+    bridge: home/dot_config/notifications/config.sh.tmpl
+    ownership: exclusive
+  - service: agent-context
+    source: docs/system-context.md
+    destination: ~/.agents/docs/system/notifications.md
+    bridge: home/dot_agents/docs/system/notifications.md.tmpl
+    ownership: exclusive
+tests:
+  - tests/test_module.sh

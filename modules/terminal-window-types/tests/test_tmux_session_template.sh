@@ -126,6 +126,7 @@ cat > "$FAKE_BIN/codex" <<'EOF'
 #!/usr/bin/env bash
 exec sleep 300
 EOF
+cp "$FAKE_BIN/codex" "$FAKE_BIN/hermes"
 cat > "$FAKE_BIN/nvim" <<'EOF'
 #!/usr/bin/env bash
 exec sleep 300
@@ -137,7 +138,7 @@ cat > "$FAKE_BIN/tuxedo" <<EOF
 printf '%s|%s|%s|%s\n' "\$PWD" "\$TODO_DIR" "\$TODO_FILE" "\$DONE_FILE" >> $TUXEDO_CALLS_FILE_QUOTED
 exec sleep 300
 EOF
-chmod +x "$FAKE_BIN/codex" "$FAKE_BIN/nvim" "$FAKE_BIN/todo" "$FAKE_BIN/tuxedo"
+chmod +x "$FAKE_BIN/codex" "$FAKE_BIN/hermes" "$FAKE_BIN/nvim" "$FAKE_BIN/todo" "$FAKE_BIN/tuxedo"
 
 cat > "$TMUX_CONFIG" <<EOF
 set -g default-shell /bin/bash

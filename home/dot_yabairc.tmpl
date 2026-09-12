@@ -53,7 +53,9 @@ yabai -m rule --remove "scratchpad_terminal" >/dev/null 2>&1 || true
 yabai -m rule --remove "scratchpad_quick_terminal" >/dev/null 2>&1 || true
 yabai -m rule --remove "scratchpad_codex_dotfiles" >/dev/null 2>&1 || true
 yabai -m rule --remove "scratchpad_projects_tmux" >/dev/null 2>&1 || true
+yabai -m rule --remove "scratchpad_dotfiles_manager" >/dev/null 2>&1 || true
 {{ if .modules.scratchpads.enabled }}{{ includeTemplate "../modules/scratchpads/targets/yabairc.tmpl" . | trim }}{{ end }}
+{{ if .modules.dotfilesManager.enabled }}{{ includeTemplate "../modules/dotfiles-manager/targets/yabairc.tmpl" . | trim }}{{ end }}
 
 {{ if .modules.windowLayout.enabled }}{{ includeTemplate "../modules/window-layout/targets/yabairc-restore.tmpl" . | trim }}{{ end }}
 

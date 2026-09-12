@@ -9,6 +9,9 @@ distribution:
   platform: macos
 requires:
   executables: []
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
 state:
   preserved:
     - ~/.qutebrowser/bookmarks

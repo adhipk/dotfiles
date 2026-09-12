@@ -103,7 +103,8 @@ echo ""
 echo "Testing default rendering..."
 render_profile
 assert_executable "$DESTINATION/bin/dotfiles-settings" "dotfiles-settings command renders"
-assert_contains "$DESTINATION/.config/dotfiles/preferences.toml" 'assistant = "codex"' "preferences render the default assistant"
+assert_contains "$DESTINATION/.config/dotfiles/preferences.toml" 'assistant = "hermes"' "preferences render Hermes as the pluggable default assistant"
+assert_contains "$DESTINATION/.config/dotfiles/preferences.toml" 'hermes_skin = "dotfiles-manager"' "preferences render the managed Hermes splash and theme"
 assert_contains "$DESTINATION/.config/dotfiles/preferences.toml" 'terminal_editor = "nvim"' "preferences render the default terminal editor"
 assert_contains "$DESTINATION/.zshrc" "export EDITOR=nvim" "zshrc renders the default EDITOR"
 assert_contains "$DESTINATION/.skhdrc" 'alt - 1 : ~/bin/hotkeys app-focus 1 "@browser"' "skhd renders the default slot1"
@@ -115,8 +116,9 @@ assert_equals "catppuccin-mocha.sh" "$(readlink "$DESTINATION/.config/colorschem
 
 echo ""
 echo "Testing preference override rendering..."
-render_profile '{"preferences":{"terminalEditor":"hx","guiEditor":"Zed","assistant":"claude","terminalApp":"kitty","appSlots":{"slot1":"@browser","slot2":"@editor","slot3":"Calendar","slot4":"Slack"},"theme":{"tmuxFlavor":"latte","colorscheme":"catppuccin-mocha"}}}'
+render_profile '{"preferences":{"terminalEditor":"hx","guiEditor":"Zed","assistant":"claude","hermes":{"skin":"slate"},"terminalApp":"kitty","appSlots":{"slot1":"@browser","slot2":"@editor","slot3":"Calendar","slot4":"Slack"},"theme":{"tmuxFlavor":"latte","colorscheme":"catppuccin-mocha"}}}'
 assert_contains "$DESTINATION/.config/dotfiles/preferences.toml" 'assistant = "claude"' "assistant override reaches preferences"
+assert_contains "$DESTINATION/.config/dotfiles/preferences.toml" 'hermes_skin = "slate"' "Hermes skin override reaches preferences"
 assert_contains "$DESTINATION/.zshrc" "export EDITOR=hx" "terminal editor override reaches zshrc"
 assert_contains "$DESTINATION/.skhdrc" 'alt - 3 : ~/bin/hotkeys app-focus 3 "Calendar"' "slot3 override reaches skhd"
 assert_contains "$DESTINATION/.skhdrc" '~/.config/skhd/focus_app.sh "kitty"' "terminal app override reaches skhd"
@@ -191,6 +193,7 @@ run_cli() {
   DOTFILES_DIR="$DOTFILES_DIR" \
   DOTFILES_SETTINGS_REGISTRY="$TEST_REGISTRY" \
   DOTFILES_SETTINGS_DATA_FILE="$TEST_DATA" \
+  DOTFILES_SETTINGS_FRAGMENTS_DIR="$TEMP_DIR/no-fragments" \
   "$CLI" "$@"
 }
 
@@ -232,6 +235,95 @@ if run_cli set assistant $'bad\nvalue' --no-apply --no-reload >/dev/null 2>&1; t
   fail "set rejects values with newlines" "nonzero exit" "accepted newline value"
 else
   pass "set rejects values with newlines"
+fi
+
+echo ""
+echo "Testing settings fragments..."
+FRAGMENTS_DIR="$TEMP_DIR/fragments"
+mkdir -p "$FRAGMENTS_DIR/demo-module"
+cat >"$FRAGMENTS_DIR/demo-module/settings.yaml" <<'EOF'
+apiVersion: dotfiles/v1
+kind: SettingsFragment
+schemaVersion: 1
+module: demo-module
+dataKey: modules.demoModule
+settings:
+  - key: demo-module.flavor
+    description: test fragment enum
+    dataPath: preferences.theme.tmuxFlavor
+    file: home/.chezmoidata/20-preferences.yaml
+    type: string
+    values:
+      enum: [mocha, latte]
+    bridges:
+      - home/dot_tmux.conf.tmpl
+    reload: []
+EOF
+cat >>"$TEST_DATA" <<'EOF'
+  demoModule:
+    enabled: true
+EOF
+
+run_cli_fragments() {
+  DOTFILES_DIR="$DOTFILES_DIR" \
+  DOTFILES_SETTINGS_REGISTRY="$TEST_REGISTRY" \
+  DOTFILES_SETTINGS_DATA_FILE="$TEST_DATA" \
+  DOTFILES_SETTINGS_FRAGMENTS_DIR="$FRAGMENTS_DIR" \
+  DOTFILES_SETTINGS_MODULES_DATA_FILE="$TEST_DATA" \
+  "$CLI" "$@"
+}
+
+if run_cli_fragments list --json | jq -e '.settings | length == 5' >/dev/null 2>&1; then
+  pass "fragment settings merge into the registry"
+else
+  fail "fragment settings merge into the registry" "5 settings" "$(run_cli_fragments list --json | jq '.settings | length')"
+fi
+if run_cli_fragments list --json | jq -e '.settings[] | select(.key == "demo-module.flavor") | .module == "demo-module"' >/dev/null 2>&1; then
+  pass "fragment entries report their owning module"
+else
+  fail "fragment entries report their owning module" "module demo-module" "$(run_cli_fragments list --json)"
+fi
+assert_equals "mocha" "$(run_cli_fragments get demo-module.flavor)" "get resolves a fragment key"
+
+yq -i '.modules.demoModule.enabled = false' "$TEST_DATA"
+if run_cli_fragments list --json | jq -e '.settings | length == 4' >/dev/null 2>&1; then
+  pass "disabled modules drop their fragment settings"
+else
+  fail "disabled modules drop their fragment settings" "4 settings" "$(run_cli_fragments list --json | jq '.settings | length')"
+fi
+if run_cli_fragments get demo-module.flavor >/dev/null 2>&1; then
+  fail "disabled fragment keys are rejected" "nonzero exit" "resolved"
+else
+  pass "disabled fragment keys are rejected"
+fi
+yq -i '.modules.demoModule.enabled = true' "$TEST_DATA"
+
+cat >"$FRAGMENTS_DIR/demo-module/settings.yaml" <<'EOF'
+apiVersion: dotfiles/v1
+kind: SettingsFragment
+schemaVersion: 1
+module: wrong-id
+settings:
+  - key: demo-module.flavor
+    description: mismatched module id
+    dataPath: preferences.theme.tmuxFlavor
+    file: home/.chezmoidata/20-preferences.yaml
+    type: string
+    bridges:
+      - home/dot_tmux.conf.tmpl
+    reload: []
+EOF
+if run_cli_fragments validate >/dev/null 2>&1; then
+  fail "validate rejects a module/directory mismatch" "nonzero exit" "validated"
+else
+  pass "validate rejects a module/directory mismatch"
+fi
+rm -rf "$FRAGMENTS_DIR/demo-module"
+
+if DOTFILES_DIR="$DOTFILES_DIR" "$CLI" validate --json | jq -e '.fragmentCount >= 1' >/dev/null 2>&1; then
+  pass "repository fragments validate and are counted"
+else
+  fail "repository fragments validate and are counted" "fragmentCount >= 1" "$(DOTFILES_DIR="$DOTFILES_DIR" "$CLI" validate --json 2>&1)"
 fi
 
 echo ""

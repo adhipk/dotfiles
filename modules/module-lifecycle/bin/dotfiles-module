@@ -43,7 +43,7 @@ path_has_no_symlink_components() {
 }
 
 validate_manifest() {
-    local manifest="$1" id directory_id data_key source destination bridge ownership
+    local manifest="$1" id directory_id data_key source destination bridge ownership phase hook
     id=$(yq -r '.id' "$manifest")
     directory_id=$(basename "$(dirname "$manifest")")
     [[ "$(yq -r '.apiVersion' "$manifest")" == "dotfiles/v1" ]] || die "$id: unsupported apiVersion"
@@ -63,6 +63,15 @@ validate_manifest() {
         die "$id: state entries must be strings"
     [[ "$(yq -r '[.targets[] | select(type != "!!map" or (.source | type != "!!str") or (.destination | type != "!!str") or (.bridge | type != "!!str") or (.ownership | type != "!!str"))] | length' "$manifest")" == "0" ]] ||
         die "$id: every target field must be a string"
+
+    for phase in setup teardown; do
+        hook=$(yq -r ".lifecycle.${phase} // \"\"" "$manifest")
+        safe_relative_path "$hook" || die "$id: lifecycle.$phase must be a safe relative path"
+        [[ -f "$(dirname "$manifest")/$hook" && -x "$(dirname "$manifest")/$hook" ]] ||
+            die "$id: lifecycle.$phase must be an executable module-owned file: $hook"
+        path_has_no_symlink_components "$(dirname "$manifest")" "$hook" ||
+            die "$id: lifecycle.$phase traverses a symlink: $hook"
+    done
 
     while IFS=$'\t' read -r source destination bridge ownership; do
         [[ "$ownership" == "exclusive" || "$ownership" == "contribution" ]] ||
@@ -161,7 +170,7 @@ plan_module() {
     data_key=$(yq -r '.dataKey' "$manifest")
 
     printf 'Plan: %s module %s (currently enabled: %s)\n' "$action" "$id" "$enabled"
-    printf '  1. Run declared pre-disable hooks and stop module-owned runtime work.\n'
+    printf '  1. Run module teardown: %s.\n' "$(yq -r '.lifecycle.teardown' "$manifest")"
     printf '  2. Set %s.enabled=false and re-render targets through chezmoi.\n' "$data_key"
     printf '  3. Verify exclusive targets are absent:\n'
     if [[ "$(yq -r '[.targets[] | select(.ownership == "exclusive")] | length' "$manifest")" == "0" ]]; then
@@ -207,13 +216,15 @@ plan_enable() {
     else
         yq -r '.targets[] | select(.ownership == "contribution") | "     - " + .destination' "$manifest" | sort -u
     fi
-    printf '  4. Preserve all declared module state and source.\n'
+    printf '  4. Run module setup: %s.\n' "$(yq -r '.lifecycle.setup' "$manifest")"
+    printf '  5. Preserve all declared module state and source.\n'
     printf '\nThis is a read-only plan; no files were changed.\n'
 }
 
 plan_module_json() {
     local action="$1" id="$2" manifest enabled data_key description target_enabled
     local state_root_required confirmation exclusive_targets contribution_targets preserved_state ephemeral_state
+    local setup_hook teardown_hook
     manifest=$(manifest_for "$id")
     [[ "$action" == "enable" || "$id" != "module-lifecycle" ]] ||
         die "module-lifecycle is removed last by a system uninstall plan"
@@ -225,6 +236,8 @@ plan_module_json() {
     contribution_targets=$(yq -o=json -I=0 '.targets | map(select(.ownership == "contribution") | .destination) | unique' "$manifest")
     preserved_state=$(yq -o=json -I=0 '.state.preserved' "$manifest")
     ephemeral_state=$(yq -o=json -I=0 '.state.ephemeral' "$manifest")
+    setup_hook=$(yq -r '.lifecycle.setup' "$manifest")
+    teardown_hook=$(yq -r '.lifecycle.teardown' "$manifest")
     target_enabled=false
     confirmation=null
     state_root_required=false
@@ -256,6 +269,8 @@ plan_module_json() {
         --argjson contributionTargets "$contribution_targets" \
         --argjson preservedState "$preserved_state" \
         --argjson ephemeralState "$ephemeral_state" \
+        --arg setupHook "$setup_hook" \
+        --arg teardownHook "$teardown_hook" \
         --argjson stateRootRequired "$state_root_required" \
         --argjson confirmation "$confirmation" \
         '{
@@ -272,6 +287,10 @@ plan_module_json() {
           contributionTargets: $contributionTargets,
           preservedState: $preservedState,
           ephemeralState: $ephemeralState,
+          lifecycle: {
+            setup: $setupHook,
+            teardown: $teardownHook
+          },
           stateRootRequired: $stateRootRequired,
           confirmation: $confirmation,
           sourcePreserved: true,
@@ -298,6 +317,23 @@ apply_module_bridges() {
     done < <(yq -r '.targets[].bridge' "$manifest")
     [[ ${#bridges[@]} -gt 0 ]] || die "module has no target bridges"
     chezmoi -S "$ROOT" apply --force --source-path "${bridges[@]}"
+}
+
+run_lifecycle_hook() {
+    local manifest="$1" phase="$2" action="$3" relative hook output status=0
+    relative=$(yq -r ".lifecycle.${phase}" "$manifest")
+    hook="$(dirname "$manifest")/$relative"
+    output=$(mktemp "${TMPDIR:-/tmp}/dotfiles-module-hook.XXXXXX")
+    DOTFILES_ROOT="$ROOT" \
+        DOTFILES_MODULE_ID="$(yq -r '.id' "$manifest")" \
+        DOTFILES_MODULE_ACTION="$action" \
+        "$hook" >"$output" 2>&1 || status=$?
+    if [[ "$status" -ne 0 ]]; then
+        cat "$output" >&2
+        printf '%s: lifecycle %s failed\n' "$(yq -r '.id' "$manifest")" "$phase" >&2
+    fi
+    rm -f "$output"
+    return "$status"
 }
 
 atomic_set_enabled() {
@@ -381,6 +417,11 @@ execute_module() (
     previous=$(enabled_for "$manifest")
     if [[ "$action" == "enable" ]]; then target_enabled=true; else target_enabled=false; fi
     if [[ "$previous" == "$target_enabled" ]]; then changed=false; else changed=true; fi
+
+    if [[ "$action" != "enable" ]] && ! run_lifecycle_hook "$manifest" teardown "$action"; then
+        die "module teardown failed before configuration changed"
+    fi
+
     backup=$(mktemp "${DATA_FILE}.backup.XXXXXX")
     temp=$(mktemp "${DATA_FILE}.tmp.XXXXXX")
     cp -p "$DATA_FILE" "$backup"
@@ -393,9 +434,21 @@ execute_module() (
     if [[ "$apply_status" -ne 0 ]]; then
         mv -f "$backup" "$DATA_FILE"
         apply_module_bridges "$manifest" || rollback_status=$?
+        if [[ "$action" != "enable" && "$rollback_status" -eq 0 ]]; then
+            run_lifecycle_hook "$manifest" setup rollback || rollback_status=$?
+        fi
         rm -f "$temp"
         [[ "$rollback_status" -eq 0 ]] || die "chezmoi apply failed and target rollback also failed"
         die "chezmoi apply failed; configuration and targets were rolled back"
+    fi
+
+    if [[ "$action" == "enable" ]] && ! run_lifecycle_hook "$manifest" setup "$action"; then
+        mv -f "$backup" "$DATA_FILE"
+        run_lifecycle_hook "$manifest" teardown rollback || rollback_status=$?
+        apply_module_bridges "$manifest" || rollback_status=$?
+        rm -f "$temp"
+        [[ "$rollback_status" -eq 0 ]] || die "module setup failed and target rollback also failed"
+        die "module setup failed; configuration and targets were rolled back"
     fi
     rm -f "$backup" "$temp"
 

@@ -7,7 +7,8 @@ thin templates under `home/` include into the target state.
 ## Boundary
 
 Each module owns its runtime commands, target-service fragments, tests,
-documentation, defaults, and package declarations. It may depend on:
+documentation, defaults, package declarations, and the common
+`lifecycle/setup` plus `lifecycle/teardown` executables. It may depend on:
 
 - the public runtime library installed at `~/.local/lib/dotfiles`;
 - external commands declared in `module.yaml`;
@@ -77,6 +78,13 @@ For every module change:
 5. Run a cold-home chezmoi dry apply and the repository test suite.
 
 ## Lifecycle
+
+Every `module.yaml` declares the same two module-local lifecycle entrypoints.
+`setup` initializes only module-owned runtime state after targets render;
+`teardown` quiesces only module-owned runtime state before targets are removed.
+Both commands must be quiet, non-interactive, idempotent, and usable through
+the `DOTFILES_ROOT`, `DOTFILES_MODULE_ID`, and `DOTFILES_MODULE_ACTION`
+environment contract. Declarative-only modules use explicit no-op hooks.
 
 Use `dotfiles-module status` to inspect the normalized manifest inventory and
 `dotfiles-module plan disable|uninstall|purge MODULE` to preview module

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Next Task"
+  short_description: "Finish, commit, then start the next task"
+  default_prompt: "Use $next-task to finish and commit the current work, verify a clean worktree, then begin the next request."
+policy:
+  allow_implicit_invocation: false

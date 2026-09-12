@@ -2,7 +2,11 @@
 
 This module owns the transient Ghostty scratchpad workflow:
 
-- `Fn+Comma` toggles one opaque terminal panel on the `dotfiles` tmux session.
+- `scratchpads open command LABEL PROFILE CWD COMMAND` is the public transport
+  adapter for feature-owned scratchpads. It owns Ghostty/yabai window behavior
+  while leaving the launched application's session and UI inside its module.
+- The `projects` session uses a one-line Spotlight-style header. Normal tmux
+  windows keep their bottom workspace bar.
 - `Fn+P` toggles a separate opaque session-manager panel. Its dedicated
   `session-manager` tmux template contains the live hub dashboard and a terminal
   window for direct `tmux`, `sesh`, and persistence commands.

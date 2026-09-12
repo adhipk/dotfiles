@@ -15,6 +15,9 @@ requires:
   libraries:
     - core.sh
     - locks.sh
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
 state:
   preserved: []
   ephemeral: []

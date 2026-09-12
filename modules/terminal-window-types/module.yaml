@@ -17,6 +17,9 @@ requires:
     - core.sh
     - prefs.sh
     - tmux.sh
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
 state:
   preserved: []
   ephemeral:

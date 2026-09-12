@@ -332,6 +332,15 @@ assert_eq "0" "$(wc -l <"$FAKE_TMUX_LOG" | tr -d ' ')" "Claude expiry never type
 assert_eq "native-notification" "$(jq -r '.lastCheckpointDeliveryMode' "$AGENT_TIMER_STATE_DIR/claude-native.json")" "Claude expiry records native-only delivery"
 assert_eq "sent" "$(jq -r '.lastCheckpointDeliveryStatus' "$AGENT_TIMER_STATE_DIR/claude-native.json")" "native-only expiry completes its delivery state"
 assert_contains "$(cat "$FAKE_NOTIFIER_LOG")" "Agent checkpoint due" "native-only expiry surfaces the checkpoint outside terminal input"
+
+export FAKE_PS_COMMAND="python /Users/test/.hermes/hermes-agent/hermes --tui"
+AGENT_TIMER_NOW=1500 "$TIMER" start --seconds 30 --warning-seconds 5 --target %9 --id hermes-native --turn-id hermes-turn --json >/dev/null
+: >"$FAKE_TMUX_LOG"
+: >"$FAKE_NOTIFIER_LOG"
+AGENT_TIMER_NOW=1530 "$TIMER" tick
+assert_eq "0" "$(wc -l <"$FAKE_TMUX_LOG" | tr -d ' ')" "Hermes expiry never types a follow-up into the active agent"
+assert_eq "hermes:native-notification" "$(jq -r '[.agent.kind,.lastCheckpointDeliveryMode] | join(":")' "$AGENT_TIMER_STATE_DIR/hermes-native.json")" "Hermes is recognized and uses native-only delivery"
+assert_eq "sent" "$(jq -r '.lastCheckpointDeliveryStatus' "$AGENT_TIMER_STATE_DIR/hermes-native.json")" "Hermes native-only expiry completes its delivery state"
 export FAKE_PS_COMMAND="node $TEMP_DIR/fake-codex-bin/codex"
 
 printf '\nTesting stale panes and cancellation...\n'
@@ -496,7 +505,7 @@ assert_contains "$(cat "$DESTINATION/.config/agent-timer/config.toml")" "auto_st
 assert_contains "$(cat "$DESTINATION/.config/agent-timer/config.toml")" "default_seconds = 600" "enabled profile installs the global TOML budget"
 assert_contains "$(cat "$DESTINATION/.config/agent-timer/config.toml")" "report_timeout_seconds = 120" "enabled profile installs the bounded detached-report timeout"
 assert_contains "$(cat "$DESTINATION/.config/agent-timer/config.toml")" 'expiry_sound = "Ping"' "enabled profile installs the expiry sound"
-assert_contains "$(cat "$DESTINATION/.config/agent-timer/config.toml")" '"codex", "claude", "opencode"' "enabled profile prefers Codex first"
+assert_contains "$(cat "$DESTINATION/.config/agent-timer/config.toml")" '"hermes", "codex", "claude", "opencode"' "enabled profile prefers Hermes first"
 assert_contains "$(cat "$DESTINATION/.codex/hooks.json")" "UserPromptSubmit" "enabled profile installs Codex hooks"
 assert_contains "$(cat "$DESTINATION/.codex/hooks.json")" 'cat >\/dev\/null' "enabled profile installs a missing-command guard for cached hooks"
 assert_contains "$(cat "$DESTINATION/.tmux.conf")" "agent-timer manage" "enabled profile installs tmux lifecycle access"

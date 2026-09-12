@@ -1,0 +1,5 @@
+schema_version = 1
+backend = "auto"
+ignore_dnd = true
+sound = "none"
+group_prefix = "dotfiles"

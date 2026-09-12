@@ -14,6 +14,9 @@ requires:
     - jq
     - tmux
     - yabai
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
 state:
   preserved: []
   ephemeral: []

@@ -1,0 +1,1283 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "textual==8.2.8",
+# ]
+#
+# [tool.uv]
+# exclude-newer = "2026-07-01T00:00:00Z"
+# ///
+"""Human-first control panel for dotfiles settings and system inventories."""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import os
+import subprocess
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from rich.markup import escape
+from textual import events, on
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.containers import Container, Horizontal, Vertical
+from textual.screen import ModalScreen
+from textual.widgets import Button, DataTable, Footer, Input, Label, OptionList, Select, Static
+from textual.widgets.option_list import Option
+
+
+@dataclass(frozen=True)
+class Setting:
+    key: str
+    value: str
+    type: str
+    description: str
+    allowed_values: tuple[str, ...]
+    free_text: bool
+    data_path: str
+    source_file: str
+
+    @property
+    def category(self) -> str:
+        return self.key.split(".", 1)[0]
+
+    @property
+    def label(self) -> str:
+        leaf = self.key.rsplit(".", 1)[-1]
+        words: list[str] = []
+        current = ""
+        for char in leaf:
+            if char.isupper() and current:
+                words.append(current)
+                current = char.lower()
+            elif char in "-_":
+                if current:
+                    words.append(current)
+                    current = ""
+            else:
+                current += char
+        if current:
+            words.append(current)
+        return " ".join(words).capitalize()
+
+
+class BackendError(RuntimeError):
+    pass
+
+
+class SettingsBackend:
+    def __init__(self, command: str | None = None, root: Path | None = None) -> None:
+        self.command = command or os.environ.get(
+            "DOTFILES_MANAGER_SETTINGS_BIN", str(Path.home() / "bin" / "dotfiles-settings")
+        )
+        self.root = root or Path(
+            os.environ.get("DOTFILES_MANAGER_ROOT", str(Path.home() / "dotfiles"))
+        )
+        self.module_command = os.environ.get(
+            "DOTFILES_MANAGER_MODULE_BIN", str(Path.home() / "bin" / "dotfiles-module")
+        )
+        self.dependencies_command = os.environ.get(
+            "DOTFILES_MANAGER_DEPS_BIN", str(Path.home() / "bin" / "dotfiles-deps")
+        )
+        self.uninstall_command = os.environ.get(
+            "DOTFILES_MANAGER_UNINSTALL_BIN", str(Path.home() / "bin" / "dotfiles-uninstall")
+        )
+        self.shortcut_rebind_command = os.environ.get(
+            "DOTFILES_MANAGER_SHORTCUT_REBIND_BIN", str(Path.home() / "bin" / "shortcut-rebind")
+        )
+        self.yq_command = os.environ.get("DOTFILES_MANAGER_YQ_BIN", "yq")
+        self.shortcuts_path = Path(
+            os.environ.get(
+                "DOTFILES_MANAGER_SHORTCUTS",
+                str(self.root / "modules" / "shortcut-guide" / "generated" / "shortcuts.json"),
+            )
+        )
+
+    def _run(self, *arguments: str) -> dict[str, Any]:
+        environment = os.environ.copy()
+        environment["DOTFILES_DIR"] = str(self.root)
+        result = subprocess.run(
+            [self.command, *arguments],
+            cwd=self.root,
+            env=environment,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            message = result.stderr.strip() or result.stdout.strip() or f"exit {result.returncode}"
+            raise BackendError(message)
+        try:
+            return json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            raise BackendError(f"settings backend returned invalid JSON: {error}") from error
+
+    def list_settings(self) -> list[Setting]:
+        payload = self._run("list", "--json")
+        return [
+            Setting(
+                key=row["key"],
+                value=str(row.get("value", "")),
+                type=row["type"],
+                description=row["description"],
+                allowed_values=tuple(str(value) for value in row.get("allowedValues", [])),
+                free_text=bool(row.get("freeText", False)),
+                data_path=row.get("dataPath", ""),
+                source_file=row.get("sourceFile", ""),
+            )
+            for row in payload.get("settings", [])
+        ]
+
+    def set_setting(self, key: str, value: str) -> dict[str, Any]:
+        return self._run("set", key, value, "--json")
+
+    def _run_json_command(self, command: str, *arguments: str) -> Any:
+        result = subprocess.run(
+            [command, *arguments],
+            cwd=self.root,
+            env=os.environ.copy(),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            message = result.stderr.strip() or result.stdout.strip() or f"exit {result.returncode}"
+            raise BackendError(message)
+        if not result.stdout.strip():
+            message = result.stderr.strip() or f"{Path(command).name} exited with {result.returncode}"
+            raise BackendError(message)
+        try:
+            return json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            raise BackendError(f"{Path(command).name} returned invalid JSON: {error}") from error
+
+    def list_shortcuts(self) -> list[dict[str, Any]]:
+        try:
+            payload = json.loads(self.shortcuts_path.read_text())
+        except (OSError, json.JSONDecodeError) as error:
+            raise BackendError(f"could not load shortcut catalog: {error}") from error
+        return list(payload.get("shortcuts", []))
+
+    def rebind_shortcut(self, stable_id: str, raw_key: str) -> dict[str, Any]:
+        return dict(
+            self._run_json_command(
+                self.shortcut_rebind_command, stable_id, raw_key, "--json"
+            )
+        )
+
+    def list_modules(self) -> list[dict[str, Any]]:
+        return list(self._run_json_command(self.module_command, "status", "--json"))
+
+    def plan_module_action(self, module_id: str, action: str) -> dict[str, Any]:
+        return dict(
+            self._run_json_command(self.module_command, "plan", action, module_id, "--json")
+        )
+
+    def execute_module_action(self, module_id: str, action: str) -> dict[str, Any]:
+        return dict(self._run_json_command(self.module_command, action, module_id, "--json"))
+
+    def dependency_status(self) -> dict[str, Any]:
+        return dict(self._run_json_command(self.dependencies_command, "status", "--json"))
+
+    def system_status(self) -> dict[str, Any]:
+        return dict(self._run_json_command(self.uninstall_command, "plan", "--json"))
+
+    def list_utilities(self) -> list[dict[str, Any]]:
+        utilities: list[dict[str, Any]] = []
+        for manifest in sorted((self.root / "modules").glob("*/module.yaml")):
+            payload = self._run_json_command(self.yq_command, "-o=json", "-I=0", ".", str(manifest))
+            module = str(payload.get("id", manifest.parent.name))
+            for action in payload.get("actions", []):
+                if not isinstance(action, dict):
+                    continue
+                command = str(action.get("command", ""))
+                arguments = action.get("arguments", [])
+                if not command or not isinstance(arguments, list):
+                    continue
+                resolved = str(Path(command).expanduser()) if command.startswith("~/") else command
+                available = Path(resolved).is_file() and os.access(resolved, os.X_OK)
+                utilities.append(
+                    {
+                        "id": str(action.get("id", f"{module}:{len(utilities)}")),
+                        "label": str(action.get("label", action.get("id", "Utility"))),
+                        "description": str(action.get("description", "")),
+                        "command": command,
+                        "arguments": [str(value) for value in arguments],
+                        "module": module,
+                        "state": "ready" if available else "unavailable",
+                    }
+                )
+        return utilities
+
+    def run_utility(self, utility: dict[str, Any]) -> str:
+        command = str(utility.get("command", ""))
+        arguments = utility.get("arguments", [])
+        if not command or not isinstance(arguments, list):
+            raise BackendError("utility action has an invalid command contract")
+        resolved = str(Path(command).expanduser()) if command.startswith("~/") else command
+        if not Path(resolved).is_file() or not os.access(resolved, os.X_OK):
+            raise BackendError(f"utility is not installed: {command}")
+        result = subprocess.run(
+            [resolved, *(str(value) for value in arguments)],
+            cwd=self.root,
+            env=os.environ.copy(),
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            message = result.stderr.strip() or result.stdout.strip() or f"exit {result.returncode}"
+            raise BackendError(message)
+        return result.stdout.strip()
+
+
+class EditSettingScreen(ModalScreen[str | None]):
+    BINDINGS = [Binding("escape", "cancel", "Cancel", show=False)]
+
+    def __init__(self, setting: Setting) -> None:
+        super().__init__()
+        self.setting = setting
+
+    def compose(self) -> ComposeResult:
+        with Container(id="edit-card"):
+            yield Label(f"Edit {self.setting.label}", id="edit-title")
+            yield Static(self.setting.description, id="edit-description")
+            if self.setting.allowed_values and not self.setting.free_text:
+                options = [(value, value) for value in self.setting.allowed_values]
+                yield Select(options, value=self.setting.value, allow_blank=False, id="edit-select")
+            else:
+                input_type = "integer" if self.setting.type == "integer" else "text"
+                yield Input(value=self.setting.value, type=input_type, id="edit-input")
+                if self.setting.allowed_values:
+                    suggestions = "  ".join(self.setting.allowed_values[:8])
+                    yield Static(f"Suggestions  {suggestions}", id="edit-suggestions")
+            with Horizontal(id="edit-actions"):
+                yield Button("Cancel", variant="default", id="cancel")
+                yield Button("Apply", variant="primary", id="apply")
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+    @on(Button.Pressed, "#cancel")
+    def cancel(self) -> None:
+        self.dismiss(None)
+
+    @on(Button.Pressed, "#apply")
+    def apply(self) -> None:
+        select = self.query_one("#edit-select", Select) if self.query("#edit-select") else None
+        if select is not None:
+            value = str(select.value)
+        else:
+            value = self.query_one("#edit-input", Input).value.strip()
+        if value:
+            self.dismiss(value)
+
+
+class ModuleActionScreen(ModalScreen[tuple[str, str] | None]):
+    BINDINGS = [Binding("escape", "cancel", "Cancel", show=False)]
+
+    def __init__(self, module: dict[str, Any], action: str, plan: dict[str, Any]) -> None:
+        super().__init__()
+        self.module = module
+        self.action = action
+        self.plan = plan
+
+    def compose(self) -> ComposeResult:
+        module_id = str(self.module.get("id", "module"))
+        exclusive = len(self.plan.get("exclusiveTargets", []))
+        contributions = len(self.plan.get("contributionTargets", []))
+        with Container(id="module-card"):
+            yield Label(f"{self.action.title()} {module_id}?", id="module-title")
+            yield Static(
+                f"{self.module.get('description', '')}\n\n"
+                f"This runs the module-owned {self.action} lifecycle, then reconciles "
+                f"{exclusive} exclusive target(s) and {contributions} shared contribution(s).",
+                id="module-description",
+            )
+            with Horizontal(id="module-actions"):
+                yield Button("Cancel", variant="default", id="module-cancel")
+                yield Button(self.action.title(), variant="primary", id="module-confirm")
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+    @on(Button.Pressed, "#module-cancel")
+    def cancel(self) -> None:
+        self.dismiss(None)
+
+    @on(Button.Pressed, "#module-confirm")
+    def confirm(self) -> None:
+        self.dismiss((str(self.module["id"]), self.action))
+
+
+class EditShortcutScreen(ModalScreen[tuple[str, str] | None]):
+    BINDINGS = [Binding("escape", "cancel", "Cancel", show=False)]
+
+    def __init__(self, shortcut: dict[str, Any]) -> None:
+        super().__init__()
+        self.shortcut = shortcut
+
+    def compose(self) -> ComposeResult:
+        with Container(id="shortcut-card"):
+            yield Label(f"Rebind {self.shortcut.get('title', 'shortcut')}", id="shortcut-title")
+            yield Static(
+                "Use skhd syntax, for example alt - 1 or shift + alt - h.",
+                id="shortcut-description",
+            )
+            yield Input(value=str(self.shortcut.get("rawKey", "")), id="shortcut-input")
+            with Horizontal(id="shortcut-actions"):
+                yield Button("Cancel", variant="default", id="shortcut-cancel")
+                yield Button("Apply", variant="primary", id="shortcut-apply")
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+    @on(Button.Pressed, "#shortcut-cancel")
+    def cancel(self) -> None:
+        self.dismiss(None)
+
+    @on(Button.Pressed, "#shortcut-apply")
+    def apply(self) -> None:
+        value = self.query_one("#shortcut-input", Input).value.strip()
+        if value:
+            self.dismiss((str(self.shortcut.get("stableId", "")), value))
+
+
+class DotfilesManagerApp(App[None]):
+    TITLE = "Dotfiles"
+    SUB_TITLE = "Control panel"
+    ENABLE_COMMAND_PALETTE = True
+    _theme_override = Path(
+        os.environ.get(
+            "DOTFILES_MANAGER_THEME", str(Path.home() / ".config" / "dotfiles-manager" / "theme.tcss")
+        )
+    )
+    CSS_PATH = [str(_theme_override)] if _theme_override.is_file() else []
+    BINDINGS = [
+        Binding("/", "focus_search", "Search"),
+        Binding("enter", "edit_selected", "Open"),
+        Binding("a", "open_agent", "Agent"),
+        Binding("r", "refresh", "Refresh"),
+        Binding("q", "quit", "Quit"),
+    ]
+    CSS = """
+    Screen {
+        background: #11111b;
+        color: #cdd6f4;
+    }
+
+    #topbar {
+        height: 4;
+        padding: 1 2 0 2;
+        background: #11111b;
+    }
+
+    #wordmark {
+        width: 1fr;
+        color: #cba6f7;
+        text-style: bold;
+    }
+
+    #status {
+        width: auto;
+        color: #6c7086;
+        text-align: right;
+    }
+
+    #body {
+        height: 1fr;
+        padding: 0 2 1 2;
+    }
+
+    #categories {
+        width: 20;
+        height: 1fr;
+        padding: 1 0;
+        background: #181825;
+        border: none;
+        scrollbar-size: 1 1;
+    }
+
+    #categories > .option-list--option-highlighted {
+        background: #313244;
+        color: #f5c2e7;
+        text-style: bold;
+    }
+
+    #content {
+        width: 1fr;
+        margin: 0 1;
+        background: #181825;
+    }
+
+    #section-title {
+        height: 3;
+        padding: 1 2 0 2;
+        color: #f5e0dc;
+        text-style: bold;
+    }
+
+    #search {
+        height: 3;
+        margin: 0 1 1 1;
+        border: none;
+        background: #313244;
+    }
+
+    #settings {
+        height: 1fr;
+        border: none;
+        background: #181825;
+        scrollbar-size: 1 1;
+    }
+
+    #settings > .datatable--header {
+        background: #181825;
+        color: #6c7086;
+        text-style: none;
+    }
+
+    #settings > .datatable--cursor {
+        background: #313244;
+        color: #cdd6f4;
+    }
+
+    #detail {
+        width: 35;
+        height: 1fr;
+        padding: 2;
+        background: #181825;
+        color: #a6adc8;
+    }
+
+    Footer {
+        background: #11111b;
+        color: #6c7086;
+    }
+
+    Footer > .footer--highlight {
+        background: #cba6f7;
+        color: #11111b;
+    }
+
+    EditSettingScreen {
+        align: center middle;
+        background: #11111b 70%;
+    }
+
+    #edit-card {
+        width: 64;
+        height: auto;
+        padding: 2 3;
+        background: #181825;
+        border: tall #45475a;
+    }
+
+    #edit-title {
+        height: 2;
+        color: #f5c2e7;
+        text-style: bold;
+    }
+
+    #edit-description {
+        height: auto;
+        margin-bottom: 1;
+        color: #a6adc8;
+    }
+
+    #edit-input, #edit-select {
+        margin: 1 0;
+    }
+
+    #edit-suggestions {
+        height: auto;
+        color: #6c7086;
+    }
+
+    #edit-actions {
+        height: 3;
+        align-horizontal: right;
+        margin-top: 1;
+    }
+
+    #edit-actions Button {
+        margin-left: 1;
+    }
+
+    ModuleActionScreen {
+        align: center middle;
+        background: #11111b 70%;
+    }
+
+    #module-card {
+        width: 68;
+        height: auto;
+        padding: 2 3;
+        background: #181825;
+        border: tall #45475a;
+    }
+
+    #module-title {
+        height: 2;
+        color: #f5c2e7;
+        text-style: bold;
+    }
+
+    #module-description {
+        height: auto;
+        color: #a6adc8;
+    }
+
+    #module-actions {
+        height: 3;
+        align-horizontal: right;
+        margin-top: 1;
+    }
+
+    #module-actions Button {
+        margin-left: 1;
+    }
+
+    EditShortcutScreen {
+        align: center middle;
+        background: #11111b 70%;
+    }
+
+    #shortcut-card {
+        width: 68;
+        height: auto;
+        padding: 2 3;
+        background: #181825;
+        border: tall #45475a;
+    }
+
+    #shortcut-title {
+        height: 2;
+        color: #f5c2e7;
+        text-style: bold;
+    }
+
+    #shortcut-description {
+        height: auto;
+        color: #a6adc8;
+    }
+
+    #shortcut-input {
+        margin: 1 0;
+    }
+
+    #shortcut-actions {
+        height: 3;
+        align-horizontal: right;
+    }
+
+    #shortcut-actions Button {
+        margin-left: 1;
+    }
+
+    Screen.narrow #body {
+        padding: 0 1 1 1;
+    }
+
+    Screen.narrow #categories {
+        width: 18;
+    }
+
+    Screen.narrow #detail {
+        display: none;
+    }
+
+    Screen.compact #categories {
+        display: none;
+    }
+    """
+
+    def __init__(
+        self,
+        backend: SettingsBackend | Any | None = None,
+        agent_runner: Callable[[], Any] | None = None,
+    ) -> None:
+        super().__init__()
+        self.backend = backend or SettingsBackend()
+        self.agent_runner = agent_runner or self._run_agent_command
+        self.settings: list[Setting] = []
+        self.visible_settings: list[Setting] = []
+        self.records: list[dict[str, Any]] = []
+        self.visible_records: list[dict[str, Any]] = []
+        self.view = "settings"
+        self.category = "all"
+        self.view_cache: dict[str, tuple[list[dict[str, Any]], str]] = {}
+        self.view_locks = {
+            view: asyncio.Lock()
+            for view in ("utilities", "shortcuts", "modules", "dependencies", "system")
+        }
+
+    def compose(self) -> ComposeResult:
+        with Horizontal(id="topbar"):
+            yield Static("DOTFILES", id="wordmark")
+            yield Static("loading settings…", id="status")
+        with Horizontal(id="body"):
+            yield OptionList(Option("All settings", id="all"), id="categories")
+            with Vertical(id="content"):
+                yield Static("Settings", id="section-title")
+                yield Input(placeholder="Search settings", id="search")
+                yield DataTable(id="settings", cursor_type="row", zebra_stripes=False)
+            yield Static("Select a setting to see what it controls.", id="detail")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self._sync_responsive_layout(self.size.width)
+        self.run_worker(self._load_settings(), exclusive=True, group="settings")
+
+    def on_resize(self, event: events.Resize) -> None:
+        self._sync_responsive_layout(event.size.width)
+
+    def _sync_responsive_layout(self, width: int) -> None:
+        for class_name, enabled in (("narrow", width < 100), ("compact", width < 68)):
+            if enabled:
+                self.screen.add_class(class_name)
+            else:
+                self.screen.remove_class(class_name)
+
+    async def _load_settings(self) -> None:
+        self.query_one("#status", Static).update("loading settings…")
+        try:
+            settings = await asyncio.to_thread(self.backend.list_settings)
+        except Exception as error:
+            self.query_one("#status", Static).update("settings unavailable")
+            self.notify(str(error), title="Could not load settings", severity="error", timeout=8)
+            return
+        self.settings = sorted(settings, key=lambda setting: setting.key)
+        self._populate_categories()
+        self._render_settings()
+        self.query_one("#status", Static).update(f"{len(self.settings)} settings")
+        self.run_worker(self._prefetch_views(), exclusive=True, group="prefetch")
+
+    def _populate_categories(self) -> None:
+        categories = self.query_one("#categories", OptionList)
+        categories.clear_options()
+        options = [Option("All settings", id="settings:all")]
+        for category in sorted({setting.category for setting in self.settings}):
+            options.append(
+                Option(f"  {category.replace('-', ' ').title()}", id=f"settings:{category}")
+            )
+        options.extend(
+            [
+                Option("Utilities", id="utilities"),
+                Option("Shortcuts", id="shortcuts"),
+                Option("Modules", id="modules"),
+                Option("Dependencies", id="dependencies"),
+                Option("System", id="system"),
+            ]
+        )
+        for option in options:
+            categories.add_option(option)
+        selected = f"settings:{self.category}" if self.view == "settings" else self.view
+        categories.highlighted = next(
+            (index for index, option in enumerate(options) if str(option.id) == selected), 0
+        )
+
+    def _reset_table(self, *columns: str) -> DataTable[Any]:
+        table = self.query_one("#settings", DataTable)
+        table.clear(columns=True)
+        table.add_columns(*columns)
+        return table
+
+    def _render_settings(self) -> None:
+        self.view = "settings"
+        query = self.query_one("#search", Input).value.casefold().strip()
+        self.visible_settings = [
+            setting
+            for setting in self.settings
+            if (self.category == "all" or setting.category == self.category)
+            and (
+                not query
+                or query in setting.key.casefold()
+                or query in setting.description.casefold()
+                or query in setting.value.casefold()
+            )
+        ]
+        table = self._reset_table("Setting", "Value")
+        for setting in self.visible_settings:
+            table.add_row(setting.label, setting.value, key=setting.key)
+        section = "Settings" if self.category == "all" else self.category.replace("-", " ").title()
+        self.query_one("#section-title", Static).update(section)
+        if self.visible_settings:
+            table.move_cursor(row=0, column=0)
+            self._show_detail(self.visible_settings[0])
+        else:
+            self.query_one("#detail", Static).update("No settings match this view.")
+
+    def _normalize_view_payload(self, view: str, payload: Any) -> tuple[list[dict[str, Any]], str]:
+        suffix = ""
+        if view == "dependencies":
+            records = list(payload.get("dependencies", []))
+            summary = payload.get("summary", {})
+            suffix = f" · {summary.get('missing', 0)} missing · {summary.get('outdated', 0)} outdated"
+        elif view == "system":
+            records = list(payload.get("targets", []))
+            suffix = f" · {len(payload.get('blockers', []))} blockers"
+        else:
+            records = list(payload)
+        return records, f"{len(records)} {view}{suffix}"
+
+    async def _ensure_view(self, view: str, refresh: bool = False) -> tuple[list[dict[str, Any]], str]:
+        async with self.view_locks[view]:
+            if not refresh and view in self.view_cache:
+                return self.view_cache[view]
+            loaders = {
+                "utilities": self.backend.list_utilities,
+                "shortcuts": self.backend.list_shortcuts,
+                "modules": self.backend.list_modules,
+                "dependencies": self.backend.dependency_status,
+                "system": self.backend.system_status,
+            }
+            payload = await asyncio.to_thread(loaders[view])
+            cached = self._normalize_view_payload(view, payload)
+            self.view_cache[view] = cached
+            return cached
+
+    async def _prefetch_views(self) -> None:
+        results = await asyncio.gather(
+            *(self._ensure_view(view) for view in self.view_locks), return_exceptions=True
+        )
+        # Prefetch is an optimization. A failed provider reports its error when
+        # the user actually selects that section.
+        _ = results
+
+    async def _load_view(self, view: str, refresh: bool = False) -> None:
+        self.view = view
+        cached = self.view_cache.get(view) if not refresh else None
+        if cached is None:
+            self.records = []
+            self.visible_records = []
+            self.query_one("#status", Static).update(f"loading {view}…")
+        try:
+            records, status = cached or await self._ensure_view(view, refresh=refresh)
+        except Exception as error:
+            if self.view == view:
+                self.query_one("#status", Static).update(f"{view} unavailable")
+                self.notify(str(error), title=f"Could not load {view}", severity="error", timeout=8)
+            return
+        if self.view != view:
+            return
+        self.records = records
+        self._render_records()
+        self.query_one("#status", Static).update(status)
+
+    def _record_search_text(self, record: dict[str, Any]) -> str:
+        return " ".join(
+            str(value) if not isinstance(value, list) else " ".join(str(item) for item in value)
+            for value in record.values()
+            if value is not None
+        ).casefold()
+
+    def _render_records(self) -> None:
+        query = self.query_one("#search", Input).value.casefold().strip()
+        self.visible_records = [
+            record for record in self.records if not query or query in self._record_search_text(record)
+        ]
+        columns = {
+            "utilities": ("Utility", "State"),
+            "shortcuts": ("Shortcut", "Action"),
+            "modules": ("Module", "State"),
+            "dependencies": ("Dependency", "State"),
+            "system": ("Managed target", "State"),
+        }
+        table = self._reset_table(*columns[self.view])
+        for index, record in enumerate(self.visible_records):
+            if self.view == "utilities":
+                values = (str(record.get("label", "")), str(record.get("state", "")))
+            elif self.view == "shortcuts":
+                values = (str(record.get("displayKey", "")), str(record.get("title", "")))
+            elif self.view == "modules":
+                values = (str(record.get("id", "")), "enabled" if record.get("enabled") else "disabled")
+            elif self.view == "dependencies":
+                values = (str(record.get("name", "")), str(record.get("state", "")))
+            else:
+                values = (str(record.get("path", "")), str(record.get("status", "")))
+            table.add_row(*values, key=str(index))
+        self.query_one("#section-title", Static).update(self.view.title())
+        if self.visible_records:
+            table.move_cursor(row=0, column=0)
+            self._show_record_detail(self.visible_records[0])
+        else:
+            self.query_one("#detail", Static).update(f"No {self.view} match this view.")
+
+    def _render_current(self) -> None:
+        if self.view == "settings":
+            self._render_settings()
+        else:
+            self._render_records()
+
+    def _selected_setting(self) -> Setting | None:
+        table = self.query_one("#settings", DataTable)
+        if 0 <= table.cursor_row < len(self.visible_settings):
+            return self.visible_settings[table.cursor_row]
+        return None
+
+    def _show_detail(self, setting: Setting) -> None:
+        allowed = ""
+        if setting.allowed_values and not setting.free_text:
+            allowed = "\n\n[dim]Choices[/]\n" + "  ".join(escape(value) for value in setting.allowed_values)
+        source = escape(setting.source_file.replace("home/.chezmoidata/", ""))
+        self.query_one("#detail", Static).update(
+            f"[b]{escape(setting.label)}[/]\n"
+            f"[dim]{escape(setting.key)}[/]\n\n"
+            f"{escape(setting.description)}\n\n"
+            f"[dim]Current[/]\n{escape(setting.value)}"
+            f"{allowed}\n\n"
+            f"[dim]Source[/]\n{source}"
+        )
+
+    def _show_record_detail(self, record: dict[str, Any]) -> None:
+        if self.view == "utilities":
+            command = " ".join(
+                [str(record.get("command", "")), *(str(value) for value in record.get("arguments", []))]
+            )
+            text = (
+                f"[b]{escape(str(record.get('label', 'Utility')))}[/]\n"
+                f"[dim]{escape(str(record.get('module', 'root')))} · {escape(str(record.get('state', 'unknown')))}[/]\n\n"
+                f"{escape(str(record.get('description', '')))}\n\n"
+                f"[dim]Command[/]\n{escape(command)}\n\n"
+                "[dim]Press Enter to run this utility action.[/]"
+            )
+        elif self.view == "shortcuts":
+            text = (
+                f"[b]{escape(str(record.get('title', 'Shortcut')))}[/]\n"
+                f"[dim]{escape(str(record.get('displayKey', '')))}[/]\n\n"
+                f"{escape(str(record.get('detail', '')))}\n\n"
+                f"[dim]Command[/]\n{escape(str(record.get('command', '')))}\n\n"
+                f"[dim]Owner[/]\n{escape(str(record.get('owner', 'root')))}\n\n"
+                f"[dim]Source[/]\n{escape(str(record.get('sourceFile', 'unmapped')))}\n\n"
+                "[dim]Press Enter to rebind this shortcut.[/]"
+            )
+        elif self.view == "modules":
+            state = "enabled" if record.get("enabled") else "disabled"
+            action = "disable" if record.get("enabled") else "enable"
+            text = (
+                f"[b]{escape(str(record.get('id', 'Module')))}[/]\n"
+                f"[dim]{state}[/]\n\n{escape(str(record.get('description', '')))}\n\n"
+                f"[dim]Press Enter to {action}. The guarded plan runs first.[/]"
+            )
+        elif self.view == "dependencies":
+            owners = ", ".join(str(value) for value in record.get("owners", []))
+            text = (
+                f"[b]{escape(str(record.get('name', 'Dependency')))}[/]\n"
+                f"[dim]{escape(str(record.get('manager', '')))} · {escape(str(record.get('kind', '')))}[/]\n\n"
+                f"State  {escape(str(record.get('state', 'unknown')))}\n"
+                f"Installed  {escape(str(record.get('installedVersion') or '—'))}\n"
+                f"Locked  {escape(str(record.get('lockedVersion') or '—'))}\n"
+                f"Update  {escape(str(record.get('updateStatus', 'unchecked')))}\n\n"
+                f"[dim]Owners[/]\n{escape(owners or '—')}"
+            )
+        else:
+            text = (
+                f"[b]{escape(str(record.get('path', 'Managed target')))}[/]\n"
+                f"[dim]{escape(str(record.get('type', '')))}[/]\n\n"
+                f"State  {escape(str(record.get('status', 'unknown')))}\n"
+                f"Actual type  {escape(str(record.get('actualType') or '—'))}\n\n"
+                "[dim]System removal still requires the dedicated exact-confirmation workflow.[/]"
+            )
+        self.query_one("#detail", Static).update(text)
+
+    @on(OptionList.OptionSelected, "#categories")
+    def select_category(self, event: OptionList.OptionSelected) -> None:
+        selected = str(event.option.id or "settings:all")
+        if selected.startswith("settings:"):
+            self.category = selected.split(":", 1)[1]
+            self._render_settings()
+        else:
+            self.run_worker(self._load_view(selected), exclusive=True, group="view")
+
+    @on(Input.Changed, "#search")
+    def search_changed(self) -> None:
+        self._render_current()
+
+    @on(DataTable.RowHighlighted, "#settings")
+    def row_highlighted(self) -> None:
+        if self.view == "settings":
+            setting = self._selected_setting()
+            if setting is not None:
+                self._show_detail(setting)
+        else:
+            table = self.query_one("#settings", DataTable)
+            if 0 <= table.cursor_row < len(self.visible_records):
+                self._show_record_detail(self.visible_records[table.cursor_row])
+
+    @on(DataTable.RowSelected, "#settings")
+    def row_selected(self) -> None:
+        self.action_edit_selected()
+
+    def action_focus_search(self) -> None:
+        self.query_one("#search", Input).focus()
+
+    def action_edit_selected(self) -> None:
+        if not self.query_one("#settings", DataTable).has_focus:
+            return
+        if self.view == "utilities":
+            table = self.query_one("#settings", DataTable)
+            if 0 <= table.cursor_row < len(self.visible_records):
+                utility = self.visible_records[table.cursor_row]
+                self.run_worker(self._run_selected_utility(utility), exclusive=True, group="utility")
+            return
+        if self.view == "modules":
+            table = self.query_one("#settings", DataTable)
+            if 0 <= table.cursor_row < len(self.visible_records):
+                module = self.visible_records[table.cursor_row]
+                self.run_worker(
+                    self._prepare_module_action(module), exclusive=True, group="module-action"
+                )
+            return
+        if self.view == "shortcuts":
+            table = self.query_one("#settings", DataTable)
+            if 0 <= table.cursor_row < len(self.visible_records):
+                shortcut = self.visible_records[table.cursor_row]
+                if shortcut.get("sourceFile"):
+                    self.push_screen(EditShortcutScreen(shortcut), self._shortcut_edited)
+                else:
+                    self.notify(
+                        "This rendered shortcut has no authoritative source mapping.",
+                        title="Shortcut cannot be edited",
+                        severity="warning",
+                    )
+            return
+        if self.view != "settings":
+            return
+        setting = self._selected_setting()
+        if setting is not None:
+            self.push_screen(EditSettingScreen(setting), self._setting_edited)
+
+    def _setting_edited(self, value: str | None) -> None:
+        setting = self._selected_setting()
+        if setting is not None and value is not None and value != setting.value:
+            self.run_worker(self._apply_setting(setting, value), exclusive=True, group="settings")
+
+    async def _apply_setting(self, setting: Setting, value: str) -> None:
+        self.query_one("#status", Static).update(f"applying {setting.label.lower()}…")
+        try:
+            await asyncio.to_thread(self.backend.set_setting, setting.key, value)
+        except Exception as error:
+            self.query_one("#status", Static).update("apply failed")
+            self.notify(str(error), title="Setting was not changed", severity="error", timeout=8)
+            return
+        self.notify(f"{setting.label}: {setting.value} → {value}", title="Applied")
+        await self._load_settings()
+
+    async def _run_selected_utility(self, utility: dict[str, Any]) -> None:
+        label = str(utility.get("label", "Utility"))
+        self.query_one("#status", Static).update(f"running {label.lower()}…")
+        try:
+            output = await asyncio.to_thread(self.backend.run_utility, utility)
+        except Exception as error:
+            self.query_one("#status", Static).update("utility failed")
+            self.notify(str(error), title=f"{label} failed", severity="error", timeout=8)
+            return
+        self.query_one("#status", Static).update(f"completed {label.lower()}")
+        self.notify(output or "Completed successfully", title=label)
+
+    async def _prepare_module_action(self, module: dict[str, Any]) -> None:
+        module_id = str(module.get("id", ""))
+        action = "disable" if module.get("enabled") else "enable"
+        self.query_one("#status", Static).update(f"planning {action} {module_id}…")
+        try:
+            plan = await asyncio.to_thread(self.backend.plan_module_action, module_id, action)
+        except Exception as error:
+            self.query_one("#status", Static).update("module plan failed")
+            self.notify(
+                str(error), title=f"Could not {action} {module_id}", severity="error", timeout=8
+            )
+            return
+        self.query_one("#status", Static).update(f"ready to {action} {module_id}")
+        self.push_screen(ModuleActionScreen(module, action, plan), self._module_action_confirmed)
+
+    def _module_action_confirmed(self, selection: tuple[str, str] | None) -> None:
+        if selection is not None:
+            self.run_worker(
+                self._execute_module_action(*selection), exclusive=True, group="module-action"
+            )
+
+    async def _execute_module_action(self, module_id: str, action: str) -> None:
+        self.query_one("#status", Static).update(f"{action}ing {module_id}…")
+        try:
+            await asyncio.to_thread(self.backend.execute_module_action, module_id, action)
+            settings = await asyncio.to_thread(self.backend.list_settings)
+        except Exception as error:
+            self.query_one("#status", Static).update(f"{action} failed")
+            self.notify(
+                str(error), title=f"Could not {action} {module_id}", severity="error", timeout=8
+            )
+            return
+        self.settings = sorted(settings, key=lambda setting: setting.key)
+        self._populate_categories()
+        self.view_cache.pop("modules", None)
+        await self._load_view("modules", refresh=True)
+        state = "enabled" if action == "enable" else "disabled"
+        self.notify(f"{module_id} is now {state}.", title="Applied")
+
+    def _shortcut_edited(self, selection: tuple[str, str] | None) -> None:
+        if selection is not None:
+            self.run_worker(
+                self._apply_shortcut_rebind(*selection), exclusive=True, group="shortcut-rebind"
+            )
+
+    async def _apply_shortcut_rebind(self, stable_id: str, raw_key: str) -> None:
+        self.query_one("#status", Static).update(f"applying {raw_key}…")
+        try:
+            result = await asyncio.to_thread(self.backend.rebind_shortcut, stable_id, raw_key)
+        except Exception as error:
+            self.query_one("#status", Static).update("shortcut apply failed")
+            self.notify(str(error), title="Shortcut was not changed", severity="error", timeout=8)
+            return
+        self.view_cache.pop("shortcuts", None)
+        await self._load_view("shortcuts", refresh=True)
+        self.notify(
+            f"{result.get('oldRawKey', '')} → {result.get('newRawKey', raw_key)}",
+            title="Shortcut applied",
+        )
+
+    def _run_agent_command(self) -> None:
+        manager = os.environ.get(
+            "DOTFILES_MANAGER_COMMAND", str(Path.home() / "bin" / "dotfiles-manager")
+        )
+        result = subprocess.run(
+            [manager, "tmux", "select", "agent"], text=True, capture_output=True, check=False
+        )
+        if result.returncode != 0:
+            raise BackendError(result.stderr.strip() or "could not open the agent")
+
+    def action_open_agent(self) -> None:
+        self.run_worker(self._open_agent(), exclusive=True, group="agent")
+
+    async def _open_agent(self) -> None:
+        try:
+            await asyncio.to_thread(self.agent_runner)
+        except Exception as error:
+            self.notify(str(error), title="Could not open agent", severity="error", timeout=8)
+
+    def action_refresh(self) -> None:
+        if self.view == "settings":
+            self.run_worker(self._load_settings(), exclusive=True, group="settings")
+        else:
+            self.run_worker(
+                self._load_view(self.view, refresh=True), exclusive=True, group="view-refresh"
+            )
+
+
+class FakeBackend:
+    def __init__(self) -> None:
+        self.values = {"assistant": "hermes-dotfiles", "theme.tmuxFlavor": "mocha"}
+        self.calls = {
+            view: 0 for view in ("utilities", "shortcuts", "modules", "dependencies", "system")
+        }
+        self.utility_runs: list[str] = []
+        self.module_enabled = True
+        self.shortcut_raw_key = "fn - 0x2B"
+
+    def list_settings(self) -> list[Setting]:
+        return [
+            Setting(
+                key="assistant",
+                value=self.values["assistant"],
+                type="string",
+                description="Agent CLI used by the stable assistant window.",
+                allowed_values=("hermes-dotfiles", "codex"),
+                free_text=True,
+                data_path="preferences.assistant",
+                source_file="home/.chezmoidata/20-preferences.yaml",
+            ),
+            Setting(
+                key="theme.tmuxFlavor",
+                value=self.values["theme.tmuxFlavor"],
+                type="string",
+                description="Catppuccin flavor for normal tmux sessions.",
+                allowed_values=("mocha", "latte"),
+                free_text=False,
+                data_path="preferences.theme.tmuxFlavor",
+                source_file="home/.chezmoidata/20-preferences.yaml",
+            ),
+        ]
+
+    def set_setting(self, key: str, value: str) -> dict[str, Any]:
+        self.values[key] = value
+        return {"status": "complete", "key": key, "value": value}
+
+    def list_shortcuts(self) -> list[dict[str, Any]]:
+        self.calls["shortcuts"] += 1
+        return [
+            {
+                "stableId": "sha256:test-shortcut",
+                "rawKey": self.shortcut_raw_key,
+                "displayKey": "fn ,",
+                "title": "Open dotfiles control panel",
+                "detail": "Open the persistent control panel.",
+                "command": "dotfiles-manager open",
+                "owner": "dotfiles-manager",
+                "sourceFile": "modules/dotfiles-manager/targets/skhdrc.tmpl",
+            }
+        ]
+
+    def rebind_shortcut(self, stable_id: str, raw_key: str) -> dict[str, Any]:
+        old_key = self.shortcut_raw_key
+        self.shortcut_raw_key = raw_key
+        return {"oldRawKey": old_key, "newRawKey": raw_key, "stableId": stable_id}
+
+    def list_utilities(self) -> list[dict[str, Any]]:
+        self.calls["utilities"] += 1
+        return [
+            {
+                "id": "test-notification",
+                "label": "Test desktop notification",
+                "description": "Send one notification through the managed backend.",
+                "command": "~/bin/desktop-notify",
+                "arguments": ["Dotfiles notifications", "Notification delivery is working"],
+                "module": "notifications",
+                "state": "ready",
+            }
+        ]
+
+    def run_utility(self, utility: dict[str, Any]) -> str:
+        self.utility_runs.append(str(utility["id"]))
+        return "Notification sent"
+
+    def list_modules(self) -> list[dict[str, Any]]:
+        self.calls["modules"] += 1
+        return [
+            {
+                "id": "settings",
+                "enabled": self.module_enabled,
+                "description": "Settings registry",
+            }
+        ]
+
+    def plan_module_action(self, module_id: str, action: str) -> dict[str, Any]:
+        return {
+            "module": {"id": module_id},
+            "operation": f"module-{action}",
+            "exclusiveTargets": ["~/bin/dotfiles-settings"],
+            "contributionTargets": [],
+        }
+
+    def execute_module_action(self, module_id: str, action: str) -> dict[str, Any]:
+        self.module_enabled = action == "enable"
+        return {"module": {"id": module_id, "enabled": self.module_enabled}}
+
+    def dependency_status(self) -> dict[str, Any]:
+        self.calls["dependencies"] += 1
+        return {
+            "summary": {"missing": 0, "outdated": 0},
+            "dependencies": [
+                {
+                    "name": "tmux",
+                    "state": "installed",
+                    "manager": "homebrew",
+                    "kind": "formula",
+                    "owners": ["root"],
+                }
+            ],
+        }
+
+    def system_status(self) -> dict[str, Any]:
+        self.calls["system"] += 1
+        return {
+            "blockers": [],
+            "targets": [{"path": ".tmux.conf", "type": "file", "status": "managed"}],
+        }
+
+
+async def run_self_test() -> None:
+    backend = FakeBackend()
+    agent_calls: list[str] = []
+    app = DotfilesManagerApp(backend=backend, agent_runner=lambda: agent_calls.append("agent"))
+    async with app.run_test(size=(120, 36)) as pilot:
+        await pilot.pause()
+        table = app.query_one("#settings", DataTable)
+        assert table.row_count == 2
+        await pilot.press("/")
+        await pilot.press("t", "h", "e", "m", "e")
+        await pilot.pause()
+        assert table.row_count == 1
+        app.query_one("#search", Input).value = ""
+        await pilot.pause()
+        assert table.row_count == 2
+        table.focus()
+        table.move_cursor(row=1, column=0)
+        await pilot.press("enter")
+        await pilot.pause()
+        select = app.screen.query_one("#edit-select", Select)
+        select.value = "latte"
+        await pilot.click("#apply")
+        await pilot.pause()
+        assert backend.values["theme.tmuxFlavor"] == "latte"
+        await pilot.press("a")
+        await pilot.pause()
+        assert agent_calls == ["agent"]
+        await app._prefetch_views()
+        assert backend.calls == {
+            "utilities": 1,
+            "shortcuts": 1,
+            "modules": 1,
+            "dependencies": 1,
+            "system": 1,
+        }
+        await app._load_view("utilities")
+        await pilot.pause()
+        assert app.view == "utilities"
+        assert table.row_count == 1
+        table.focus()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert backend.utility_runs == ["test-notification"]
+        await app._load_view("shortcuts")
+        await pilot.pause()
+        assert app.view == "shortcuts"
+        assert table.row_count == 1
+        assert "Open dotfiles control panel" in str(app.query_one("#detail", Static).render())
+        await app._load_view("shortcuts")
+        assert backend.calls["shortcuts"] == 1
+        table.focus()
+        await pilot.press("enter")
+        await pilot.pause()
+        shortcut_input = app.screen.query_one("#shortcut-input", Input)
+        shortcut_input.value = "fn - 0x2C"
+        await pilot.click("#shortcut-apply")
+        await pilot.pause()
+        assert backend.shortcut_raw_key == "fn - 0x2C"
+        await app._load_view("modules")
+        await pilot.pause()
+        assert app.view == "modules"
+        assert table.row_count == 1
+        table.focus()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert "Disable settings?" in str(app.screen.query_one("#module-title", Label).render())
+        await pilot.click("#module-confirm")
+        await pilot.pause()
+        assert backend.module_enabled is False
+        assert "disabled" in str(app.query_one("#detail", Static).render())
+    print("dotfiles-manager-ui self-test passed")
+
+
+def parse_arguments(arguments: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="dotfiles-manager-ui")
+    parser.add_argument("--self-test", action="store_true")
+    return parser.parse_args(arguments)
+
+
+def main(arguments: Sequence[str] | None = None) -> None:
+    options = parse_arguments(arguments)
+    if options.self_test:
+        asyncio.run(run_self_test())
+    else:
+        DotfilesManagerApp().run()
+
+
+if __name__ == "__main__":
+    main()

@@ -15,6 +15,9 @@ optional:
   executables:
     - osascript
     - swiftc
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
 state:
   preserved:
     - ~/.config/yabai/projects.json

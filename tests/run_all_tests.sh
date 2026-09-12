@@ -18,6 +18,8 @@ FAILED_SUITES=()
 # Test suites to run
 TEST_SUITES=(
     "test_agent_timer.sh"
+    "test_hermes_agent.sh"
+    "test_dotfiles_manager.sh"
     "test_dotfiles_lib.sh"
     "test_module_lifecycle.sh"
     "test_module_integration.sh"

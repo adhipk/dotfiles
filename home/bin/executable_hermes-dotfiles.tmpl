@@ -1,0 +1,3 @@
+{{- if .modules.hermesAgent.enabled -}}
+{{ includeTemplate "../modules/hermes-agent/bin/hermes-dotfiles" . }}
+{{- end -}}

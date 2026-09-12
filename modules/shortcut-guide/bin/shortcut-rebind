@@ -1,0 +1,230 @@
+#!/usr/bin/env python3
+"""Atomically rebind one source-owned skhd shortcut."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from typing import Any
+
+
+KEY_PATTERN = re.compile(r"^[A-Za-z0-9_+ .,/;'\[\]`=-]{3,80}$")
+
+
+class RebindError(RuntimeError):
+    pass
+
+
+def default_root() -> Path:
+    if value := os.environ.get("DOTFILES_DIR"):
+        return Path(value).expanduser().resolve()
+    return Path(__file__).resolve().parents[2]
+
+
+def atomic_write(path: Path, content: bytes) -> None:
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(temporary, path.stat().st_mode & 0o777)
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def run(command: list[str], *, cwd: Path) -> str:
+    result = subprocess.run(command, cwd=cwd, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        message = result.stderr.strip() or result.stdout.strip() or f"exit {result.returncode}"
+        raise RebindError(message)
+    return result.stdout.strip()
+
+
+def load_catalog(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise RebindError(f"could not load shortcut catalog: {error}") from error
+    if not isinstance(payload, dict) or not isinstance(payload.get("shortcuts"), list):
+        raise RebindError("shortcut catalog has an invalid schema")
+    return payload
+
+
+def validate_key(raw_key: str) -> None:
+    if not KEY_PATTERN.fullmatch(raw_key) or " - " not in raw_key or ":" in raw_key:
+        raise RebindError(
+            "new shortcut must use skhd key syntax such as 'alt - 1' or 'shift + alt - h'"
+        )
+
+
+def resolve_source(root: Path, relative: str) -> Path:
+    if not relative or relative.startswith("/") or ".." in Path(relative).parts:
+        raise RebindError("shortcut has no safe sourceFile mapping")
+    source = root / relative
+    resolved = source.resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as error:
+        raise RebindError("shortcut sourceFile escapes the repository") from error
+    if resolved != source.absolute() or not source.is_file():
+        raise RebindError("shortcut sourceFile is missing or traverses a symlink")
+    return source
+
+
+def replace_key(content: str, old_key: str, new_key: str) -> str:
+    pattern = re.compile(
+        rf'^(?P<prefix>\s*(?:"[^"]+"\s*:\s*)?){re.escape(old_key)}(?P<suffix>\s*(?::|\[))',
+        re.MULTILINE,
+    )
+    replaced, count = pattern.subn(
+        lambda match: f"{match.group('prefix')}{new_key}{match.group('suffix')}",
+        content,
+    )
+    if count != 1:
+        raise RebindError(f"expected one authoritative binding for {old_key!r}; found {count}")
+    return replaced
+
+
+def rebind(root: Path, stable_id: str, new_key: str, apply: bool) -> dict[str, Any]:
+    lock = root / ".dotfiles-settings.lock"
+    try:
+        lock.mkdir()
+    except FileExistsError as error:
+        raise RebindError("another settings or shortcut mutation is in progress") from error
+    try:
+        return rebind_locked(root, stable_id, new_key, apply)
+    finally:
+        try:
+            lock.rmdir()
+        except OSError:
+            pass
+
+
+def rebind_locked(root: Path, stable_id: str, new_key: str, apply: bool) -> dict[str, Any]:
+    validate_key(new_key)
+    module_dir = root / "modules" / "shortcut-guide"
+    catalog_path = module_dir / "generated" / "shortcuts.json"
+    markdown_path = module_dir / "generated" / "shortcuts.md"
+    catalog = load_catalog(catalog_path)
+    matches = [row for row in catalog["shortcuts"] if row.get("stableId") == stable_id]
+    if len(matches) != 1:
+        raise RebindError(f"shortcut id must identify exactly one binding: {stable_id}")
+    binding = matches[0]
+    old_key = str(binding.get("rawKey", ""))
+    if new_key == old_key:
+        return {
+            "status": "complete",
+            "changed": False,
+            "oldRawKey": old_key,
+            "newRawKey": new_key,
+            "shortcut": binding,
+        }
+    if any(
+        row.get("stableId") != stable_id and row.get("rawKey") == new_key
+        for row in catalog["shortcuts"]
+    ):
+        raise RebindError(f"shortcut key is already in use: {new_key}")
+
+    source = resolve_source(root, str(binding.get("sourceFile", "")))
+    original = source.read_bytes()
+    generated_originals = {
+        path: path.read_bytes() for path in (catalog_path, markdown_path) if path.is_file()
+    }
+    updated = replace_key(original.decode("utf-8"), old_key, new_key).encode("utf-8")
+    catalog_command = Path(
+        os.environ.get("SHORTCUT_REBIND_CATALOG_BIN", str(module_dir / "bin" / "shortcut-catalog"))
+    )
+    chezmoi = os.environ.get("SHORTCUT_REBIND_CHEZMOI_BIN", "chezmoi")
+    skhd = os.environ.get("SHORTCUT_REBIND_SKHD_BIN", "skhd")
+    applied = False
+
+    try:
+        atomic_write(source, updated)
+        run([str(catalog_command), "update", "--root", str(root)], cwd=root)
+        refreshed = load_catalog(catalog_path)
+        rebound = next(
+            (
+                row
+                for row in refreshed["shortcuts"]
+                if row.get("owner") == binding.get("owner")
+                and row.get("rawKey") == new_key
+                and row.get("command") == binding.get("command")
+            ),
+            None,
+        )
+        if rebound is None:
+            raise RebindError("updated catalog does not contain the rebound shortcut")
+        if apply:
+            run(
+                [chezmoi, "-S", str(root), "apply", "--force", "--source-path", "home/dot_skhdrc.tmpl"],
+                cwd=root,
+            )
+            applied = True
+            if shutil.which(skhd):
+                run([skhd, "--restart-service"], cwd=root)
+    except Exception as error:
+        atomic_write(source, original)
+        for path, content in generated_originals.items():
+            atomic_write(path, content)
+        if applied:
+            subprocess.run(
+                [chezmoi, "-S", str(root), "apply", "--force", "--source-path", "home/dot_skhdrc.tmpl"],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+        if isinstance(error, RebindError):
+            raise
+        raise RebindError(str(error)) from error
+    return {
+        "status": "complete",
+        "changed": True,
+        "oldRawKey": old_key,
+        "newRawKey": new_key,
+        "shortcut": rebound,
+    }
+
+
+def parse_arguments(arguments: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="shortcut-rebind")
+    parser.add_argument("stable_id")
+    parser.add_argument("new_raw_key")
+    parser.add_argument("--root", type=Path, default=default_root())
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--no-apply", action="store_true")
+    return parser.parse_args(arguments)
+
+
+def main(arguments: list[str] | None = None) -> int:
+    options = parse_arguments(arguments)
+    try:
+        result = rebind(
+            options.root.expanduser().resolve(),
+            options.stable_id,
+            options.new_raw_key.strip(),
+            not options.no_apply,
+        )
+    except RebindError as error:
+        print(f"shortcut-rebind: {error}", file=sys.stderr)
+        return 1
+    if options.json:
+        print(json.dumps(result, sort_keys=True))
+    else:
+        print(f"{result['oldRawKey']} -> {result['newRawKey']}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

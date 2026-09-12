@@ -13,6 +13,9 @@ requires:
     - kit
     - kit-watch
     - uv
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
 state:
   preserved: []
   ephemeral: []

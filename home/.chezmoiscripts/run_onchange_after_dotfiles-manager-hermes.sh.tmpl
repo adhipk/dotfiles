@@ -1,0 +1,3 @@
+{{- if and .modules.dotfilesManager.enabled .modules.hermesAgent.enabled -}}
+{{ includeTemplate "../modules/dotfiles-manager/install/configure-hermes.sh.tmpl" . }}
+{{- end -}}

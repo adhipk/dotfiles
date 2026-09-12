@@ -1,0 +1,82 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: dotfiles-manager
+version: 1.0.0
+description: Human-first Textual control panel for dotfiles settings with an optional Hermes agent.
+dataKey: modules.dotfilesManager
+distribution:
+  standalone: false
+requires:
+  executables:
+    - bash
+    - tmux
+    - uv
+    - dotfiles-settings
+    - dotfiles-module
+    - dotfiles-deps
+    - dotfiles-uninstall
+    - dotfiles-manager
+    - dotfiles-manager-ui
+optional:
+  executables:
+    - hermes
+    - scratchpads
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
+state:
+  preserved:
+    - ~/.hermes/profiles/dotfiles
+    - ~/.config/dotfiles-manager/theme.tcss
+  ephemeral:
+    - ~/.hermes/profiles/dotfiles/skins/dotfiles-manager.yaml
+commands:
+  - name: dotfiles-manager
+    source: bin/dotfiles-manager
+    target: ~/bin/dotfiles-manager
+  - name: dotfiles-manager-ui
+    source: bin/dotfiles-manager-ui
+    target: ~/bin/dotfiles-manager-ui
+targets:
+  - service: command
+    source: bin/dotfiles-manager
+    destination: ~/bin/dotfiles-manager
+    bridge: home/bin/executable_dotfiles-manager.tmpl
+    ownership: exclusive
+  - service: command
+    source: bin/dotfiles-manager-ui
+    destination: ~/bin/dotfiles-manager-ui
+    bridge: home/bin/executable_dotfiles-manager-ui.tmpl
+    ownership: exclusive
+  - service: dependency-lock
+    source: bin/dotfiles-manager-ui.lock
+    destination: ~/bin/dotfiles-manager-ui.lock
+    bridge: home/bin/dotfiles-manager-ui.lock.tmpl
+    ownership: exclusive
+  - service: config
+    source: assets/hermes-skin.yaml
+    destination: ~/.config/dotfiles-manager/hermes-skin.yaml
+    bridge: home/dot_config/dotfiles-manager/hermes-skin.yaml.tmpl
+    ownership: exclusive
+  - service: config-example
+    source: assets/theme.example.tcss
+    destination: ~/.config/dotfiles-manager/theme.example.tcss
+    bridge: home/dot_config/dotfiles-manager/theme.example.tcss.tmpl
+    ownership: exclusive
+  - service: install-hook
+    source: install/configure-hermes.sh.tmpl
+    destination: chezmoi after-apply lifecycle
+    bridge: home/.chezmoiscripts/run_onchange_after_dotfiles-manager-hermes.sh.tmpl
+    ownership: exclusive
+  - service: skhd
+    source: targets/skhdrc.tmpl
+    destination: ~/.skhdrc
+    bridge: home/dot_skhdrc.tmpl
+    ownership: contribution
+  - service: yabai
+    source: targets/yabairc.tmpl
+    destination: ~/.yabairc
+    bridge: home/dot_yabairc.tmpl
+    ownership: contribution
+tests:
+  - tests/test_module.sh

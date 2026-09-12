@@ -12,6 +12,9 @@ requires:
     - gh
     - gh-create-repo
     - yq
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
 state:
   preserved: []
   ephemeral: []

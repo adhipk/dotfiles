@@ -410,7 +410,7 @@ assert_not_contains "$DESTINATION/.skhdrc" 'hotkeys terminal new' "disabled prof
 assert_not_contains "$DESTINATION/.skhdrc" 'focus-open-tmux-window.sh' "disabled profile removes Fn tmux window slots"
 assert_not_contains "$DESTINATION/.yabairc" 'signal --add label=app_mru_update' "disabled profile removes MRU registration"
 assert_contains "$DESTINATION/.yabairc" 'signal --remove "app_mru_update"' "disabled profile cleans a previously registered signal"
-assert_contains "$DESTINATION/.skhdrc" 'fn - 0x2B : ~/bin/scratchpads open codex' "disabled profile preserves unrelated scratchpads"
+assert_contains "$DESTINATION/.skhdrc" 'fn - 0x2B : ~/bin/dotfiles-manager open' "disabled profile preserves the unrelated dotfiles manager"
 assert_contains "$DESTINATION/.yabairc" 'signal --add label=tile_pip_on_create' "disabled profile preserves unrelated yabai signals"
 
 printf '\n================================\n'

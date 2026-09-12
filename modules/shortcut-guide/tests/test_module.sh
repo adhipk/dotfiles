@@ -10,6 +10,7 @@ TEMP_DIR="$(cd "$TEMP_DIR" && pwd -P)"
 APP="$TEMP_DIR/whichkey"
 JSON="$TEMP_DIR/parser.json"
 CATALOG="$MODULE_DIR/bin/shortcut-catalog"
+REBIND="$MODULE_DIR/bin/shortcut-rebind"
 OUTPUT_DIR="$TEMP_DIR/generated"
 FAKE_BIN="$TEMP_DIR/bin"
 PASSED=0
@@ -39,10 +40,12 @@ assert_file "$MODULE_DIR/README.md" "module documents its boundary"
 assert_file "$MODULE_DIR/app/WhichKey.swift" "module owns the Swift application"
 assert_executable "$MODULE_DIR/install/build-whichkey.sh" "module owns the native build adapter"
 assert_executable "$CATALOG" "module owns the catalog generator"
+assert_executable "$REBIND" "module owns the one-shortcut rebind command"
 assert_executable "$MODULE_DIR/bin/show_keys.sh" "module owns the stable launcher implementation"
 assert_file "$MODULE_DIR/targets/skhdrc.tmpl" "module owns the shortcut-guide binding"
 assert_file "$MODULE_DIR/generated/shortcuts.json" "module checks in machine-readable shortcuts"
 assert_file "$MODULE_DIR/generated/shortcuts.md" "module checks in human-readable shortcuts"
+assert_file "$DOTFILES_DIR/home/bin/executable_shortcut-rebind.tmpl" "module owns the rebind command bridge"
 assert_absent "$DOTFILES_DIR/scripts/whichkey/WhichKey.swift" "legacy Swift source is removed"
 assert_contains "$DOTFILES_DIR/scripts/build-whichkey.sh" \
   'exec "$ROOT/modules/shortcut-guide/install/build-whichkey.sh" "$@"' \
@@ -67,11 +70,67 @@ if PYTHONDONTWRITEBYTECODE=1 python3 "$CATALOG" --help >/dev/null; then
 else
   fail "catalog command parses" "successful --help" "command failed"
 fi
+if PYTHONDONTWRITEBYTECODE=1 python3 "$REBIND" --help >/dev/null; then
+  pass "rebind command parses"
+else
+  fail "rebind command parses" "successful --help" "command failed"
+fi
 
 assert_contains "$MODULE_DIR/app/WhichKey.swift" 'let owner: String' "Swift model exports shortcut ownership"
 assert_contains "$MODULE_DIR/app/WhichKey.swift" 'comment.hasPrefix("dotfiles-owner:")' "Swift parser reads rendered ownership markers"
 assert_contains "$MODULE_DIR/bin/show_keys.sh" 'module_dir="${SHORTCUT_GUIDE_MODULE_DIR:-$dotfiles_dir/modules/shortcut-guide}"' "launcher resolves module-owned source"
 assert_contains "$MODULE_DIR/README.md" 'not repeat shortcut keys or commands.' "module documents rendered skhd authority"
+
+REBIND_ROOT="$TEMP_DIR/rebind-root"
+mkdir -p \
+  "$REBIND_ROOT/modules/demo/targets" \
+  "$REBIND_ROOT/modules/shortcut-guide/generated" \
+  "$TEMP_DIR/rebind-bin"
+printf 'alt - 1 : demo-command\n' >"$REBIND_ROOT/modules/demo/targets/skhdrc.tmpl"
+cat >"$REBIND_ROOT/modules/shortcut-guide/generated/shortcuts.json" <<'EOF'
+{"schemaVersion":1,"shortcuts":[{"stableId":"sha256:test","owner":"demo","rawKey":"alt - 1","displayKey":"alt 1","title":"Demo","detail":"Demo","category":"System","command":"demo-command","sourceSection":"Demo","sourceFile":"modules/demo/targets/skhdrc.tmpl"}]}
+EOF
+printf '# generated\n' >"$REBIND_ROOT/modules/shortcut-guide/generated/shortcuts.md"
+cat >"$TEMP_DIR/rebind-bin/catalog" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+root="${3:?missing root}"
+raw_key="$(sed -E 's/[[:space:]]*:[[:space:]].*$//' "$root/modules/demo/targets/skhdrc.tmpl")"
+temp="$(mktemp "$root/modules/shortcut-guide/generated/shortcuts.json.tmp.XXXXXX")"
+jq --arg rawKey "$raw_key" '.shortcuts[0].rawKey = $rawKey' \
+  "$root/modules/shortcut-guide/generated/shortcuts.json" >"$temp"
+mv "$temp" "$root/modules/shortcut-guide/generated/shortcuts.json"
+EOF
+chmod +x "$TEMP_DIR/rebind-bin/catalog"
+if SHORTCUT_REBIND_CATALOG_BIN="$TEMP_DIR/rebind-bin/catalog" \
+  "$REBIND" sha256:test 'alt - 2' --root "$REBIND_ROOT" --no-apply --json \
+  >"$TEMP_DIR/rebind.json"; then
+  pass "rebind changes one source-owned shortcut without a shell command string"
+else
+  fail "rebind changes one source-owned shortcut without a shell command string" "successful rebind" "command failed"
+fi
+assert_contains "$REBIND_ROOT/modules/demo/targets/skhdrc.tmpl" 'alt - 2 : demo-command' "rebind updates the authoritative source template"
+if jq -e '.changed == true and .oldRawKey == "alt - 1" and .newRawKey == "alt - 2"' "$TEMP_DIR/rebind.json" >/dev/null; then
+  pass "rebind emits composable JSON"
+else
+  fail "rebind emits composable JSON" "changed old/new keys" "$(cat "$TEMP_DIR/rebind.json")"
+fi
+
+printf 'alt - 2 : demo-command\n' >"$REBIND_ROOT/modules/demo/targets/skhdrc.tmpl"
+cat >"$TEMP_DIR/rebind-bin/fail-catalog" <<'EOF'
+#!/usr/bin/env bash
+printf 'catalog failed\n' >&2
+exit 42
+EOF
+chmod +x "$TEMP_DIR/rebind-bin/fail-catalog"
+if SHORTCUT_REBIND_CATALOG_BIN="$TEMP_DIR/rebind-bin/fail-catalog" \
+  "$REBIND" sha256:test 'alt - 3' --root "$REBIND_ROOT" --no-apply >/dev/null 2>&1; then
+  fail "rebind rolls source back when catalog validation fails" "non-zero result" "command passed"
+elif grep -Fq 'alt - 2 : demo-command' "$REBIND_ROOT/modules/demo/targets/skhdrc.tmpl"; then
+  pass "rebind rolls source back when catalog validation fails"
+else
+  fail "rebind rolls source back when catalog validation fails" "original source" "$(cat "$REBIND_ROOT/modules/demo/targets/skhdrc.tmpl")"
+fi
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
   pass "native parser and catalog execution are macOS-only"

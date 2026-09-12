@@ -21,6 +21,9 @@ optional:
     - skhd
     - tmux
     - zsh
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
 state:
   preserved:
     - ~/.config/sesh/hyperspaces.json

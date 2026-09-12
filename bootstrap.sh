@@ -30,6 +30,15 @@ start_desktop_service() {
   fi
 }
 
+warm_dotfiles_manager_ui() {
+  local manager_ui="$HOME/bin/dotfiles-manager-ui"
+
+  command -v uv >/dev/null 2>&1 || return 0
+  [[ -x "$manager_ui" ]] || return 0
+  echo "Preparing the dotfiles control panel..."
+  "$manager_ui" --self-test >/dev/null
+}
+
 if [ ! -d "$DOTFILES_DIR" ]; then
   echo "Dotfiles directory not found at $DOTFILES_DIR" >&2
   exit 1
@@ -62,6 +71,8 @@ fi
 echo "Applying chezmoi source state..."
 "$DOTFILES_DIR/install.sh"
 
+warm_dotfiles_manager_ui
+
 start_desktop_service yabai
 start_desktop_service skhd
 
@@ -71,5 +82,9 @@ echo "  1. Grant Accessibility to yabai, skhd, and Ghostty; approve Karabiner's 
 echo "  2. Complete yabai's SIP setup, then run: setup-yabai-sa"
 echo "     https://github.com/asmvik/yabai/wiki/Disabling-System-Integrity-Protection"
 echo "  3. Sign in to the Codex app and CLI."
-echo "  4. Open this directory's canonical task list: todo"
-echo "  5. Review personal commands: man-me"
+echo "  4. Install and configure Hermes, then create its dotfiles profile:"
+echo "     curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash"
+echo "     hermes profile create dotfiles --clone-from default --no-alias"
+echo "     dotfiles-manager configure"
+echo "  5. Open this directory's canonical task list: todo"
+echo "  6. Review personal commands: man-me"

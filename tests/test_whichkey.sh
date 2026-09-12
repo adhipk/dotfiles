@@ -100,7 +100,7 @@ fi
 
 assert_jq 'length >= 50' "Parser covers the active shortcut surface"
 assert_jq 'any(.[]; .rawKey == "shift + alt - tab")' "Parser includes Shift+Alt bindings"
-assert_jq 'any(.[]; .displayKey == "fn ," and .title == "Open dotfiles scratchpad" and .category == "Apps & Focus")' "Parser categorizes Fn+Comma as the dotfiles scratchpad"
+assert_jq 'any(.[]; .displayKey == "fn ," and .title == "Open dotfiles control panel" and .category == "Apps & Focus")' "Parser categorizes Fn+Comma as the dotfiles control panel"
 assert_jq 'any(.[]; .displayKey == "fn P" and .title == "Open session manager" and .category == "Apps & Focus")' "Parser categorizes Fn+P as the floating session manager"
 assert_jq '([.[] | select(.command | test("focus-open-tmux-window\\.sh [1-9]$"))] | length) == 9' "Parser exposes nine open tmux window slots"
 assert_jq 'any(.[]; .displayKey == "fn 1" and .title == "Focus open tmux window 1" and .category == "Apps & Focus")' "Parser categorizes Fn+1 as the first open tmux window"

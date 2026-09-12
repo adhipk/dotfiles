@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# man-me: name=desktop-notify
+# man-me: category=Desktop Helpers
+# man-me: usage=desktop-notify TITLE MESSAGE
+# man-me: description=Deliver a macOS desktop notification through a stable backend adapter.
+# man-me: tags=notification macos terminal-notifier osascript
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_LIB="${DESKTOP_NOTIFY_CONFIG_LIB:-}"
+
+if [[ -z "$CONFIG_LIB" && -r "$SCRIPT_DIR/../lib/config.sh" ]]; then
+  CONFIG_LIB="$SCRIPT_DIR/../lib/config.sh"
+elif [[ -z "$CONFIG_LIB" && -r "$HOME/.config/notifications/config.sh" ]]; then
+  CONFIG_LIB="$HOME/.config/notifications/config.sh"
+fi
+
+if [[ -n "$CONFIG_LIB" ]]; then
+  # shellcheck source=../lib/config.sh
+  source "$CONFIG_LIB"
+fi
+
+notification_setting() {
+  local key="$1" fallback="$2"
+  if declare -F desktop_notify_config_value >/dev/null 2>&1; then
+    desktop_notify_config_value "$key" "$fallback"
+  else
+    printf '%s\n' "$fallback"
+  fi
+}
+
+usage() {
+  cat <<'EOF'
+Usage: desktop-notify TITLE MESSAGE
+
+Environment:
+  DESKTOP_NOTIFY_BACKEND   auto, terminal-notifier, osascript, or none
+  DESKTOP_NOTIFY_GROUP     Notification replacement group
+  DESKTOP_NOTIFY_SOUND     Optional macOS sound name
+  DESKTOP_NOTIFY_IGNORE_DND  1 to request delivery through Focus modes (default)
+  DESKTOP_NOTIFY_TERMINAL_NOTIFIER  Explicit terminal-notifier executable
+  DESKTOP_NOTIFY_OSASCRIPT Explicit osascript executable
+EOF
+}
+
+die() {
+  printf 'desktop-notify: %s\n' "$*" >&2
+  exit 64
+}
+
+find_terminal_notifier() {
+  local candidate="${DESKTOP_NOTIFY_TERMINAL_NOTIFIER:-}"
+
+  if [[ -n "$candidate" ]]; then
+    [[ -x "$candidate" ]] && printf '%s\n' "$candidate"
+    return
+  fi
+
+  if command -v terminal-notifier >/dev/null 2>&1; then
+    command -v terminal-notifier
+    return
+  fi
+
+  for candidate in /opt/homebrew/bin/terminal-notifier /usr/local/bin/terminal-notifier; do
+    if [[ -x "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return
+    fi
+  done
+}
+
+notification_group() {
+  local value normalized prefix
+  value="${DESKTOP_NOTIFY_GROUP:-$1}"
+  normalized=$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]._-' '-')
+  normalized="${normalized#-}"
+  normalized="${normalized%-}"
+  prefix=$(notification_setting '.group_prefix' 'dotfiles')
+  printf '%s.%s\n' "${prefix:-dotfiles}" "${normalized:-desktop-notify}"
+}
+
+send_with_terminal_notifier() {
+  local notifier="$1" title="$2" message="$3" group="$4"
+  local -a arguments
+
+  arguments=(-title "$title" -message "$message" -group "$group")
+  if [[ "$ignore_dnd" == "1" || "$ignore_dnd" == "true" ]]; then
+    arguments+=(-ignoreDnD)
+  fi
+  if [[ -n "$sound" && "$sound" != "none" ]]; then
+    arguments+=(-sound "$sound")
+  fi
+
+  "$notifier" "${arguments[@]}"
+}
+
+send_with_osascript() {
+  local osascript_command title message
+  osascript_command="${DESKTOP_NOTIFY_OSASCRIPT:-/usr/bin/osascript}"
+  title="$1"
+  message="$2"
+
+  [[ -x "$osascript_command" ]] || return 127
+
+  # AppleScript's legacy notification API rejects some multiline payloads.
+  # Normalize them in Bash so the fallback script remains valid on every
+  # supported macOS release.
+  message=${message//$'\r\n'/' · '}
+  message=${message//$'\r'/' · '}
+  message=${message//$'\n'/' · '}
+
+  "$osascript_command" - "$title" "$message" <<'APPLESCRIPT'
+on run argv
+  set noticeTitle to item 1 of argv
+  set noticeBody to item 2 of argv
+  display notification noticeBody with title noticeTitle
+end run
+APPLESCRIPT
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
+[[ "$#" -eq 2 ]] || die "expected TITLE and MESSAGE"
+
+title="$1"
+message="$2"
+[[ -n "$message" ]] || exit 0
+
+backend="${DESKTOP_NOTIFY_BACKEND:-$(notification_setting '.backend' 'auto')}"
+ignore_dnd="${DESKTOP_NOTIFY_IGNORE_DND:-$(notification_setting '.ignore_dnd' 'true')}"
+sound="${DESKTOP_NOTIFY_SOUND:-$(notification_setting '.sound' 'none')}"
+group=$(notification_group "$title")
+
+case "$backend" in
+  none)
+    exit 0
+    ;;
+  terminal-notifier)
+    notifier=$(find_terminal_notifier)
+    [[ -n "$notifier" ]] || die "terminal-notifier backend requested but executable was not found"
+    send_with_terminal_notifier "$notifier" "$title" "$message" "$group"
+    ;;
+  osascript)
+    send_with_osascript "$title" "$message"
+    ;;
+  auto)
+    notifier=$(find_terminal_notifier)
+    if [[ -n "$notifier" ]] && send_with_terminal_notifier "$notifier" "$title" "$message" "$group"; then
+      exit 0
+    fi
+    send_with_osascript "$title" "$message"
+    ;;
+  *)
+    die "unknown backend '$backend'"
+    ;;
+esac

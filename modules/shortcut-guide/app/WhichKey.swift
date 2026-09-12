@@ -762,7 +762,7 @@ enum ActionDescriber {
             let app = lastQuotedValue(in: command) ?? "app"
             return info("Focus \(app)", "Focus or cycle \(app) windows.")
         }
-        if lower.contains("scratchpads open codex") { return info("Open dotfiles scratchpad", "Toggle the black terminal scratchpad on the dotfiles tmux session.") }
+        if lower.contains("dotfiles-manager open") { return info("Open dotfiles control panel", "Toggle the unified settings, shortcuts, modules, dependencies, terminal, and agent workspace.") }
         if lower.contains("scratchpads open projects") { return info("Open projects scratchpad", "Toggle the black terminal scratchpad on the projects tmux session.") }
         if lower.contains("scratchpads open sessions") { return info("Open session manager", "Toggle the floating tmux session dashboard and cleanup tools.") }
         if lower.contains("focus-open-tmux-window.sh cycle") {

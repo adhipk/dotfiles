@@ -1,7 +1,6 @@
 dotfiles:
   profile: default
   moduleApiVersion: 1
-
 # Checked-in defaults. Machine-specific overrides may be supplied from the
 # `data` section of ~/.config/chezmoi/chezmoi.{toml,yaml,json}.
 modules:
@@ -17,8 +16,14 @@ modules:
     enabled: true
   shortcutGuide:
     enabled: true
+  notifications:
+    enabled: true
+    backend: auto
+    ignoreDnd: true
+    sound: none
   appFocus:
     enabled: true
+    zenBlockedSlots: "3 4 5"
   windowLayout:
     enabled: true
   appearancePip:
@@ -36,9 +41,14 @@ modules:
     retentionSeconds: 604800
     expirySound: Ping
     preferredAgents:
+      - hermes
       - codex
       - claude
       - opencode
+  hermesAgent:
+    enabled: true
+  dotfilesManager:
+    enabled: true
   tmuxSessions:
     enabled: true
   tmuxYazi:

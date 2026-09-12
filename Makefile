@@ -3,7 +3,7 @@
 # man-me: usage=make test; make install; make diff; make watch; make reload
 # man-me: description=Convenience wrappers for tests, source-state and tmux-plugin installation, diff, watch, reload, and native HUD builds.
 # man-me: tags=make setup test install apply diff watch reload tmux tpm projectdeck whichkey shortcuts
-.PHONY: test test-agent-timer test-dotfiles-lib test-module-lifecycle test-module-integration test-system-uninstall test-dependencies test-control-center test-shortcut-guide test-settings test-colorscheme test-configs test-scratchpads test-projects test-hyperspace test-todo test-tmux-session-template test-tmux-workspace test-tmux-which-key test-tmux-persistence test-tmux-border-accent test-tmux-yazi-pane test-source-state test-install test-integration test-whichkey shortcuts-update shortcuts-check install apply apply-debug compile sync diff watch reload clean help build-projectdeck build-whichkey
+.PHONY: test test-agent-timer test-hermes-agent test-dotfiles-manager test-dotfiles-lib test-module-lifecycle test-module-integration test-system-uninstall test-dependencies test-control-center test-shortcut-guide test-settings test-colorscheme test-configs test-scratchpads test-projects test-hyperspace test-todo test-tmux-session-template test-tmux-workspace test-tmux-which-key test-tmux-persistence test-tmux-border-accent test-tmux-yazi-pane test-source-state test-install test-integration test-whichkey shortcuts-update shortcuts-check install apply apply-debug compile sync diff watch reload clean help build-projectdeck build-whichkey
 
 # Default target
 help:
@@ -12,6 +12,8 @@ help:
 	@echo "Available targets:"
 	@echo "  make test              - Run all tests"
 	@echo "  make test-agent-timer  - Run global agent deadline and sesh lifecycle tests"
+	@echo "  make test-hermes-agent - Run the Hermes profile launcher module tests"
+	@echo "  make test-dotfiles-manager - Run the Textual dotfiles manager tests"
 	@echo "  make test-dotfiles-lib - Run shared shell standard-library tests"
 	@echo "  make test-module-lifecycle - Run module schema and removal-plan tests"
 	@echo "  make test-module-integration - Run module-aware install and watch tests"
@@ -56,6 +58,12 @@ test:
 # Run individual test suites
 test-agent-timer:
 	@./tests/test_agent_timer.sh
+
+test-hermes-agent:
+	@./tests/test_hermes_agent.sh
+
+test-dotfiles-manager:
+	@./tests/test_dotfiles_manager.sh
 
 test-dotfiles-lib:
 	@./tests/test_dotfiles_lib.sh

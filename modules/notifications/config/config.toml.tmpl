@@ -1,0 +1,7 @@
+# Rendered notifications configuration. Change these values through
+# dotfiles-settings; config/defaults.toml remains the standalone fallback.
+schema_version = 1
+backend = "{{ .modules.notifications.backend | default "auto" }}"
+ignore_dnd = {{ .modules.notifications.ignoreDnd | default true }}
+sound = "{{ .modules.notifications.sound | default "none" }}"
+group_prefix = "dotfiles"

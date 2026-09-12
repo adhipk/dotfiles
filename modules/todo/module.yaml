@@ -13,6 +13,9 @@ requires:
     - chezmoi-todo
     - todo
     - tuxedo
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
 state:
   preserved:
     - ~/.agents/tasks/todo.txt

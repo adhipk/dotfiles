@@ -5,13 +5,13 @@
 This catalog is derived from the desired skhd state rendered by `chezmoi -S ROOT cat "$HOME/.skhdrc"`. Shortcut definitions remain in their skhd source fragments and are not duplicated in module manifests.
 
 - Shortcuts: 70
-- Rendered source SHA-256: `af492ea54d09d12cfb022d530e8d95636d3239fd120422168a3504bb8da554b4`
+- Rendered source SHA-256: `028a78d6b243c76b270dfab51dbf53603ec3a6f6e2a73577209825ab14487d11`
 
 ## Apps & Focus
 
 | Shortcut | Action | Details | Owner |
 | --- | --- | --- | --- |
-| fn , | Open dotfiles scratchpad | Toggle the black terminal scratchpad on the dotfiles tmux session. | [scratchpads](../../scratchpads/README.md) |
+| fn , | Open dotfiles control panel | Toggle the unified settings, shortcuts, modules, dependencies, terminal, and agent workspace. | [dotfiles-manager](../../dotfiles-manager/README.md) |
 | fn 1 | Focus open tmux window 1 | Focus creation-order slot 1 among open normal tmux Ghostty windows. | [app-focus](../../app-focus/README.md) |
 | fn 2 | Focus open tmux window 2 | Focus creation-order slot 2 among open normal tmux Ghostty windows. | [app-focus](../../app-focus/README.md) |
 | fn 3 | Focus open tmux window 3 | Focus creation-order slot 3 among open normal tmux Ghostty windows. | [app-focus](../../app-focus/README.md) |

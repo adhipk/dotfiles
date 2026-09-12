@@ -17,6 +17,9 @@ requires:
 optional:
   executables:
     - terminal-notifier
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
 state:
   preserved:
     - ~/.config/yabai/floating-windows.json

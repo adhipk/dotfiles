@@ -266,6 +266,7 @@ is_agent_command() {
 agent_kind() {
     local command_line="$1"
     case "$command_line" in
+        hermes|hermes\ *|*/hermes|*/hermes\ *|*'/hermes '*|*'/hermes') printf 'hermes\n' ;;
         codex|codex\ *|*/codex|*/codex\ *|*'/bin/codex '*|*'/bin/codex') printf 'codex\n' ;;
         claude|claude\ *|*/claude|*/claude\ *) printf 'claude\n' ;;
         opencode|opencode\ *|*/opencode|*/opencode\ *) printf 'opencode\n' ;;
@@ -293,7 +294,7 @@ configured_preferred_agents() {
         return 0
     fi
 
-    printf '%s\n' codex claude opencode
+    printf '%s\n' hermes codex claude opencode
 }
 
 agent_preference_rank() {

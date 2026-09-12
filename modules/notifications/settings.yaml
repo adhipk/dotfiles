@@ -1,0 +1,36 @@
+# Settings contributed by the notifications module to `dotfiles-settings`.
+apiVersion: dotfiles/v1
+kind: SettingsFragment
+schemaVersion: 1
+module: notifications
+dataKey: modules.notifications
+settings:
+  - key: notifications.backend
+    description: macOS desktop-notification delivery backend
+    dataPath: modules.notifications.backend
+    file: home/.chezmoidata/10-modules.yaml
+    type: string
+    values:
+      enum: [auto, terminal-notifier, osascript, none]
+    bridges:
+      - home/dot_config/notifications/config.toml.tmpl
+    reload: []
+  - key: notifications.ignoreDnd
+    description: Ask Terminal Notifier to deliver through active Focus modes
+    dataPath: modules.notifications.ignoreDnd
+    file: home/.chezmoidata/10-modules.yaml
+    type: boolean
+    bridges:
+      - home/dot_config/notifications/config.toml.tmpl
+    reload: []
+  - key: notifications.sound
+    description: macOS sound for desktop notices, or none for silent delivery
+    dataPath: modules.notifications.sound
+    file: home/.chezmoidata/10-modules.yaml
+    type: string
+    values:
+      provider: macos-sounds
+      freeText: true
+    bridges:
+      - home/dot_config/notifications/config.toml.tmpl
+    reload: []

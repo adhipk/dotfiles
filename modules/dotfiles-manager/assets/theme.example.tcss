@@ -1,0 +1,21 @@
+/* Personal overrides for dotfiles-manager-ui.
+ *
+ * Run `dotfiles-manager theme edit`, uncomment what you want, save, and reopen
+ * the panel. This file is copied to ~/.config/dotfiles-manager/theme.tcss;
+ * that personal file is preserved and is never overwritten by ChezMoi.
+ */
+
+/*
+Screen {
+    background: #11111b;
+    color: #cdd6f4;
+}
+
+#categories, #content, #detail {
+    background: #181825;
+}
+
+#wordmark {
+    color: #cba6f7;
+}
+*/

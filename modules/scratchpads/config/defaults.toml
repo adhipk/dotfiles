@@ -1,12 +1,10 @@
 schema_version = 1
 
 [paths]
-dotfiles = "dotfiles"
 projects = "projects"
 
 [tmux]
 terminal_label = "terminal"
-dotfiles_session = "dotfiles"
 projects_session = "projects"
 session_manager_label = "session_manager"
 session_manager_session = "session-manager"

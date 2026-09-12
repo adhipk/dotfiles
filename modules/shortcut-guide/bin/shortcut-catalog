@@ -197,6 +197,39 @@ def normalize_bindings(
     return normalized
 
 
+def attach_source_files(
+    bindings: list[dict[str, str]], root: Path
+) -> list[dict[str, str]]:
+    """Resolve each rendered binding to one stable authoritative template."""
+    for binding in bindings:
+        owner = binding["owner"]
+        if owner == "root":
+            candidates = [root / "home" / "dot_skhdrc.tmpl"]
+        else:
+            candidates = sorted((root / "modules" / owner / "targets").rglob("*.tmpl"))
+        raw_key = re.escape(binding["rawKey"])
+        pattern = re.compile(
+            rf'^\s*(?:"[^"]+"\s*:\s*)?{raw_key}\s*(?::|\[)', re.MULTILINE
+        )
+        matches = [
+            candidate
+            for candidate in candidates
+            if candidate.is_file() and pattern.search(candidate.read_text(encoding="utf-8"))
+        ]
+        if not matches:
+            # Parser fixtures and third-party rendered inputs may intentionally
+            # describe bindings that are not authored by this source tree.
+            continue
+        if len(matches) != 1:
+            rendered = ", ".join(str(path.relative_to(root)) for path in matches) or "none"
+            raise CatalogError(
+                f"binding {binding['displayKey']!r} owned by {owner!r} must map to one "
+                f"source template; found {rendered}"
+            )
+        binding["sourceFile"] = str(matches[0].relative_to(root))
+    return bindings
+
+
 def json_document(rendered: bytes, bindings: list[dict[str, str]]) -> bytes:
     document = {
         "schemaVersion": SCHEMA_VERSION,
@@ -326,7 +359,9 @@ def main() -> int:
         rendered = render_desired_skhd(root)
         with tempfile.TemporaryDirectory(prefix="shortcut-catalog.") as temporary:
             parsed = parse_bindings(rendered, Path(temporary))
-        normalized = normalize_bindings(parsed, known_module_owners(root))
+        normalized = attach_source_files(
+            normalize_bindings(parsed, known_module_owners(root)), root
+        )
         outputs = {
             output_directory / "shortcuts.json": json_document(rendered, normalized),
             output_directory / "shortcuts.md": markdown_document(rendered, normalized),

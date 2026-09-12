@@ -19,6 +19,9 @@ optional:
     - tmux-hub
     - tmux-session-template
     - tmux-border-accent
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
 state:
   preserved: []
   ephemeral: []

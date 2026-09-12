@@ -17,7 +17,7 @@ warning_seconds = 60
 report_timeout_seconds = 120
 retention_seconds = 604800
 expiry_sound = "Ping"
-preferred_agents = ["codex", "claude", "opencode"]
+preferred_agents = ["hermes", "codex", "claude", "opencode"]
 ```
 
 The timer command and fail-open Codex hooks are installed, but `auto_start = false`

@@ -14,6 +14,9 @@ unit.
   and phased implementation plan.
 - `decisions/0001-evaluate-hermes-before-building.md` — the current proposed
   direction after comparing the plan with Hermes Agent v0.19.
+- `decisions/0002-promote-hermes-pluggable-default.md` — the accepted narrow
+  integration that selects a dedicated Hermes profile without adopting Kanban
+  or gateway state.
 - `session-notes/2026-08-12-hermes-fit-assessment.md` — reusable evidence and
   handoff from the session that produced the Hermes recommendation.
 
@@ -63,4 +66,3 @@ record and does not affect the active environment.
    tasks without changing the default assistant or canonical task store.
 5. Decide whether to integrate Hermes, build a smaller adapter, or continue the
    standalone runtime before writing implementation code.
-

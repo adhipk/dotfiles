@@ -9,6 +9,8 @@ set -euo pipefail
 
 ROOT="${DOTFILES_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
 REGISTRY="${DOTFILES_SETTINGS_REGISTRY:-$ROOT/modules/settings/registry.yaml}"
+FRAGMENTS_DIR="${DOTFILES_SETTINGS_FRAGMENTS_DIR:-$ROOT/modules}"
+MODULES_DATA_FILE="${DOTFILES_SETTINGS_MODULES_DATA_FILE:-$ROOT/home/.chezmoidata/10-modules.yaml}"
 DATA_FILE_OVERRIDE="${DOTFILES_SETTINGS_DATA_FILE:-}"
 LIB_DIR="$ROOT/home/dot_local/lib/dotfiles"
 SETTINGS_LOCK_DIR="$ROOT/.dotfiles-settings.lock"
@@ -36,8 +38,65 @@ need() {
     command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
 }
 
+core_registry_entries() {
+    "$YQ_BIN" -o=json -I=0 '.settings // []' "$REGISTRY" |
+        "$JQ_BIN" -c 'map(. + {module: "settings"})'
+}
+
+fragment_files() {
+    [[ -d "$FRAGMENTS_DIR" ]] || return 0
+    local fragment
+    for fragment in "$FRAGMENTS_DIR"/*/settings.yaml; do
+        [[ -f "$fragment" ]] || continue
+        printf '%s\n' "$fragment"
+    done
+}
+
+fragment_module_enabled() {
+    local data_key="$1" enabled
+    # A fragment without a dataKey is unconditionally active; otherwise the
+    # module's `enabled` flag in the modules data file gates its settings.
+    [[ -n "$data_key" && "$data_key" != "null" ]] || { printf 'true\n'; return 0; }
+    [[ -f "$MODULES_DATA_FILE" ]] || { printf 'true\n'; return 0; }
+    # `//` treats false as falsy in yq, so read the raw value and compare.
+    enabled=$("$YQ_BIN" -r ".${data_key}.enabled" "$MODULES_DATA_FILE" 2>/dev/null || true)
+    if [[ "$enabled" == "false" ]]; then
+        printf 'false\n'
+    else
+        printf 'true\n'
+    fi
+}
+
+fragment_entries() {
+    local fragment module data_key kind api
+    while IFS= read -r fragment; do
+        [[ -n "$fragment" ]] || continue
+        api=$("$YQ_BIN" -r '.apiVersion // ""' "$fragment" 2>/dev/null || true)
+        kind=$("$YQ_BIN" -r '.kind // ""' "$fragment" 2>/dev/null || true)
+        [[ "$api" == "dotfiles/v1" && "$kind" == "SettingsFragment" ]] || {
+            warn "skipping invalid settings fragment: $fragment"
+            continue
+        }
+        module=$("$YQ_BIN" -r '.module // ""' "$fragment")
+        [[ -n "$module" ]] || {
+            warn "skipping settings fragment without a module id: $fragment"
+            continue
+        }
+        data_key=$("$YQ_BIN" -r '.dataKey // ""' "$fragment")
+        [[ "$(fragment_module_enabled "$data_key")" == "true" ]] || continue
+        "$YQ_BIN" -o=json -I=0 '.settings // []' "$fragment" |
+            "$JQ_BIN" -c --arg module "$module" 'map(. + {module: $module})'
+    done < <(fragment_files)
+}
+
+REGISTRY_ENTRIES_CACHE=""
+
 registry_entries() {
-    "$YQ_BIN" -o=json -I=0 '.settings // []' "$REGISTRY"
+    if [[ -z "$REGISTRY_ENTRIES_CACHE" ]]; then
+        REGISTRY_ENTRIES_CACHE=$({ core_registry_entries; fragment_entries; } |
+            "$JQ_BIN" -sc 'add // []')
+    fi
+    printf '%s\n' "$REGISTRY_ENTRIES_CACHE"
 }
 
 entry_for_key() {
@@ -249,13 +308,33 @@ release_lock() {
 }
 
 list_settings() {
-    local json="${1:-}" entry key description value type
+    local json="${1:-}" entry key description value type allowed free_text data_path source_file
     if [[ "$json" == "--json" ]]; then
         local rows="[]"
         while IFS= read -r entry; do
             value=$(current_value "$entry")
-            rows=$("$JQ_BIN" -c --argjson entry "$entry" --arg value "$value" \
-                '. + [{key: $entry.key, value: $value, type: $entry.type, description: $entry.description}]' <<<"$rows")
+            allowed=$(allowed_values "$entry" | "$JQ_BIN" -Rsc 'split("\n") | map(select(length > 0))')
+            free_text=$(entry_field "$entry" '.values.freeText // false')
+            data_path=$(entry_field "$entry" '.dataPath')
+            source_file=$(entry_field "$entry" '.file')
+            rows=$("$JQ_BIN" -c \
+                --argjson entry "$entry" \
+                --arg value "$value" \
+                --argjson allowed "$allowed" \
+                --argjson freeText "$free_text" \
+                --arg dataPath "$data_path" \
+                --arg sourceFile "$source_file" \
+                '. + [{
+                  key: $entry.key,
+                  value: $value,
+                  type: $entry.type,
+                  description: $entry.description,
+                  module: ($entry.module // "settings"),
+                  allowedValues: $allowed,
+                  freeText: $freeText,
+                  dataPath: $dataPath,
+                  sourceFile: $sourceFile
+                }]' <<<"$rows")
         done < <(registry_entries | "$JQ_BIN" -c '.[]')
         "$JQ_BIN" -n --argjson settings "$rows" '{schemaVersion: 1, settings: $settings}'
     else
@@ -365,10 +444,37 @@ set_setting() {
 
 validate_registry() {
     local json="${1:-}" count duplicates entry key relative bridge
+    local fragment fragment_count=0 module data_key
     [[ -f "$REGISTRY" ]] || die "missing registry: $REGISTRY"
     [[ "$("$YQ_BIN" -r '.apiVersion' "$REGISTRY")" == "dotfiles/v1" ]] || die "registry: unsupported apiVersion"
     [[ "$("$YQ_BIN" -r '.kind' "$REGISTRY")" == "SettingsRegistry" ]] || die "registry: unsupported kind"
     [[ "$("$YQ_BIN" -r '.schemaVersion' "$REGISTRY")" == "1" ]] || die "registry: unsupported schemaVersion"
+
+    # Every fragment envelope is validated even when its module is disabled,
+    # so a malformed contribution cannot hide behind an enablement flag.
+    # Entry-level checks below run on the merged (enabled) entries.
+    while IFS= read -r fragment; do
+        [[ -n "$fragment" ]] || continue
+        fragment_count=$((fragment_count + 1))
+        [[ "$("$YQ_BIN" -r '.apiVersion // ""' "$fragment")" == "dotfiles/v1" ]] ||
+            die "fragment $fragment: unsupported apiVersion"
+        [[ "$("$YQ_BIN" -r '.kind // ""' "$fragment")" == "SettingsFragment" ]] ||
+            die "fragment $fragment: kind must be SettingsFragment"
+        [[ "$("$YQ_BIN" -r '.schemaVersion // ""' "$fragment")" == "1" ]] ||
+            die "fragment $fragment: unsupported schemaVersion"
+        module=$("$YQ_BIN" -r '.module // ""' "$fragment")
+        [[ -n "$module" ]] || die "fragment $fragment: missing module id"
+        [[ "$(basename "$(dirname "$fragment")")" == "$module" ]] ||
+            die "fragment $fragment: module id '$module' does not match its directory"
+        data_key=$("$YQ_BIN" -r '.dataKey // ""' "$fragment")
+        if [[ -n "$data_key" ]]; then
+            [[ "$data_key" =~ ^modules\.[A-Za-z][A-Za-z0-9]*$ ]] ||
+                die "fragment $fragment: dataKey must look like modules.<camelCaseId>"
+        fi
+        [[ "$("$YQ_BIN" -o=json -I=0 '.settings // []' "$fragment" | "$JQ_BIN" 'length')" -gt 0 ]] ||
+            die "fragment $fragment: settings must be a non-empty array"
+    done < <(fragment_files)
+
     count=$(registry_entries | "$JQ_BIN" 'length')
     [[ "$count" -gt 0 ]] || die "registry: settings must be a non-empty array"
 
@@ -398,10 +504,10 @@ validate_registry() {
     done < <(registry_entries | "$JQ_BIN" -c '.[]')
 
     if [[ "$json" == "--json" ]]; then
-        "$JQ_BIN" -n --argjson settingCount "$count" \
-            '{valid: true, apiVersion: "dotfiles/v1", schemaVersion: 1, settingCount: $settingCount}'
+        "$JQ_BIN" -n --argjson settingCount "$count" --argjson fragmentCount "$fragment_count" \
+            '{valid: true, apiVersion: "dotfiles/v1", schemaVersion: 1, settingCount: $settingCount, fragmentCount: $fragmentCount}'
     else
-        printf 'Valid settings registry (%s settings)\n' "$count"
+        printf 'Valid settings registry (%s settings, %s module fragments)\n' "$count" "$fragment_count"
     fi
 }
 

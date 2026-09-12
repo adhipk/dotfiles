@@ -100,6 +100,20 @@ set -g @dotfiles_status_accent '#{?#{==:#{session_name},dotfiles},#{@thm_mauve},
 set -g @dotfiles_window_accent '#{?#{==:#{e|m:#{window_index},12},0},#{@thm_mauve},#{==:#{e|m:#{window_index},12},1},#{@thm_blue},#{==:#{e|m:#{window_index},12},2},#{@thm_green},#{==:#{e|m:#{window_index},12},3},#{@thm_peach},#{==:#{e|m:#{window_index},12},4},#{@thm_teal},#{==:#{e|m:#{window_index},12},5},#{@thm_yellow},#{==:#{e|m:#{window_index},12},6},#{@thm_pink},#{==:#{e|m:#{window_index},12},7},#{@thm_lavender},#{==:#{e|m:#{window_index},12},8},#{@thm_sky},#{==:#{e|m:#{window_index},12},9},#{@thm_sapphire},#{==:#{e|m:#{window_index},12},10},#{@thm_red},#{@thm_flamingo}}'
 set -g @dotfiles_window_label '#{?#{m/r:^(ba|c|da|fi|k|tc|z)?sh$,#{pane_current_command}},~,#{pane_current_command}}'
 {{ if .modules.terminalWindowTypes.enabled }}{{ includeTemplate "../modules/terminal-window-types/targets/tmux-status.conf.tmpl" . }}{{ end }}
+
+# Scratchpad clients are closer to Spotlight than to a full terminal workspace:
+# one temporary, centered surface whose current agent is the primary object.
+# The scratchpad manager opts its sessions into this surface with a session-local
+# @dotfiles_tmux_surface=spotlight marker and moves the single line to the top.
+# Ordinary tmux clients retain the existing workspace bar below.
+set -g @dotfiles_tmux_surface 'workspace'
+set -g @dotfiles_spotlight_status_left '#[fg=#{E:@dotfiles_status_accent},bold]  ◆  #S #[fg=#{@thm_surface_2},nobold]· #[fg=#{@thm_overlay_1}]#{pane_current_path}  '
+set -g @dotfiles_spotlight_status_right '#[fg=#{@thm_overlay_0}]⌘1 agent  ·  ⌘2 edit  ·  ⌘3 tasks  '
+set -g @dotfiles_spotlight_window '#[fg=#{@thm_overlay_0},nobold] #W '
+set -g @dotfiles_spotlight_window_current '#[fg=#{@thm_crust},bg=#{E:@dotfiles_status_accent},bold]  ● #W  #[default]'
+# Reconcile the custom full-line renderer from the first Spotlight iteration.
+# Native status slots preserve tmux's window-list ranges and click targets.
+set -gu status-format
 set -g status-position bottom
 set -g status-justify absolute-centre
 set -g status-style default

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${DOTFILES_ROOT:?DOTFILES_ROOT is required}"
+: "${DOTFILES_MODULE_ID:?DOTFILES_MODULE_ID is required}"
+: "${DOTFILES_MODULE_ACTION:?DOTFILES_MODULE_ACTION is required}"
+
+[[ "$DOTFILES_MODULE_ID" == "shortcut-guide" ]] || {
+  printf 'shortcut-guide teardown: unexpected module id: %s\n' "$DOTFILES_MODULE_ID" >&2
+  exit 2
+}
+
+# This module has no runtime teardown beyond its declarative targets.
+

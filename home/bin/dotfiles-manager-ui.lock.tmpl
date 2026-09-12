@@ -1,0 +1,3 @@
+{{- if .modules.dotfilesManager.enabled -}}
+{{ includeTemplate "../modules/dotfiles-manager/bin/dotfiles-manager-ui.lock" . }}
+{{- end -}}

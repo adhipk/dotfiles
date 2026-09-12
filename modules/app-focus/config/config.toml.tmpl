@@ -9,7 +9,7 @@ terminal = "{{ .preferences.terminalApp }}"
 
 [modes]
 state_directory = ".config/skhd"
-zen_blocked_slots = [3, 4, 5]
+zen_blocked_slots = [{{ splitList " " (.modules.appFocus.zenBlockedSlots | default "3 4 5") | join ", " }}]
 
 [integrations]
 notification_command = ".config/skhd/notify.sh"

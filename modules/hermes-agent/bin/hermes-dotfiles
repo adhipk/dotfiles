@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# man-me: name=hermes-dotfiles
+# man-me: category=Agents
+# man-me: usage=hermes-dotfiles [HERMES ARGUMENTS...]
+# man-me: description=Run the dedicated Hermes dotfiles profile, opening the TUI when no arguments are supplied.
+# man-me: tags=hermes agent dotfiles profile tui assistant
+
+set -euo pipefail
+
+profile="${HERMES_DOTFILES_PROFILE:-dotfiles}"
+hermes_bin="${HERMES_DOTFILES_BIN:-}"
+todo_dir="${HERMES_DOTFILES_TODO_DIR:-${HOME:?HOME is not set}/.hermes/profiles/$profile/tasks}"
+
+if [[ -z "$hermes_bin" ]]; then
+  hermes_bin="$(command -v hermes 2>/dev/null || true)"
+fi
+if [[ -z "$hermes_bin" || ! -x "$hermes_bin" ]]; then
+  printf '%s\n' 'hermes-dotfiles: Hermes is not installed; see https://hermes-agent.nousresearch.com/docs/getting-started/quickstart' >&2
+  exit 127
+fi
+if ! "$hermes_bin" profile show "$profile" >/dev/null 2>&1; then
+  printf 'hermes-dotfiles: profile %q is missing; create it with:\n' "$profile" >&2
+  printf '  hermes profile create %q --clone-from default --no-alias\n' "$profile" >&2
+  exit 69
+fi
+
+if (($# == 0)); then
+  set -- --tui
+fi
+
+export AGENT_TODO_DIR="$todo_dir"
+exec "$hermes_bin" -p "$profile" "$@"

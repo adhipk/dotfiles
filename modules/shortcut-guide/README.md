@@ -42,6 +42,13 @@ The JSON artifact is the machine-readable input intended for the future module
 management UI. The Markdown artifact is the human-readable desktop shortcut
 reference.
 
+Each source-owned JSON row also carries a stable repository-relative
+`sourceFile`. `shortcut-rebind STABLE_ID NEW_RAW_KEY` uses that mapping to
+change exactly one authoritative template, regenerate the catalog, apply the
+skhd bridge, and restart skhd. It rejects collisions and unsafe key syntax and
+restores the source plus generated artifacts if validation or apply fails.
+`--json` emits the old/new-key result; `--no-apply` supports isolated tests.
+
 ## Runtime build
 
 `install/build-whichkey.sh` compiles and installs the Swift application. The
@@ -51,6 +58,7 @@ The build requires macOS and the Xcode Command Line Tools.
 ## Parent integration
 
 The parent source state supplies only thin bridges for `shortcut-catalog`,
-`show_keys.sh`, and `targets/skhdrc.tmpl`, plus the module-enabled data flag.
+`shortcut-rebind`, `show_keys.sh`, and `targets/skhdrc.tmpl`, plus the
+module-enabled data flag.
 Deleting or disabling this module removes those mounts without requiring a
 second shortcut registry.

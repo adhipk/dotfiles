@@ -15,6 +15,9 @@ requires:
     - sesh
     - tmux
     - zoxide
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
 state:
   preserved:
     - ~/.local/state/tmux-workspace
@@ -40,6 +43,11 @@ commands:
     source: bin/tmux-workspace
     target: ~/bin/tmux-workspace
 targets:
+  - service: skhd
+    source: targets/skhdrc.tmpl
+    destination: ~/.skhdrc
+    bridge: home/dot_skhdrc.tmpl
+    ownership: contribution
   - service: command
     source: bin/daemon
     destination: ~/bin/daemon

@@ -47,6 +47,10 @@
 {{ includeTemplate "../modules/scratchpads/targets/skhdrc.tmpl" . | trim }}
 # dotfiles-owner: root
 {{ end }}
+{{ if .modules.dotfilesManager.enabled }}# dotfiles-owner: dotfiles-manager
+{{ includeTemplate "../modules/dotfiles-manager/targets/skhdrc.tmpl" . | trim }}
+# dotfiles-owner: root
+{{ end }}
 {{ if .modules.appFocus.enabled }}# dotfiles-owner: app-focus
 {{ includeTemplate "../modules/app-focus/targets/skhd-modes.conf.tmpl" . | trim }}
 # dotfiles-owner: root
@@ -71,10 +75,7 @@ rcmd - space [
 ]
 
 {{ if .modules.tmuxSessions.enabled }}# dotfiles-owner: tmux-sessions
-rcmd - h [
-    "Ghostty" : skhd -k "f20"  # Open centralized tmux hub
-    * ~
-]
+{{ includeTemplate "../modules/tmux-sessions/targets/skhdrc.tmpl" . | trim }}
 # dotfiles-owner: root
 {{ end }}
 

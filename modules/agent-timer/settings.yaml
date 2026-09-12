@@ -1,0 +1,53 @@
+# Settings contributed by the agent-timer module to `dotfiles-settings`.
+# Contract: modules/<id>/settings.yaml, kind SettingsFragment. Entries use the
+# same schema as modules/settings/registry.yaml and are merged at runtime when
+# the module's `enabled` flag (under `dataKey`) is not false.
+apiVersion: dotfiles/v1
+kind: SettingsFragment
+schemaVersion: 1
+module: agent-timer
+dataKey: modules.agentTimer
+settings:
+  - key: agent-timer.autoStart
+    description: Arm the agent delivery timer automatically for new sessions
+    dataPath: modules.agentTimer.autoStart
+    file: home/.chezmoidata/10-modules.yaml
+    type: boolean
+    bridges:
+      - home/dot_config/agent-timer/config.toml.tmpl
+      - home/.chezmoiscripts/run_onchange_after_agent-timer-cron.sh.tmpl
+      - home/.chezmoiscripts/run_onchange_before_agent-timer-disable.sh.tmpl
+    reload: []
+  - key: agent-timer.defaultSeconds
+    description: Default agent timer block length in seconds
+    dataPath: modules.agentTimer.defaultSeconds
+    file: home/.chezmoidata/10-modules.yaml
+    type: integer
+    values:
+      min: 60
+      max: 14400
+    bridges:
+      - home/dot_config/agent-timer/config.toml.tmpl
+    reload: []
+  - key: agent-timer.warningSeconds
+    description: Seconds before expiry that the agent timer warns
+    dataPath: modules.agentTimer.warningSeconds
+    file: home/.chezmoidata/10-modules.yaml
+    type: integer
+    values:
+      min: 10
+      max: 3600
+    bridges:
+      - home/dot_config/agent-timer/config.toml.tmpl
+    reload: []
+  - key: agent-timer.expirySound
+    description: macOS system sound played when the agent timer expires
+    dataPath: modules.agentTimer.expirySound
+    file: home/.chezmoidata/10-modules.yaml
+    type: string
+    values:
+      provider: macos-sounds
+      freeText: true
+    bridges:
+      - home/dot_config/agent-timer/config.toml.tmpl
+    reload: []

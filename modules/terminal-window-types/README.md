@@ -4,6 +4,9 @@ This module owns the standard tmux window-type workflow as one vertical slice:
 
 - ordinary sessions receive `terminal:0`, `codex:1`, `nvim:2`, and `tuxedo:3`;
 - `Ctrl+0/1/2/3` and Ghostty's `Cmd+Backtick/1/2/3` cycle by stable type;
+- inside the dotfiles control panel, `Ctrl+Backtick/1/2` instead select its
+  terminal, agent, and settings roles while preserving the ordinary mappings
+  everywhere else;
 - `Ctrl+Shift+0/1/2/3` creates a typed window in the active pane directory;
 - `Shift+Enter` reaches Codex as an explicit CSI-u multiline-input sequence
   without enabling tmux-wide extended-key rewriting;

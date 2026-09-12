@@ -13,6 +13,9 @@ requires:
     - chezmoi
     - python3
     - swiftc
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
 state:
   preserved: []
   ephemeral:
@@ -22,6 +25,10 @@ commands:
     source: bin/shortcut-catalog
     target: ~/bin/shortcut-catalog
     bridge: home/bin/executable_shortcut-catalog.tmpl
+  - name: shortcut-rebind
+    source: bin/shortcut-rebind
+    target: ~/bin/shortcut-rebind
+    bridge: home/bin/executable_shortcut-rebind.tmpl
 targets:
   - service: command
     source: bin/shortcut-catalog
@@ -38,5 +45,10 @@ targets:
     destination: ~/.skhdrc
     bridge: home/dot_skhdrc.tmpl
     ownership: contribution
+  - service: command
+    source: bin/shortcut-rebind
+    destination: ~/bin/shortcut-rebind
+    bridge: home/bin/executable_shortcut-rebind.tmpl
+    ownership: exclusive
 tests:
   - tests/test_module.sh

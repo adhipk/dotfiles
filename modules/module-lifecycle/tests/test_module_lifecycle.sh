@@ -17,6 +17,9 @@ STATE_ROOT="$TEMP_DIR/state-root"
 MOCK_BIN="$TEMP_DIR/mock-bin"
 CHEZMOI_LOG="$TEMP_DIR/chezmoi.log"
 CHEZMOI_FAIL_MARKER="$TEMP_DIR/chezmoi.fail-once"
+HOOK_LOG="$TEMP_DIR/hooks.log"
+HOOK_FAIL_SETUP="$TEMP_DIR/hook-fail-setup"
+HOOK_FAIL_TEARDOWN="$TEMP_DIR/hook-fail-teardown"
 STDOUT_FILE="$TEMP_DIR/stdout"
 STDERR_FILE="$TEMP_DIR/stderr"
 
@@ -124,6 +127,9 @@ run_execution() {
     PATH="$MOCK_BIN:$PATH" \
     CHEZMOI_LOG="$CHEZMOI_LOG" \
     CHEZMOI_FAIL_MARKER="$CHEZMOI_FAIL_MARKER" \
+    DOTFILES_TEST_HOOK_LOG="$HOOK_LOG" \
+    DOTFILES_TEST_HOOK_FAIL_SETUP="$HOOK_FAIL_SETUP" \
+    DOTFILES_TEST_HOOK_FAIL_TEARDOWN="$HOOK_FAIL_TEARDOWN" \
     DOTFILES_DIR="$repo" \
     "$LIFECYCLE" "$@" >"$STDOUT_FILE" 2>"$STDERR_FILE" || LAST_STATUS=$?
   LAST_STDOUT="$(cat "$STDOUT_FILE")"
@@ -141,8 +147,10 @@ make_fixture() {
     "$FIXTURE_REPO/home/dot_config/example" \
     "$FIXTURE_REPO/home/dot_local/lib/dotfiles" \
     "$FIXTURE_REPO/modules/alpha/bin" \
+    "$FIXTURE_REPO/modules/alpha/lifecycle" \
     "$FIXTURE_REPO/modules/alpha/targets" \
-    "$FIXTURE_REPO/modules/beta/bin"
+    "$FIXTURE_REPO/modules/beta/bin" \
+    "$FIXTURE_REPO/modules/beta/lifecycle"
 
   cat >"$FIXTURE_REPO/home/.chezmoidata/10-modules.yaml" <<'EOF'
 dotfiles:
@@ -164,6 +172,9 @@ description: Alpha fixture module
 dataKey: modules.alpha
 distribution:
   standalone: true
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
 state:
   preserved:
     - ~/.local/state/alpha
@@ -196,6 +207,9 @@ description: Beta fixture module
 dataKey: modules.beta
 distribution:
   standalone: true
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
 state:
   preserved: []
   ephemeral: []
@@ -212,8 +226,31 @@ tests: []
 EOF
 
   : >"$FIXTURE_REPO/modules/alpha/bin/alpha"
+  cat >"$FIXTURE_REPO/modules/alpha/lifecycle/setup" <<'EOF'
+#!/usr/bin/env bash
+printf 'alpha:setup:%s\n' "$DOTFILES_MODULE_ACTION" >>"$DOTFILES_TEST_HOOK_LOG"
+[[ ! -e "$DOTFILES_TEST_HOOK_FAIL_SETUP" ]]
+EOF
+  cat >"$FIXTURE_REPO/modules/alpha/lifecycle/teardown" <<'EOF'
+#!/usr/bin/env bash
+printf 'alpha:teardown:%s\n' "$DOTFILES_MODULE_ACTION" >>"$DOTFILES_TEST_HOOK_LOG"
+[[ ! -e "$DOTFILES_TEST_HOOK_FAIL_TEARDOWN" ]]
+EOF
   : >"$FIXTURE_REPO/modules/alpha/targets/example.conf.tmpl"
   : >"$FIXTURE_REPO/modules/beta/bin/beta"
+  cat >"$FIXTURE_REPO/modules/beta/lifecycle/setup" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  cat >"$FIXTURE_REPO/modules/beta/lifecycle/teardown" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x \
+    "$FIXTURE_REPO/modules/alpha/lifecycle/setup" \
+    "$FIXTURE_REPO/modules/alpha/lifecycle/teardown" \
+    "$FIXTURE_REPO/modules/beta/lifecycle/setup" \
+    "$FIXTURE_REPO/modules/beta/lifecycle/teardown"
   : >"$FIXTURE_REPO/home/bin/executable_alpha.tmpl"
   : >"$FIXTURE_REPO/home/bin/executable_beta.tmpl"
   : >"$FIXTURE_REPO/home/dot_config/example/config.tmpl"
@@ -226,6 +263,7 @@ make_mock_chezmoi() {
   cat >"$MOCK_BIN/chezmoi" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$CHEZMOI_LOG"
+printf 'chezmoi\n' >>"$DOTFILES_TEST_HOOK_LOG"
 if [[ "${CHEZMOI_FAIL_FIRST:-0}" == "1" && ! -e "$CHEZMOI_FAIL_MARKER" ]]; then
   : >"$CHEZMOI_FAIL_MARKER"
   exit 42
@@ -325,6 +363,7 @@ for action in enable disable uninstall purge; do
     .contributionTargets == ["~/.config/example/config"] and
     (.preservedState | index("~/.local/state/alpha")) != null and
     (.ephemeralState | index("~/.cache/alpha")) != null and
+    .lifecycle == {setup:"lifecycle/setup",teardown:"lifecycle/teardown"} and
     .stateRootRequired == ($action == "purge") and
     .confirmation == (if $action == "purge" then "alpha" else null end) and
     .sourcePreserved == true and
@@ -369,6 +408,9 @@ dataKey: modules.beta
 state:
   preserved: []
   ephemeral: []
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
 targets:
   - source: bin/broken
     destination: ~/bin/broken
@@ -376,6 +418,10 @@ targets:
     ownership: shared
 EOF
 : >"$INVALID_REPO/modules/broken/bin/broken"
+mkdir -p "$INVALID_REPO/modules/broken/lifecycle"
+printf '#!/usr/bin/env bash\nexit 0\n' >"$INVALID_REPO/modules/broken/lifecycle/setup"
+printf '#!/usr/bin/env bash\nexit 0\n' >"$INVALID_REPO/modules/broken/lifecycle/teardown"
+chmod +x "$INVALID_REPO/modules/broken/lifecycle/setup" "$INVALID_REPO/modules/broken/lifecycle/teardown"
 
 run_lifecycle "$INVALID_REPO" status --json
 assert_failure "status fails closed on unknown target ownership"
@@ -393,6 +439,7 @@ mkdir -p "$TEST_HOME/.local/state/alpha" "$TEST_HOME/.cache/alpha"
 : >"$TEST_HOME/.local/state/alpha/preserved"
 : >"$TEST_HOME/.cache/alpha/ephemeral"
 : >"$CHEZMOI_LOG"
+: >"$HOOK_LOG"
 run_execution "$FIXTURE_REPO" disable alpha
 assert_success "disable succeeds in a disposable repository and HOME"
 assert_eq "false" "$(yq -r '.modules.alpha.enabled' "$FIXTURE_REPO/home/.chezmoidata/10-modules.yaml")" "disable atomically changes the module flag"
@@ -400,6 +447,7 @@ assert_eq "1" "$(wc -l <"$CHEZMOI_LOG" | tr -d ' ')" "disable invokes chezmoi ex
 assert_contains "$(cat "$CHEZMOI_LOG")" "-S $FIXTURE_REPO apply --force --source-path" "disable uses targeted chezmoi source-path apply"
 assert_contains "$(cat "$CHEZMOI_LOG")" "home/bin/executable_alpha.tmpl" "disable applies the exclusive bridge"
 assert_contains "$(cat "$CHEZMOI_LOG")" "home/dot_config/example/config.tmpl" "disable applies the contribution bridge"
+assert_eq $'alpha:teardown:disable\nchezmoi' "$(cat "$HOOK_LOG")" "disable runs module teardown before target reconciliation"
 assert_file_exists "$TEST_HOME/.local/state/alpha/preserved" "disable preserves declared persistent state"
 assert_file_exists "$TEST_HOME/.cache/alpha/ephemeral" "disable preserves declared ephemeral state"
 assert_file_exists "$FIXTURE_REPO/modules/alpha/module.yaml" "disable preserves module source"
@@ -412,10 +460,12 @@ fi
 
 printf '\nTesting enable and JSON action results...\n'
 : >"$CHEZMOI_LOG"
+: >"$HOOK_LOG"
 run_execution "$FIXTURE_REPO" enable alpha --json
 assert_success "enable --json succeeds in a disposable repository and HOME"
 assert_eq "true" "$(yq -r '.modules.alpha.enabled' "$FIXTURE_REPO/home/.chezmoidata/10-modules.yaml")" "enable atomically changes the module flag"
 assert_eq "1" "$(wc -l <"$CHEZMOI_LOG" | tr -d ' ')" "enable invokes chezmoi exactly once"
+assert_eq $'chezmoi\nalpha:setup:enable' "$(cat "$HOOK_LOG")" "enable reconciles targets before module setup"
 if jq -e '
   .schemaVersion == 1 and
   .operation == "module-enable" and
@@ -432,6 +482,7 @@ assert_file_exists "$TEST_HOME/.local/state/alpha/preserved" "enable preserves d
 assert_file_exists "$TEST_HOME/.cache/alpha/ephemeral" "enable preserves declared ephemeral state"
 
 : >"$CHEZMOI_LOG"
+: >"$HOOK_LOG"
 run_execution "$FIXTURE_REPO" disable alpha --json
 assert_success "disable --json succeeds"
 if jq -e '
@@ -451,6 +502,7 @@ fi
 printf '\nTesting enable apply rollback...\n'
 set_alpha_enabled false
 : >"$CHEZMOI_LOG"
+: >"$HOOK_LOG"
 rm -f "$CHEZMOI_FAIL_MARKER"
 CHEZMOI_FAIL_FIRST=1 run_execution "$FIXTURE_REPO" enable alpha --json
 assert_failure "a failed enable apply fails the operation"
@@ -458,17 +510,44 @@ assert_contains "$LAST_STDERR" "rolled back" "enable apply failure reports succe
 assert_eq "" "$LAST_STDOUT" "failed JSON enable emits no partial result"
 assert_eq "false" "$(yq -r '.modules.alpha.enabled' "$FIXTURE_REPO/home/.chezmoidata/10-modules.yaml")" "failed enable restores the disabled config backup"
 assert_eq "2" "$(wc -l <"$CHEZMOI_LOG" | tr -d ' ')" "failed enable re-applies the restored target state"
+assert_eq $'chezmoi\nchezmoi' "$(cat "$HOOK_LOG")" "failed enable apply never runs setup against missing targets"
 assert_file_absent "$FIXTURE_REPO/.dotfiles-module.lock" "failed enable releases the repository lock"
+
+printf '\nTesting setup and teardown failures...\n'
+set_alpha_enabled false
+: >"$CHEZMOI_LOG"
+: >"$HOOK_LOG"
+: >"$HOOK_FAIL_SETUP"
+run_execution "$FIXTURE_REPO" enable alpha --json
+assert_failure "a failed setup hook fails the enable operation"
+assert_contains "$LAST_STDERR" "setup failed" "setup failure identifies the lifecycle phase"
+assert_eq "false" "$(yq -r '.modules.alpha.enabled' "$FIXTURE_REPO/home/.chezmoidata/10-modules.yaml")" "setup failure restores the disabled module flag"
+assert_eq $'chezmoi\nalpha:setup:enable\nalpha:teardown:rollback\nchezmoi' "$(cat "$HOOK_LOG")" "setup failure composes teardown with target rollback"
+rm -f "$HOOK_FAIL_SETUP"
+
+set_alpha_enabled true
+: >"$CHEZMOI_LOG"
+: >"$HOOK_LOG"
+: >"$HOOK_FAIL_TEARDOWN"
+run_execution "$FIXTURE_REPO" disable alpha --json
+assert_failure "a failed teardown hook aborts disable"
+assert_contains "$LAST_STDERR" "teardown failed" "teardown failure identifies the lifecycle phase"
+assert_eq "true" "$(yq -r '.modules.alpha.enabled' "$FIXTURE_REPO/home/.chezmoidata/10-modules.yaml")" "teardown failure leaves the enabled module flag unchanged"
+assert_eq "0" "$(wc -l <"$CHEZMOI_LOG" | tr -d ' ')" "teardown failure happens before target reconciliation"
+assert_eq 'alpha:teardown:disable' "$(cat "$HOOK_LOG")" "teardown failure runs only the module-owned teardown"
+rm -f "$HOOK_FAIL_TEARDOWN"
 
 printf '\nTesting apply rollback...\n'
 set_alpha_enabled true
 : >"$CHEZMOI_LOG"
+: >"$HOOK_LOG"
 rm -f "$CHEZMOI_FAIL_MARKER"
 CHEZMOI_FAIL_FIRST=1 run_execution "$FIXTURE_REPO" disable alpha
 assert_failure "a failed chezmoi apply fails the operation"
 assert_contains "$LAST_STDERR" "rolled back" "apply failure reports successful rollback"
 assert_eq "true" "$(yq -r '.modules.alpha.enabled' "$FIXTURE_REPO/home/.chezmoidata/10-modules.yaml")" "apply failure restores the config backup"
 assert_eq "2" "$(wc -l <"$CHEZMOI_LOG" | tr -d ' ')" "apply failure re-applies the restored target state"
+assert_eq $'alpha:teardown:disable\nchezmoi\nchezmoi\nalpha:setup:rollback' "$(cat "$HOOK_LOG")" "failed disable restores runtime setup after target rollback"
 assert_file_absent "$FIXTURE_REPO/.dotfiles-module.lock" "rollback releases the repository lock"
 
 printf '\nTesting uninstall state boundaries...\n'

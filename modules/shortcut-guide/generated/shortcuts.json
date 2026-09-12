@@ -1,17 +1,18 @@
 {
-  "renderedSourceSha256": "af492ea54d09d12cfb022d530e8d95636d3239fd120422168a3504bb8da554b4",
+  "renderedSourceSha256": "028a78d6b243c76b270dfab51dbf53603ec3a6f6e2a73577209825ab14487d11",
   "schemaVersion": 1,
   "shortcuts": [
     {
       "category": "Apps & Focus",
-      "command": "~/bin/scratchpads open codex",
-      "detail": "Toggle the black terminal scratchpad on the dotfiles tmux session.",
+      "command": "~/bin/dotfiles-manager open",
+      "detail": "Toggle the unified settings, shortcuts, modules, dependencies, terminal, and agent workspace.",
       "displayKey": "fn ,",
-      "owner": "scratchpads",
+      "owner": "dotfiles-manager",
       "rawKey": "fn - 0x2B",
+      "sourceFile": "modules/dotfiles-manager/targets/skhdrc.tmpl",
       "sourceSection": "Focus open normal tmux windows by creation order",
-      "stableId": "sha256:d5240ad9df4996aeb168743907973afd9a5183b4f5cd42babb9b65d597a80d91",
-      "title": "Open dotfiles scratchpad"
+      "stableId": "sha256:e8c1e498e54ed825ad385c60d45020e94c9172427c823e85eaf0fedc1b19f315",
+      "title": "Open dotfiles control panel"
     },
     {
       "category": "Apps & Focus",
@@ -20,6 +21,7 @@
       "displayKey": "fn 1",
       "owner": "app-focus",
       "rawKey": "fn - 1",
+      "sourceFile": "modules/app-focus/targets/skhd-apps.conf.tmpl",
       "sourceSection": "Focus open normal tmux windows by creation order",
       "stableId": "sha256:e788c68dceae3bdb100a71774703480c1e7092bb38c7b15152206cd562587ba8",
       "title": "Focus open tmux window 1"
@@ -31,6 +33,7 @@
       "displayKey": "fn 2",
       "owner": "app-focus",
       "rawKey": "fn - 2",
+      "sourceFile": "modules/app-focus/targets/skhd-apps.conf.tmpl",
       "sourceSection": "Focus open normal tmux windows by creation order",
       "stableId": "sha256:52f3f4c266d27bb77c0c27a6b79abef5e905ab0fd0e4b63b3aa78dc13b43d0ba",
       "title": "Focus open tmux window 2"
@@ -42,6 +45,7 @@
       "displayKey": "fn 3",
       "owner": "app-focus",
       "rawKey": "fn - 3",
+      "sourceFile": "modules/app-focus/targets/skhd-apps.conf.tmpl",
       "sourceSection": "Focus open normal tmux windows by creation order",
       "stableId": "sha256:2255b6bcc54a5e7a1c7eae9f4539a6f45d03c0add0382b0f112679b2cf257fc0",
       "title": "Focus open tmux window 3"
@@ -53,6 +57,7 @@
       "displayKey": "fn 4",
       "owner": "app-focus",
       "rawKey": "fn - 4",
+      "sourceFile": "modules/app-focus/targets/skhd-apps.conf.tmpl",
       "sourceSection": "Focus open normal tmux windows by creation order",
       "stableId": "sha256:42d6bdb94c00f8802ec1cb8cbe7e4c35d13762b58deffbd3510250ef2fa36fd7",
       "title": "Focus open tmux window 4"
@@ -64,6 +69,7 @@
       "displayKey": "fn 5",
       "owner": "app-focus",
       "rawKey": "fn - 5",
+      "sourceFile": "modules/app-focus/targets/skhd-apps.conf.tmpl",
       "sourceSection": "Focus open normal tmux windows by creation order",
       "stableId": "sha256:fe35e545c3b37a75b3d4a5d8c418702f97c50a6f0290506eb015be68ac2d08d5",
       "title": "Focus open tmux window 5"
@@ -75,6 +81,7 @@
       "displayKey": "fn 6",
       "owner": "app-focus",
       "rawKey": "fn - 6",
+      "sourceFile": "modules/app-focus/targets/skhd-apps.conf.tmpl",
       "sourceSection": "Focus open normal tmux windows by creation order",
       "stableId": "sha256:0456c0677c8fcce327b03a8394123e439d524935f3b9e2b2dd95dd28bfe48392",
       "title": "Focus open tmux window 6"
@@ -86,6 +93,7 @@
       "displayKey": "fn 7",
       "owner": "app-focus",
       "rawKey": "fn - 7",
+      "sourceFile": "modules/app-focus/targets/skhd-apps.conf.tmpl",
       "sourceSection": "Focus open normal tmux windows by creation order",
       "stableId": "sha256:987e5c0a571acdb83b94532abda5bb489ddb28ab8af69b9503e7cb3ad8a6ff89",
       "title": "Focus open tmux window 7"
@@ -97,6 +105,7 @@
       "displayKey": "fn 8",
       "owner": "app-focus",
       "rawKey": "fn - 8",
+      "sourceFile": "modules/app-focus/targets/skhd-apps.conf.tmpl",
       "sourceSection": "Focus open normal tmux windows by creation order",
       "stableId": "sha256:57cbd7dff92829a7bd37cba47f1aedf1b1177d7c06a58e25ed2e4e571917053b",
       "title": "Focus open tmux window 8"
@@ -108,6 +117,7 @@
       "displayKey": "fn 9",
       "owner": "app-focus",
       "rawKey": "fn - 9",
+      "sourceFile": "modules/app-focus/targets/skhd-apps.conf.tmpl",
       "sourceSection": "Focus open normal tmux windows by creation order",
       "stableId": "sha256:c04bd26dbd4ef2b1770575facfce03fda318e9c80f9e7d339c85c9bd232bca0c",
       "title": "Focus open tmux window 9"
@@ -119,6 +129,7 @@
       "displayKey": "fn P",
       "owner": "scratchpads",
       "rawKey": "fn - p",
+      "sourceFile": "modules/scratchpads/targets/skhdrc.tmpl",
       "sourceSection": "Focus open normal tmux windows by creation order",
       "stableId": "sha256:c8c3c2cff3173ad13b749126bf6e5022eb38fa01ca2185a51fe9af6feeac7a12",
       "title": "Open session manager"
@@ -130,6 +141,7 @@
       "displayKey": "fn ⇥",
       "owner": "app-focus",
       "rawKey": "fn - tab",
+      "sourceFile": "modules/app-focus/targets/skhd-apps.conf.tmpl",
       "sourceSection": "Focus open normal tmux windows by creation order",
       "stableId": "sha256:b5098b33d4f596978557be06c71e0174ebe2d1ecf2a344ea6a51ab56c5316666",
       "title": "Cycle open tmux windows"
@@ -141,6 +153,7 @@
       "displayKey": "R⌘ D",
       "owner": "terminal-window-types",
       "rawKey": "rcmd - d",
+      "sourceFile": "modules/terminal-window-types/targets/skhdrc.tmpl",
       "sourceSection": "Ghostty management (right Command)",
       "stableId": "sha256:4661344fb676420761645b67cd20613b017478f6a7510a47ca8e2b658dc963a2",
       "title": "Duplicate current tmux window"
@@ -152,6 +165,7 @@
       "displayKey": "R⌘ H",
       "owner": "tmux-sessions",
       "rawKey": "rcmd - h",
+      "sourceFile": "modules/tmux-sessions/targets/skhdrc.tmpl",
       "sourceSection": "Ghostty management (right Command)",
       "stableId": "sha256:1da9db3323bc64c68856009b5e42ecfcaaa408d127bb757e99a7db9b2fb729c8",
       "title": "Open centralized tmux hub"
@@ -163,6 +177,7 @@
       "displayKey": "R⌘ R",
       "owner": "terminal-window-types",
       "rawKey": "rcmd - r",
+      "sourceFile": "modules/terminal-window-types/targets/skhdrc.tmpl",
       "sourceSection": "Ghostty management (right Command)",
       "stableId": "sha256:6d5b791f4941e33a4c548ffe770e320b6d5e786501e4c27c4b93d4f84c0d9571",
       "title": "Rename current tmux window"
@@ -174,6 +189,7 @@
       "displayKey": "R⌘ S",
       "owner": "root",
       "rawKey": "rcmd - s",
+      "sourceFile": "home/dot_skhdrc.tmpl",
       "sourceSection": "Ghostty management (right Command)",
       "stableId": "sha256:321fdf8a527813d4a4fd46345006b79350b7bcd47a014b3e9b7f0aed03bccb67",
       "title": "Open tmux session picker"
@@ -185,6 +201,7 @@
       "displayKey": "R⌘ Space",
       "owner": "root",
       "rawKey": "rcmd - space",
+      "sourceFile": "home/dot_skhdrc.tmpl",
       "sourceSection": "Ghostty management (right Command)",
       "stableId": "sha256:ac48446124896019d79327636f5149951a85e38a5cc285a471c1ba42489ff104",
       "title": "Search tmux commands with Telescope"
@@ -196,6 +213,7 @@
       "displayKey": "⌃ ⌥ B",
       "owner": "window-layout",
       "rawKey": "ctrl + alt - b",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Balance tree",
       "stableId": "sha256:8fbc6ddea03d17b8763655c29d45edd81628a0758c1d7d38298c658a214848c8",
       "title": "Balance windows"
@@ -207,6 +225,7 @@
       "displayKey": "⌃ ⌥ G",
       "owner": "window-layout",
       "rawKey": "ctrl + alt - g",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Stack windows",
       "stableId": "sha256:7174a08043f224800bac2efb851d5ea04fd5b2a47b7551baae3975e7c01e82f1",
       "title": "Toggle BSP / stack layout"
@@ -218,6 +237,7 @@
       "displayKey": "⌃ ⌥ O",
       "owner": "window-layout",
       "rawKey": "ctrl + alt - o",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Rotate tree",
       "stableId": "sha256:6a232003d0fac4ec03f2e1b8020c680d935da2346c74ef24c8dde339423e9ff1",
       "title": "Rotate layout"
@@ -229,6 +249,7 @@
       "displayKey": "⌃ ⌥ X",
       "owner": "window-layout",
       "rawKey": "ctrl + alt - x",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Mirror tree",
       "stableId": "sha256:3f3fadb81df0712e5601352d52f28ba424e68dd53f4fe37c2004fa3b47bc8f26",
       "title": "Mirror layout horizontally"
@@ -240,6 +261,7 @@
       "displayKey": "⌃ ⌥ Y",
       "owner": "window-layout",
       "rawKey": "ctrl + alt - y",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Mirror tree",
       "stableId": "sha256:0355db65d78c45d3ab945b30d2cea2d6d8769ca0ca8890aa64625cb3cb208246",
       "title": "Mirror layout vertically"
@@ -251,6 +273,7 @@
       "displayKey": "⌥ 1",
       "owner": "app-focus",
       "rawKey": "alt - 1",
+      "sourceFile": "modules/app-focus/targets/skhd-apps.conf.tmpl",
       "sourceSection": "App Focus",
       "stableId": "sha256:5a6123455a0b63b676fc48f247005e57bbbadb598643196d366cb8db10b56a40",
       "title": "Focus browser"
@@ -262,6 +285,7 @@
       "displayKey": "⌥ 2",
       "owner": "app-focus",
       "rawKey": "alt - 2",
+      "sourceFile": "modules/app-focus/targets/skhd-apps.conf.tmpl",
       "sourceSection": "App Focus",
       "stableId": "sha256:a1f7858b60aa9f4aaa1fd053a6cf644340c015ca26924afff17ccd5679a52ee0",
       "title": "Focus editor"
@@ -273,6 +297,7 @@
       "displayKey": "⌥ 3",
       "owner": "app-focus",
       "rawKey": "alt - 3",
+      "sourceFile": "modules/app-focus/targets/skhd-apps.conf.tmpl",
       "sourceSection": "App Focus",
       "stableId": "sha256:32ec41270adf54d0e17abfda380e010b945602f89c9c91abe43b19fc1dab4644",
       "title": "Focus Microsoft Teams"
@@ -284,6 +309,7 @@
       "displayKey": "⌥ 4",
       "owner": "app-focus",
       "rawKey": "alt - 4",
+      "sourceFile": "modules/app-focus/targets/skhd-apps.conf.tmpl",
       "sourceSection": "App Focus",
       "stableId": "sha256:9d3432c87e30906a0a01323e7817c96bbed97d2183f079b15f4a23123a0e46d5",
       "title": "Focus Slack"
@@ -295,6 +321,7 @@
       "displayKey": "⌥ \\",
       "owner": "app-focus",
       "rawKey": "alt - 0x2A",
+      "sourceFile": "modules/app-focus/targets/skhd-modes.conf.tmpl",
       "sourceSection": "Focus open normal tmux windows by creation order",
       "stableId": "sha256:7eecc38722244fb409b80d95c43bab64b4e57927a1a5f317883df95afeb38141",
       "title": "Toggle presentation mode"
@@ -306,6 +333,7 @@
       "displayKey": "⌥ `",
       "owner": "app-focus",
       "rawKey": "alt - 0x32",
+      "sourceFile": "modules/app-focus/targets/skhd-apps.conf.tmpl",
       "sourceSection": "App Focus",
       "stableId": "sha256:c2e8edfb37757c854e90a2a851db0271f2593c819e70c3720a2f7b6d70b36137",
       "title": "Focus Ghostty"
@@ -317,6 +345,7 @@
       "displayKey": "⌥ ⇧ [",
       "owner": "space-display",
       "rawKey": "alt + shift - 0x21",
+      "sourceFile": "modules/space-display/targets/skhdrc.tmpl",
       "sourceSection": "Move window to previous/next display (Option+Shift+[ / ])",
       "stableId": "sha256:ae4ace46ca3b61dda688d899e41c59909b278ad21e8dc4d585aa328e601dfcea",
       "title": "Move window to previous/next display (Option+Shift+[ / ])"
@@ -328,6 +357,7 @@
       "displayKey": "⌥ ⇧ \\",
       "owner": "app-focus",
       "rawKey": "alt + shift - 0x2A",
+      "sourceFile": "modules/app-focus/targets/skhd-modes.conf.tmpl",
       "sourceSection": "Focus open normal tmux windows by creation order",
       "stableId": "sha256:86992a8015da8e160e6fcdb9b56aa752db482cfa9b5c6bbf1681c0de0b024d6e",
       "title": "Toggle zen mode"
@@ -339,6 +369,7 @@
       "displayKey": "⌥ ⇧ ]",
       "owner": "space-display",
       "rawKey": "alt + shift - 0x1E",
+      "sourceFile": "modules/space-display/targets/skhdrc.tmpl",
       "sourceSection": "Move window to previous/next display (Option+Shift+[ / ])",
       "stableId": "sha256:1e35ccbdf8f4cddf75740f13f0b147bdec03b3af5bfeb9d0cedac99c6db84cd4",
       "title": "Move window to previous/next display (Option+Shift+[ / ])"
@@ -350,6 +381,7 @@
       "displayKey": "⌥ ⇧ `",
       "owner": "app-focus",
       "rawKey": "alt + shift - 0x32",
+      "sourceFile": "modules/app-focus/targets/skhd-modes.conf.tmpl",
       "sourceSection": "Focus open normal tmux windows by creation order",
       "stableId": "sha256:8f12663f2fb267c0c81856f05f47086ad5215c732737773b12a6116c866d7ecd",
       "title": "Open a new terminal"
@@ -361,6 +393,7 @@
       "displayKey": "⌃ ⌥ D",
       "owner": "window-layout",
       "rawKey": "ctrl + alt - d",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Stack windows",
       "stableId": "sha256:29f4bff1805555dc36c53355846a5a87cc0f7009bad8a0f77202dd2932bfe183",
       "title": "Stack window left"
@@ -372,6 +405,7 @@
       "displayKey": "⌃ ⌥ F",
       "owner": "window-layout",
       "rawKey": "ctrl + alt - f",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Toggle float + center (remembered per app/title)",
       "stableId": "sha256:14bbf2f86c91de3a74afad070fdf6d23fe1460de4c9be0c5052f5703d58f0c7f",
       "title": "Toggle floating window"
@@ -383,6 +417,7 @@
       "displayKey": "⌃ ⌥ H",
       "owner": "window-layout",
       "rawKey": "ctrl + alt - h",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Set window to 50% split",
       "stableId": "sha256:1ce3bc0f31bc76f40c9edfb4185f7d42901d02e850ada896b78afac653bc7fa6",
       "title": "Snap window left"
@@ -394,6 +429,7 @@
       "displayKey": "⌃ ⌥ K",
       "owner": "window-layout",
       "rawKey": "ctrl + alt - k",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Set window to 50% split",
       "stableId": "sha256:bac6f308ec375aeb269ed30c17521c6e1ae02affc9edaa94b77789159f41db51",
       "title": "Snap window right"
@@ -405,6 +441,7 @@
       "displayKey": "⌃ ⌥ S",
       "owner": "window-layout",
       "rawKey": "ctrl + alt - s",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Toggle split direction",
       "stableId": "sha256:433ca7c13e4eb0ee3e5613d9839150a2af118588ef4e907cc18fd756aa7430bf",
       "title": "Flip split direction"
@@ -416,6 +453,7 @@
       "displayKey": "⌃ ⌥ W",
       "owner": "window-layout",
       "rawKey": "ctrl + alt - w",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Window close / minimize",
       "stableId": "sha256:73a02f904b54ac2c40b18194f68727eccf6ab98eff89046970f5e9835c0a2290",
       "title": "Close window"
@@ -427,6 +465,7 @@
       "displayKey": "⌃ ⌥ Z",
       "owner": "window-layout",
       "rawKey": "ctrl + alt - z",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Window close / minimize",
       "stableId": "sha256:e8c972a4ddc112798923c34f070e1bf5fefb38e77980fa67eefcbb58f11a7859",
       "title": "Minimize window"
@@ -438,6 +477,7 @@
       "displayKey": "⌃ ⌥ ←",
       "owner": "window-layout",
       "rawKey": "ctrl + alt - left",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Set window to 50% split",
       "stableId": "sha256:376d611e2207bf2fc934c9596844475e9228ed01b57c2cea31fa7406e2a0de88",
       "title": "Snap window left"
@@ -449,6 +489,7 @@
       "displayKey": "⌃ ⌥ →",
       "owner": "window-layout",
       "rawKey": "ctrl + alt - right",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Set window to 50% split",
       "stableId": "sha256:145bc279845fe7ab6b08c91231e4396c49948fe83f1b953234d6b6003bebf99c",
       "title": "Snap window right"
@@ -460,6 +501,7 @@
       "displayKey": "⌃ ⌥ ↩",
       "owner": "window-layout",
       "rawKey": "ctrl + alt - return",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Fullscreen",
       "stableId": "sha256:66312e392b0e065d8804539bab9ea029cd5d4719535cb95ec950109f6ad67a9c",
       "title": "Toggle window fullscreen"
@@ -471,6 +513,7 @@
       "displayKey": "⌃ ⌥ ⇧ H",
       "owner": "window-layout",
       "rawKey": "ctrl + alt + shift - h",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Swap windows",
       "stableId": "sha256:38046e18a7cbd3cc1aa6fd572db6942fea8c19ab31295fbda4057b611c668902",
       "title": "Swap window left"
@@ -482,6 +525,7 @@
       "displayKey": "⌃ ⌥ ⇧ J",
       "owner": "window-layout",
       "rawKey": "ctrl + alt + shift - j",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Swap windows",
       "stableId": "sha256:bfc10c32e4c50537f16eb211867c7b9830f168901b94472a66f550d8b00728c9",
       "title": "Swap window down"
@@ -493,6 +537,7 @@
       "displayKey": "⌃ ⌥ ⇧ K",
       "owner": "window-layout",
       "rawKey": "ctrl + alt + shift - k",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Swap windows",
       "stableId": "sha256:09482715a662ee1f040366c69902ccb94dffe987bbf906e45a8e2c5078826776",
       "title": "Swap window right"
@@ -504,6 +549,7 @@
       "displayKey": "⌃ ⌥ ⇧ U",
       "owner": "window-layout",
       "rawKey": "ctrl + alt + shift - u",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Swap windows",
       "stableId": "sha256:7e4d9ac070f2feb2771b2258ac62c8c3f2ec377f8b9491bef88f77651caf3480",
       "title": "Swap window up"
@@ -515,6 +561,7 @@
       "displayKey": "⌃ ⌥ ⇧ ←",
       "owner": "window-layout",
       "rawKey": "ctrl + alt + shift - left",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Swap windows",
       "stableId": "sha256:23958028ae8cdd7a278decfc92d849a331637734955356b2640f089ca0e3ed41",
       "title": "Swap window left"
@@ -526,6 +573,7 @@
       "displayKey": "⌃ ⌥ ⇧ ↑",
       "owner": "window-layout",
       "rawKey": "ctrl + alt + shift - up",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Swap windows",
       "stableId": "sha256:fe21b8f642ebd3b6542544a3e8ef6805aec210da9da26c58e6605256ea2527b4",
       "title": "Swap window up"
@@ -537,6 +585,7 @@
       "displayKey": "⌃ ⌥ ⇧ →",
       "owner": "window-layout",
       "rawKey": "ctrl + alt + shift - right",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Swap windows",
       "stableId": "sha256:ab88f1e9dbc67891b341256329aecfffc9eb68c75d6665087f3c7f5e7dd37f5e",
       "title": "Swap window right"
@@ -548,6 +597,7 @@
       "displayKey": "⌃ ⌥ ⇧ ↓",
       "owner": "window-layout",
       "rawKey": "ctrl + alt + shift - down",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Swap windows",
       "stableId": "sha256:87504ae98bc8093a18da4b9252aaf22ca0a5b84e0bf07109b05399b16df01cb1",
       "title": "Swap window down"
@@ -559,6 +609,7 @@
       "displayKey": "⌥ ⇥",
       "owner": "window-layout",
       "rawKey": "alt - tab",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Cycle through windows on current desktop",
       "stableId": "sha256:bd76cd983e146fe31faeba27bf53c76c9f89dbf5fcafb6090c2a679fefc87316",
       "title": "Next stacked window"
@@ -570,6 +621,7 @@
       "displayKey": "⌥ ⇧ H",
       "owner": "window-layout",
       "rawKey": "alt + shift - h",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Resize window incrementally (Option+Shift)",
       "stableId": "sha256:0ef25b84ac971586c51d8f4abe2d3c9e2685c152b1f5deb89f92b0a76b6e8044",
       "title": "Grow window left"
@@ -581,6 +633,7 @@
       "displayKey": "⌥ ⇧ J",
       "owner": "window-layout",
       "rawKey": "alt + shift - j",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Resize window incrementally (Option+Shift)",
       "stableId": "sha256:afb17018009977005faa9428d770790bc59351ebb57f570bf921bddc9e578018",
       "title": "Grow window down"
@@ -592,6 +645,7 @@
       "displayKey": "⌥ ⇧ K",
       "owner": "window-layout",
       "rawKey": "alt + shift - k",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Resize window incrementally (Option+Shift)",
       "stableId": "sha256:87a54f4b6a49932776894d0cd716a7fbc628cbac942e4a6ef8f2e1b9bc33c8ac",
       "title": "Grow window right"
@@ -603,6 +657,7 @@
       "displayKey": "⌥ ⇧ U",
       "owner": "window-layout",
       "rawKey": "alt + shift - u",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Resize window incrementally (Option+Shift)",
       "stableId": "sha256:150456964a27b8b5e63c986270821078e766ab728f2ac0cbbd000d7b42f00ab1",
       "title": "Grow window up"
@@ -614,6 +669,7 @@
       "displayKey": "⌥ ⇧ ←",
       "owner": "window-layout",
       "rawKey": "alt + shift - left",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Resize window incrementally (Option+Shift)",
       "stableId": "sha256:a697136fce606cf694d3110c99d0e4012c864440794cf444d694316bed775c18",
       "title": "Grow window left"
@@ -625,6 +681,7 @@
       "displayKey": "⌥ ⇧ ↑",
       "owner": "window-layout",
       "rawKey": "alt + shift - up",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Resize window incrementally (Option+Shift)",
       "stableId": "sha256:170dfa4b71df5d065300ceb65a232f6b033530ea621fa394e6e1b5dcc349851d",
       "title": "Grow window up"
@@ -636,6 +693,7 @@
       "displayKey": "⌥ ⇧ →",
       "owner": "window-layout",
       "rawKey": "alt + shift - right",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Resize window incrementally (Option+Shift)",
       "stableId": "sha256:494940e6578bcd5ddadb20d57a2e53630e1a880a43b645e5089c1cfb8567f079",
       "title": "Grow window right"
@@ -647,6 +705,7 @@
       "displayKey": "⌥ ⇧ ↓",
       "owner": "window-layout",
       "rawKey": "alt + shift - down",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Resize window incrementally (Option+Shift)",
       "stableId": "sha256:50ed2ee096b439140c5ba2ca0f4d2befcc1b446cb89b8e690c962cfe7135126f",
       "title": "Grow window down"
@@ -658,6 +717,7 @@
       "displayKey": "⌥ ⇧ ⇥",
       "owner": "window-layout",
       "rawKey": "shift + alt - tab",
+      "sourceFile": "modules/window-layout/targets/skhdrc.tmpl",
       "sourceSection": "Cycle through windows on current desktop",
       "stableId": "sha256:39ff373272202063f7c446d9b642ad23d9314dcb3dbc2053f67792674993c498",
       "title": "Previous stacked window"
@@ -669,6 +729,7 @@
       "displayKey": "⌃ ⌥ N",
       "owner": "space-display",
       "rawKey": "ctrl + alt - n",
+      "sourceFile": "modules/space-display/targets/skhdrc.tmpl",
       "sourceSection": "Move window to new desktop",
       "stableId": "sha256:aebd1b3686b3156f8f2eadba76191243f56be4def05af633515c3dc577b6e3f8",
       "title": "Move window to a new Space"
@@ -680,6 +741,7 @@
       "displayKey": "⌥ K",
       "owner": "space-display",
       "rawKey": "alt - k",
+      "sourceFile": "modules/space-display/targets/skhdrc.tmpl",
       "sourceSection": "Close all empty desktops",
       "stableId": "sha256:3c2a57b6035badbabe571a3a25ede9b7d4379b0297be91a7bda18a59873a73ec",
       "title": "Close empty Spaces"
@@ -691,6 +753,7 @@
       "displayKey": "⌥ N",
       "owner": "space-display",
       "rawKey": "alt - n",
+      "sourceFile": "modules/space-display/targets/skhdrc.tmpl",
       "sourceSection": "Create new desktop, moving the focused non-scratchpad window if present",
       "stableId": "sha256:5e4175c295a389352d803581f8612e71238209e4fc329ee9b0be12ced2f855ae",
       "title": "Create a new Space"
@@ -702,6 +765,7 @@
       "displayKey": "⌥ ⌘ N",
       "owner": "space-display",
       "rawKey": "cmd + alt - n",
+      "sourceFile": "modules/space-display/targets/skhdrc.tmpl",
       "sourceSection": "Open the app's default new window and move it to a new desktop",
       "stableId": "sha256:5842355dc4edc832bd90a8fae98c47f726a04b721d49aa4275ca665d23f28da6",
       "title": "Open window on a new Space"
@@ -713,6 +777,7 @@
       "displayKey": "⇧ fn 1",
       "owner": "root",
       "rawKey": "fn + shift - 1",
+      "sourceFile": "home/dot_skhdrc.tmpl",
       "sourceSection": "Screenshots",
       "stableId": "sha256:5bbb334676c4a495a7e985279dfcc04dab7401be2f3a94c02d99ba391d847d48",
       "title": "Save full-screen screenshot"
@@ -724,6 +789,7 @@
       "displayKey": "⇧ fn 2",
       "owner": "root",
       "rawKey": "fn + shift - 2",
+      "sourceFile": "home/dot_skhdrc.tmpl",
       "sourceSection": "Screenshots",
       "stableId": "sha256:62a9229aef6099be95177a05ad133c26e75136b1cc2e5a280c1a53af0fecf74a",
       "title": "Copy full-screen screenshot"
@@ -735,6 +801,7 @@
       "displayKey": "⇧ fn 3",
       "owner": "root",
       "rawKey": "fn + shift - 3",
+      "sourceFile": "home/dot_skhdrc.tmpl",
       "sourceSection": "Screenshots",
       "stableId": "sha256:ca9e7cc0ba9840a97db393e1fe714e053fe8cc74f84f0de10f19f98f7985a174",
       "title": "Save selection screenshot"
@@ -746,6 +813,7 @@
       "displayKey": "⇧ fn 4",
       "owner": "root",
       "rawKey": "fn + shift - 4",
+      "sourceFile": "home/dot_skhdrc.tmpl",
       "sourceSection": "Screenshots",
       "stableId": "sha256:0f72706c30ca0dff203b75f4e413de115e4c23bdea36bfe578e7d92acb5d3ef2",
       "title": "Copy selection screenshot"
@@ -757,6 +825,7 @@
       "displayKey": "⌥ /",
       "owner": "shortcut-guide",
       "rawKey": "alt - 0x2C",
+      "sourceFile": "modules/shortcut-guide/targets/skhdrc.tmpl",
       "sourceSection": "Interactive shortcut guide (opt + /)",
       "stableId": "sha256:8d83711ee36a07b52cb5380af1551eda4a5b794627ef683c319be550f22be909",
       "title": "Open shortcut guide"
@@ -768,6 +837,7 @@
       "displayKey": "⌥ R",
       "owner": "root",
       "rawKey": "alt - r",
+      "sourceFile": "home/dot_skhdrc.tmpl",
       "sourceSection": "System",
       "stableId": "sha256:5969bdd56168e2a323d155f2bae14c45cd742b039377a9f12b4da1fd585c6290",
       "title": "Restart window shortcuts"

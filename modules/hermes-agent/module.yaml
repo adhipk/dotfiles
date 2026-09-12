@@ -1,0 +1,32 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: hermes-agent
+version: 1.0.0
+description: Optional profile launcher that makes an upstream Hermes installation a pluggable terminal assistant.
+dataKey: modules.hermesAgent
+distribution:
+  standalone: false
+requires:
+  executables:
+    - bash
+    - hermes
+    - hermes-dotfiles
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
+state:
+  preserved:
+    - ~/.hermes/profiles/dotfiles
+  ephemeral: []
+commands:
+  - name: hermes-dotfiles
+    source: bin/hermes-dotfiles
+    target: ~/bin/hermes-dotfiles
+targets:
+  - service: command
+    source: bin/hermes-dotfiles
+    destination: ~/bin/hermes-dotfiles
+    bridge: home/bin/executable_hermes-dotfiles.tmpl
+    ownership: exclusive
+tests:
+  - tests/test_module.sh
