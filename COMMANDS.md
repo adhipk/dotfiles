@@ -157,7 +157,7 @@ The tmux sessions module installs this shell-independent command:
 
 | Command | Usage | Purpose |
 | --- | --- | --- |
-| `daemon` | `daemon NAME COMMAND [ARG ...]` | Run a background command with `nohup`, write `/tmp/NAME.log` and `/tmp/NAME.pid`, and create a `daemon-NAME` tmux session that tails the log. |
+| `daemon` | `daemon NAME [KEY=VALUE ...] COMMAND [ARG ...]` | Run a background command with optional environment assignments through `nohup`, write `/tmp/NAME.log` and `/tmp/NAME.pid`, and create a `daemon-NAME` tmux session that tails the log. |
 
 [`home/dot_config/zsh/zshrc.commands`](home/dot_config/zsh/zshrc.commands)
 also defines these shell functions:
@@ -454,3 +454,9 @@ external has been cloned, its package commands include:
 | `pnpm zip`, `pnpm zip:firefox` | Package Chrome or Firefox builds. |
 | `pnpm compile` | Run TypeScript checking without emitting files. |
 | `pnpm postinstall` | Prepare WXT metadata. This runs automatically after dependency installation. |
+
+### Markdown clipboard
+
+- `markdown-clipboard once` — render the current eligible Markdown clipboard copy.
+- `markdown-clipboard status|start|stop` — inspect, start, or stop automatic Markdown-to-HTML clipboard enrichment.
+- `dotfiles-module disable markdown-clipboard` — disable it persistently.

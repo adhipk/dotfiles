@@ -469,13 +469,14 @@ Configuration inputs:
 Source: `modules/tmux-sessions/bin/daemon` (bash).
 
 Invoked by:
-- CLI only: `daemon NAME COMMAND [ARG...]`. No tmux/skhd bindings.
+- CLI only: `daemon NAME [KEY=VALUE ...] COMMAND [ARG...]`. No tmux/skhd bindings. For example: `daemon server PORT=3001 bun run server`.
 
 System behaviors:
 - Spawns `COMMAND` with `nohup … &` detached from the terminal (stdout+stderr → log, stdin `/dev/null`).
 - Writes `/tmp/NAME.log` (command output) and `/tmp/NAME.pid` (PID) — world-visible /tmp files by default.
 - Creates a detached tmux session `daemon-NAME` (with `DOTFILES_TMUX_TEMPLATE=skip`, window `logs`) running `tail -n +1 -F <log>`; skips creation if the session already exists; degrades gracefully when tmux is absent (process still runs).
 - NAME validated to `[A-Za-z0-9][A-Za-z0-9._-]*` to prevent path injection.
+- Leading environment assignments are passed literally through `env`; executable lookup uses the requested environment. Missing commands fail before creating logs, PID files, or tmux sessions.
 
 Configuration inputs:
 - Env: `DAEMON_LOG_DIR` (default `/tmp` — worth exposing/defaulting to a private dir), `DAEMON_TMUX_BIN`.
@@ -809,6 +810,22 @@ Configuration inputs:
 
 ---
 
+## browser-use-helium
+
+Source: `home/bin/executable_browser-use-helium` → installed `~/bin/browser-use-helium`.
+
+Invoked by: Codex CLI or user CLI for interactive browser work.
+
+System behaviors:
+- Reads Helium's `DevToolsActivePort` file and rejects a missing or malformed endpoint.
+- Runs the separately installed Browser Use CLI against Helium's local DevTools WebSocket. Browser Use may inspect or change browser tabs and writes its daemon state under `~/.config/browser-harness`; this wrapper does not start a cloud browser.
+
+Configuration inputs:
+- Env: `HOME` for Helium's profile and `BH_TAB_MARKER` (defaults to `0` to leave tab titles unchanged).
+- Browser Use CLI is installed at the `uv tool dir --bin` path by `bootstrap.sh`.
+
+---
+
 # External symlink-mounted commands
 
 These `home/bin/symlink_*.tmpl` entries render as symlinks into `~/bin` pointing at external project checkouts under `~/projects` (cloned/pinned by chezmoi externals + `gitPins` in `home/.chezmoidata.toml`). Upstream code is not audited here.
@@ -836,4 +853,8 @@ Mounts: `~/projects/unescape-cli/bin/unescape-{string,buffer}` — upstream `une
 
 ---
 
-Audited utilities: 12 fully audited + 8 external symlink-mounted commands (6 distinct upstream repos) = 20 sections.
+Audited utilities: 13 fully audited + 8 external symlink-mounted commands (6 distinct upstream repos) = 21 sections.
+
+### Markdown clipboard
+
+The `markdown-clipboard` module polls the macOS clipboard every 200 ms and adds HTML to plain-text Markdown copies, preserving the original text. VS Code Markdown-mode copies have their source-highlighted HTML replaced with rendered HTML while retaining editor metadata. It skips other rich, non-text, marked-sensitive and oversized copies. `markdown-clipboard once` explicitly processes the current clipboard; startup watches only new copies. Its after-apply hook compiles the Swift worker and registers `com.dotfiles.markdown-clipboard` in the user LaunchAgents directory. Pandoc is installed by bootstrap; no clipboard content is logged or persisted. Disable through `dotfiles-module disable markdown-clipboard`; teardown unloads the agent and removes generated worker/plist files.
