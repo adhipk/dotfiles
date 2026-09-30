@@ -60,5 +60,30 @@ grep -Fq "Started PID" <<<"$OUTPUT" \
   && pass "command reports startup" \
   || fail "command reports startup" "Started PID" "$OUTPUT"
 
+OUTPUT=$(DAEMON_LOG_DIR="$TEMP_DIR/logs" DAEMON_TMUX_BIN="$FAKE_BIN/tmux" \
+  DAEMON_TEST_TMUX_LOG="$TMUX_LOG" "$COMMAND" environment PORT=3001 'LABEL=two words' \
+  /bin/bash -c 'printf "%s|%s|%s" "$PORT" "$LABEL" "$1"' test 'literal $(no-eval)')
+for _ in {1..20}; do
+  [[ -s "$TEMP_DIR/logs/environment.log" ]] && break
+  sleep 0.05
+done
+EXPECTED='3001|two words|literal $(no-eval)'
+ACTUAL=$(cat "$TEMP_DIR/logs/environment.log" 2>/dev/null)
+[[ "$ACTUAL" == "$EXPECTED" ]] \
+  && pass "environment assignments and arguments remain literal" \
+  || fail "environment assignments and arguments remain literal" "$EXPECTED" "$ACTUAL"
+
+for scenario in missing assignment-only; do
+  args=(PORT=3001)
+  [[ "$scenario" == missing ]] && args+=(daemon-nonexistent-command-for-test)
+  OUTPUT=$(DAEMON_LOG_DIR="$TEMP_DIR/logs" "$COMMAND" "$scenario" "${args[@]}" 2>&1)
+  STATUS=$?
+  if [[ $STATUS -ne 0 && "$OUTPUT" != *'Started PID'* && ! -e "$TEMP_DIR/logs/$scenario.pid" ]]; then
+    pass "$scenario fails before reporting startup or writing a pid"
+  else
+    fail "$scenario fails before reporting startup or writing a pid" "nonzero without startup artifacts" "$OUTPUT"
+  fi
+done
+
 printf '\nResults: %s passed, %s failed\n' "$PASSED" "$FAILED"
 exit "$FAILED"

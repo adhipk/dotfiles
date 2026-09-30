@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # man-me: name=daemon
 # man-me: category=Terminal and Sessions
-# man-me: usage=daemon NAME COMMAND [ARG ...]
+# man-me: usage=daemon NAME [KEY=VALUE ...] COMMAND [ARG ...]
 # man-me: description=Run a validated background command with durable logs and a tmux log-tail session.
 # man-me: tags=tmux terminal daemon background log logs nohup
 
@@ -9,10 +9,12 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: daemon NAME COMMAND [ARG ...]
+Usage: daemon NAME [KEY=VALUE ...] COMMAND [ARG ...]
 
 Runs COMMAND with nohup, writes /tmp/NAME.log and /tmp/NAME.pid, and creates
 a detached daemon-NAME tmux session that follows the log.
+
+Example: daemon server PORT=3001 bun run server
 EOF
 }
 
@@ -35,10 +37,24 @@ if [[ ! "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
   exit 2
 fi
 
+environment=(/usr/bin/env)
+while [[ $# -gt 0 && "$1" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; do
+  environment+=("$1")
+  shift
+done
+
 if [[ $# -eq 0 ]]; then
   printf 'daemon: COMMAND is required\n' >&2
   usage >&2
   exit 2
+fi
+
+# Resolve in the requested environment, including any PATH override. Do not
+# evaluate shell syntax: arguments and assignment values stay literal.
+if ! "${environment[@]}" /bin/bash -c 'type -P -- "$1" >/dev/null' daemon "$1"; then
+  printf 'daemon: executable not found: %s\n' "$1" >&2
+  printf 'Use ./script for a local executable, or bash script.sh for a shell script.\n' >&2
+  exit 127
 fi
 
 log_dir="${DAEMON_LOG_DIR:-/tmp}"
@@ -48,7 +64,7 @@ pid_path="$log_dir/$name.pid"
 session_name="daemon-$name"
 
 mkdir -p "$log_dir"
-nohup "$@" >"$log_path" 2>&1 < /dev/null &
+nohup "${environment[@]}" "$@" >"$log_path" 2>&1 < /dev/null &
 pid=$!
 printf '%s\n' "$pid" >"$pid_path"
 
