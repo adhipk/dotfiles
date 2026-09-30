@@ -48,7 +48,17 @@ On this checkout:
 Python, Tuxedo, the Codex CLI, and the desktop app; applies this repository with
 `./install.sh`; clones and pins the declared utility projects below
 `~/projects`; installs the declared tmux plugins and searchable command catalog; builds the
-shortcut guide; and starts the yabai and skhd launch services.
+shortcut guide; installs Browser Use CLI and its shared agent skill; and starts
+the yabai and skhd launch services.
+
+Browser Use CLI gives Codex CLI browser control through its agent skill. Use
+`~/bin/browser-use-helium` to attach to the running Helium session; the wrapper
+reads Helium's current DevTools endpoint and leaves tab titles unchanged. Browser
+Use can work in background tabs without bringing Helium forward. First enable
+remote debugging in
+`helium://inspect/#remote-debugging` and approve Helium's macOS prompt if shown.
+Local browser access does not require a Browser Use cloud account. See the
+[Browser Use CLI guide](https://docs.browser-use.com/open-source/browser-use-cli).
 
 A real `./install.sh` or `make install` reloads the active tmux server and sends
 Ghostty's configuration-reload signal to every running Ghostty process,

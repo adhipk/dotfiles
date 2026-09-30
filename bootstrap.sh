@@ -39,6 +39,15 @@ warm_dotfiles_manager_ui() {
   "$manager_ui" --self-test >/dev/null
 }
 
+install_browser_use_cli() {
+  local browser_use_bin
+
+  echo "Installing Browser Use CLI for coding agents..."
+  uv tool install --python 3.12 'browser-use==0.13.10'
+  browser_use_bin="$(uv tool dir --bin)/browser-use"
+  "$browser_use_bin" skill install --target agents --no-install
+}
+
 if [ ! -d "$DOTFILES_DIR" ]; then
   echo "Dotfiles directory not found at $DOTFILES_DIR" >&2
   exit 1
@@ -71,6 +80,7 @@ fi
 echo "Applying chezmoi source state..."
 "$DOTFILES_DIR/install.sh"
 
+install_browser_use_cli
 warm_dotfiles_manager_ui
 
 start_desktop_service yabai

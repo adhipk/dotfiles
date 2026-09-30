@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# man-me: name=browser-use-helium
+# man-me: category=Agents
+# man-me: usage=browser-use-helium [browser-use args...]
+# man-me: description=Run Browser Use CLI against the current Helium browser session.
+set -euo pipefail
+
+port_file="${HOME:?}/Library/Application Support/net.imput.helium/DevToolsActivePort"
+if [[ ! -r "$port_file" ]]; then
+  echo "Helium remote debugging is off. Enable it at helium://inspect/#remote-debugging." >&2
+  exit 1
+fi
+
+port="$(sed -n '1p' "$port_file")"
+ws_path="$(sed -n '2p' "$port_file")"
+if [[ ! "$port" =~ ^[0-9]+$ || "$ws_path" != /devtools/browser/* ]]; then
+  echo "Helium has an invalid DevTools endpoint: $port_file" >&2
+  exit 1
+fi
+
+export BU_CDP_WS="ws://127.0.0.1:${port}${ws_path}"
+export BH_TAB_MARKER="${BH_TAB_MARKER:-0}"
+exec "$(uv tool dir --bin)/browser-use" "$@"
