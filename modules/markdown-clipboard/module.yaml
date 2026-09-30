@@ -1,0 +1,42 @@
+apiVersion: dotfiles/v1
+kind: Module
+id: markdown-clipboard
+version: 1.0.0
+description: Add HTML to plain Markdown clipboard copies for rich-text pasting.
+dataKey: modules.markdownClipboard
+distribution:
+  standalone: false
+  platform: macos
+requires:
+  executables:
+    - bash
+    - xcrun
+    - pandoc
+    - python3
+lifecycle:
+  setup: lifecycle/setup
+  teardown: lifecycle/teardown
+state:
+  preserved: []
+  ephemeral:
+    - ~/.local/state/markdown-clipboard
+    - ~/Library/LaunchAgents/com.dotfiles.markdown-clipboard.plist
+commands:
+  - name: markdown-clipboard
+    source: bin/markdown-clipboard
+    target: ~/bin/markdown-clipboard
+targets:
+  - source: bin/markdown-clipboard
+    destination: ~/bin/markdown-clipboard
+    bridge: home/bin/executable_markdown-clipboard.tmpl
+    ownership: exclusive
+  - source: src/main.swift
+    destination: ~/.config/markdown-clipboard/main.swift
+    bridge: home/dot_config/markdown-clipboard/main.swift.tmpl
+    ownership: exclusive
+  - source: install/service.sh.tmpl
+    destination: chezmoi after-apply lifecycle
+    bridge: home/.chezmoiscripts/run_onchange_after_markdown-clipboard.sh.tmpl
+    ownership: exclusive
+tests:
+  - tests/test_service.sh

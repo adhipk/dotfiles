@@ -17,6 +17,7 @@ FAILED_SUITES=()
 
 # Test suites to run
 TEST_SUITES=(
+    "test_markdown_clipboard.sh"
     "test_agent_timer.sh"
     "test_hermes_agent.sh"
     "test_dotfiles_manager.sh"

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+: "${DOTFILES_ROOT:?DOTFILES_ROOT is required}"
+"$DOTFILES_ROOT/modules/markdown-clipboard/bin/markdown-clipboard" start

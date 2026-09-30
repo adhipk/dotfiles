@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Worker hash: {{ include "../modules/markdown-clipboard/src/main.swift" | sha256sum }}
+# Controller hash: {{ include "../modules/markdown-clipboard/bin/markdown-clipboard" | sha256sum }}
+{{ if .modules.markdownClipboard.enabled -}}
+"$HOME/bin/markdown-clipboard" start
+{{ else -}}
+set -- stop
+{{ include "../modules/markdown-clipboard/bin/markdown-clipboard" }}
+{{ end -}}

@@ -178,3 +178,7 @@ reload:
 clean:
 	@rm -f *.tmp *.log
 	@echo "Cleaned temporary files"
+
+.PHONY: test-markdown-clipboard
+test-markdown-clipboard:
+	@./tests/test_markdown_clipboard.sh

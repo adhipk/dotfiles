@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+label=com.dotfiles.markdown-clipboard
+domain="gui/$(id -u)"
+state="$HOME/.local/state/markdown-clipboard"
+plist="$HOME/Library/LaunchAgents/$label.plist"
+case "${1:-status}" in
+  install|start)
+    pandoc=$(command -v pandoc) || { echo 'Install pandoc with brew install pandoc' >&2; exit 1; }
+    mkdir -p "$state" "$HOME/Library/LaunchAgents"
+    /usr/bin/xcrun swiftc "$HOME/.config/markdown-clipboard/main.swift" -o "$state/worker.new"
+    mv "$state/worker.new" "$state/worker"
+    python3 - "$plist" "$state/worker" "$pandoc" "$label" <<'PLIST'
+import plistlib, sys
+with open(sys.argv[1], 'wb') as f:
+    plistlib.dump({'Label': sys.argv[4], 'ProgramArguments': [sys.argv[2], sys.argv[3]],
+                  'RunAtLoad': True, 'KeepAlive': True, 'ThrottleInterval': 10,
+                  'ProcessType': 'Background'}, f)
+PLIST
+    launchctl bootout "$domain/$label" 2>/dev/null || true
+    launchctl bootstrap "$domain" "$plist"
+    ;;
+  stop|uninstall)
+    launchctl bootout "$domain/$label" 2>/dev/null || true
+    # Only generated artifacts belonging to this service are removed.
+    python3 - "$plist" "$state/worker" "$state/worker.new" <<'CLEAN'
+from pathlib import Path
+import sys
+for name in sys.argv[1:]:
+    Path(name).unlink(missing_ok=True)
+CLEAN
+    ;;
+  once)
+    "$state/worker" --once "$(command -v pandoc)"
+    ;;
+  status) launchctl print "$domain/$label" ;;
+  *) echo 'usage: markdown-clipboard {start|stop|status|once}' >&2; exit 2 ;;
+esac

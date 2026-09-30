@@ -4,6 +4,8 @@ dotfiles:
 # Checked-in defaults. Machine-specific overrides may be supplied from the
 # `data` section of ~/.config/chezmoi/chezmoi.{toml,yaml,json}.
 modules:
+  markdownClipboard:
+    enabled: true
   moduleLifecycle:
     enabled: true
   systemUninstall:
