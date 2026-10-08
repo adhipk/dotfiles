@@ -3,10 +3,14 @@
 A Swift launch agent watches new clipboard copies every 200 ms. Plain-text-only
 copies with headings, bold, inline/fenced code, lists, links, quotes or table
 separators receive an HTML representation from Pandoc. The original Markdown
-remains the plain-text representation. VS Code Markdown-mode copies also qualify: their highlighted source HTML is
+remains the plain-text representation. Plain-text copies carrying Chromium/editor
+metadata also qualify, including VSCodium copies with a null language mode.
+VS Code Markdown-mode copies also qualify: their highlighted source HTML is
 replaced with rendered HTML, preserving Chromium/editor metadata. Other existing
 rich text, normal text, files,
 images, multiple items, marked sensitive copies and copies over 256 KiB are skipped.
+Code blocks use semantic `<pre><code>` HTML without syntax-highlighting spans
+or per-line anchor links, for simpler rich-editor paste handling.
 Detection is a heuristic; code resembling Markdown can also qualify.
 
 The installed Clipboard Project `cb` 0.10.0 writes text to the macOS plain-text

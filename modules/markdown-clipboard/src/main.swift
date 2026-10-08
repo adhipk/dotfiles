@@ -10,7 +10,9 @@ func looksLikeMarkdown(_ text: String) -> Bool {
 func render(_ text: String, pandoc: String) -> String? {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: pandoc)
-    process.arguments = ["--sandbox", "--from=markdown-raw_html-raw_tex-native_divs-native_spans", "--to=html5", "--wrap=none"]
+    // Clipboard consumers need semantic code blocks, not Pandoc's highlighting
+    // wrappers, token spans and per-line anchor links.
+    process.arguments = ["--sandbox", "--from=markdown-raw_html-raw_tex-native_divs-native_spans", "--to=html5", "--syntax-highlighting=none", "--wrap=none"]
     let input = Pipe(), output = Pipe()
     process.standardInput = input
     process.standardOutput = output
@@ -79,10 +81,13 @@ func enrich(_ board: NSPasteboard, pandoc: String,
     var allowed: Set<String> = ["public.utf8-plain-text", "public.utf16-plain-text",
                                "public.plain-text", "NSStringPboardType",
                                "com.apple.traditional-mac-plain-text",
-                               "public.text-encoding"]
+                               "public.text-encoding",
+                               "org.chromium.web-custom-data", "org.chromium.source-url",
+                               "org.chromium.internal.source-rfh-token"]
+    // Chromium provenance/editor metadata is also attached to plain-text copies
+    // with a null mode. It does not make those copies rich content.
     if isMarkdownEditorCopy(original) {
-        allowed.formUnion(["public.html", "org.chromium.web-custom-data",
-                           "org.chromium.source-url", "org.chromium.internal.source-rfh-token"])
+        allowed.insert("public.html")
     }
     guard original.types.allSatisfy({ allowed.contains($0.rawValue) }),
           let text = original.string(forType: .string),
@@ -149,12 +154,13 @@ if args.contains("--self-test") {
     }
     let packed = pickle([("application/vnd.code.copymetadata", #"{"id":"test"}"#),
                          ("vscode-editor-data", editorJSON)])
-    func putEditor(mode: String = "markdown", extra: NSPasteboard.PasteboardType? = nil) {
+    func putEditor(mode: String? = "markdown", rich: Bool = true, extra: NSPasteboard.PasteboardType? = nil) {
         board.clearContents()
         let item = NSPasteboardItem()
         item.setString(table, forType: .string)
-        item.setString(highlighted, forType: .html)
-        let metadata = mode == "markdown" ? packed : pickle([("vscode-editor-data", editorJSON.replacingOccurrences(of: "markdown", with: mode))])
+        if rich { item.setString(highlighted, forType: .html) }
+        let modeJSON = mode.map { "\"\($0)\"" } ?? "null"
+        let metadata = mode == "markdown" ? packed : pickle([("vscode-editor-data", editorJSON.replacingOccurrences(of: "\"markdown\"", with: modeJSON))])
         item.setData(metadata, forType: .init("org.chromium.web-custom-data"))
         item.setString("vscode-file://vscode-app", forType: .init("org.chromium.source-url"))
         item.setData(Data(repeating: 0, count: 24), forType: .init("org.chromium.internal.source-rfh-token"))
@@ -174,6 +180,36 @@ if args.contains("--self-test") {
     }
     putEditor(mode: "plaintext")
     assert(!enrich(board, pandoc: pandoc))
+    putEditor(mode: nil)
+    assert(!enrich(board, pandoc: pandoc))
+    for mode: String? in [nil, "plaintext"] {
+        putEditor(mode: mode, rich: false)
+        let metadata = board.data(forType: .init("org.chromium.web-custom-data"))
+        assert(enrich(board, pandoc: pandoc))
+        assert(board.string(forType: .html)!.contains("<table>"))
+        assert(board.string(forType: .string) == table)
+        assert(board.data(forType: .init("org.chromium.web-custom-data")) == metadata)
+        let count = board.changeCount
+        assert(!enrich(board, pandoc: pandoc) && board.changeCount == count)
+        for type in [NSPasteboard.PasteboardType.rtf, .png, .fileURL, .init("org.nspasteboard.ConcealedType"), .init("com.example.unknown-format")] {
+            putEditor(mode: mode, rich: false, extra: type)
+            assert(!enrich(board, pandoc: pandoc))
+        }
+    }
+    print("PASS: plain-text editor copies with null/plaintext mode, metadata preservation and rich/sensitive exclusions")
+    // Browser and Electron copies need no VS Code metadata to qualify.
+    put("**browser copy**")
+    let browserItem = NSPasteboardItem()
+    browserItem.setString("**browser copy**", forType: .string)
+    let browserMetadata = pickle([("application/x-example", "copy metadata")])
+    browserItem.setData(browserMetadata, forType: .init("org.chromium.web-custom-data"))
+    browserItem.setString("https://example.com", forType: .init("org.chromium.source-url"))
+    board.clearContents()
+    assert(board.writeObjects([browserItem]))
+    assert(enrich(board, pandoc: pandoc))
+    assert(board.string(forType: .html)!.contains("<strong>browser copy</strong>"))
+    assert(board.data(forType: .init("org.chromium.web-custom-data")) == browserMetadata)
+    print("PASS: generic Chromium metadata without editor-specific fields")
     for type in [NSPasteboard.PasteboardType.png, .fileURL, .init("org.nspasteboard.ConcealedType"), .init("com.example.unknown-format")] {
         putEditor(extra: type)
         let count = board.changeCount
@@ -196,6 +232,18 @@ if args.contains("--self-test") {
     assert(!enrich(board, pandoc: pandoc))
     let html = render("**bold** <script>alert(1)</script>", pandoc: pandoc)!
     assert(html.contains("<strong>bold</strong>") && !html.contains("<script>"))
+    let mixed = "# Report\n\nBefore code.\n\n```bash\necho first\necho second\n```\n\nBetween blocks.\n\n```html\n<div>example & text</div>\n```\n\nAfter code."
+    put(mixed)
+    assert(enrich(board, pandoc: pandoc))
+    let codeHTML = board.string(forType: .html)!
+    let blocks = try! NSRegularExpression(pattern: "<pre\\b[^>]*><code[^>]*>([\\s\\S]*?)</code></pre>")
+    let matches = blocks.matches(in: codeHTML, range: NSRange(codeHTML.startIndex..., in: codeHTML))
+    let bodies = matches.map { String(codeHTML[Range($0.range(at: 1), in: codeHTML)!]) }
+    assert(bodies == ["echo first\necho second", "&lt;div&gt;example &amp; text&lt;/div&gt;"])
+    assert(!codeHTML.contains("sourceCode") && !codeHTML.contains("<span") && !codeHTML.contains("<a "))
+    assert(codeHTML.contains("<p>Before code.</p>") && codeHTML.contains("<p>Between blocks.</p>") && codeHTML.contains("<p>After code.</p>"))
+    assert(board.string(forType: .string) == mixed)
+    print("PASS: semantic code blocks contain only code, preserve escaping and keep surrounding prose separate")
     print("PASS: Markdown conversion, original text, rich/sensitive copies, self-write, size limit, conversion failure and newer-copy protection")
 } else if args.contains("--once") {
     print(enrich(.general, pandoc: pandoc) ? "Converted Markdown clipboard to HTML" : "Clipboard unchanged")
