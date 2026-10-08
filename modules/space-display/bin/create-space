@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # man-me: name=create-space
 # man-me: category=Window and Display
-# man-me: usage=~/.config/yabai/create-space [auto|focus|move-window|new-window]
+# man-me: usage=~/.config/yabai/create-space [auto|focus|move-window|new-window|current-window]
 # man-me: description=Create a yabai space on the focused display, optionally opening or moving a focused non-scratchpad window.
 # man-me: tags=hotkeys hotkey keyboard shortcut skhd yabai spaces display
 
@@ -10,9 +10,9 @@ set -euo pipefail
 mode="${1:-auto}"
 
 case "$mode" in
-  auto|focus|move-window|new-window) ;;
+  auto|focus|move-window|new-window|current-window) ;;
   *)
-    echo "usage: create-space [auto|focus|move-window|new-window]" >&2
+    echo "usage: create-space [auto|focus|move-window|new-window|current-window]" >&2
     exit 2
     ;;
 esac
@@ -33,28 +33,25 @@ window_id=""
 window_app=""
 
 open_default_new_window() {
-  local current_window_id previous_window_id
-
-  command -v skhd >/dev/null 2>&1 || {
-    echo "create-space: skhd is not installed" >&2
-    return 1
-  }
-
-  previous_window_id="$(
-    yabai -m query --windows --window 2>/dev/null \
-      | jq -r '.id // empty' 2>/dev/null \
-      || true
-  )"
+  local before_ids original_app candidates
+  command -v skhd >/dev/null 2>&1 || return 1
+  original_app="$(yabai -m query --windows --window | jq -r '.app // empty')"
+  before_ids="$(yabai -m query --windows | jq '[.[].id]')"
 
   skhd -k "cmd - n"
 
-  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
-    current_window_id="$(
-      yabai -m query --windows --window 2>/dev/null \
-        | jq -r '.id // empty' 2>/dev/null \
-        || true
-    )"
-    if [ -n "$current_window_id" ] && [ "$current_window_id" != "$previous_window_id" ]; then
+  # Cmd+n can switch spaces or create an unfocused window. A focus change alone
+  # is not evidence of creation; only accept a new normal window from this app.
+  for _ in {1..60}; do
+    candidates="$(yabai -m query --windows | jq -c --arg app "$original_app" --argjson before "$before_ids" '
+      [.[] | select(.app == $app and (.scratchpad // "") == "")
+       | select((.role // "AXWindow") == "AXWindow" and (.subrole // "AXStandardWindow") == "AXStandardWindow")
+       | select(.id as $id | $before | index($id) | not)]')"
+    if [ "$(printf '%s' "$candidates" | jq length)" = 1 ]; then
+      window_json="$(printf '%s' "$candidates" | jq '.[0]')"
+      window_id="$(printf '%s' "$window_json" | jq -r '.id')"
+      window_app="$original_app"
+      move_focused_window=true
       return 0
     fi
     sleep 0.05
@@ -100,15 +97,23 @@ case "$mode" in
       exit 1
     fi
     ;;
-  new-window)
-    if open_default_new_window; then
-      capture_focused_window_for_move false || true
-    else
-      capture_focused_window_for_move true || true
+  new-window|current-window)
+    origin_space="$(yabai -m query --spaces --space | jq -r '.index')"
+    if ! open_default_new_window; then
+      # Some applications use Cmd+n for an in-window document or another action.
+      # Leave that native action intact without moving an unrelated window.
+      exit 0
+    fi
+    if [ "$mode" = current-window ]; then
+      yabai -m window "$window_id" --space "$origin_space"
+      yabai -m space --focus "$origin_space"
+      yabai -m window --focus "$window_id"
+      exit 0
     fi
     ;;
 esac
 
+yabai -m display --focus "$display"
 yabai -m space --create
 
 new_space_json=""

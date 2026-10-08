@@ -13,9 +13,20 @@ case "$direction" in
   *) printf 'usage: display-move prev|next\n' >&2; exit 2 ;;
 esac
 
-window_id="$(yabai -m query --windows --window | jq -r '.id // empty')"
-[[ -n "$window_id" ]] || { printf 'display-move: no focused window\n' >&2; exit 1; }
+window_json="$(yabai -m query --windows --window)"
+window_id="$(printf '%s' "$window_json" | jq -r '.id // empty')"
+current_display="$(printf '%s' "$window_json" | jq -r '.display // empty')"
+[[ -n "$window_id" && -n "$current_display" ]] || { printf 'display-move: no focused window\n' >&2; exit 1; }
 
-yabai -m window --display "$direction"
-yabai -m display --focus "$direction"
+# Display indices are not spatial order. Sort the live arrangement left-to-right,
+# then top-to-bottom for stacked displays, and wrap at both ends.
+target="$(yabai -m query --displays | jq -r --argjson current "$current_display" --arg direction "$direction" '
+  sort_by(.frame.x, .frame.y, .index) | map(.index) as $ids
+  | ($ids | index($current)) as $position
+  | if $position == null or ($ids | length) < 2 then empty
+    else $ids[(($position + (if $direction == "prev" then -1 else 1 end)) + ($ids | length)) % ($ids | length)] end')"
+[[ -n "$target" ]] || exit 0
+
+yabai -m window "$window_id" --display "$target"
+yabai -m display --focus "$target"
 yabai -m window --focus "$window_id"

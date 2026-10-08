@@ -63,7 +63,10 @@ mkdir -p "$FAKE_BIN"
 cat >"$FAKE_BIN/yabai" <<'EOF'
 #!/usr/bin/env bash
 if [[ "$*" == '-m query --windows --window' ]]; then
-  printf '%s\n' '{"id":42}'
+  printf '%s\n' "{\"id\":42,\"display\":${TEST_DISPLAY:-1}}"
+elif [[ "$*" == '-m query --displays' ]]; then
+  default_displays='[{"index":1,"frame":{"x":0,"y":0}},{"index":2,"frame":{"x":-1920,"y":0}}]'
+  printf '%s\n' "${TEST_DISPLAYS:-$default_displays}"
 else
   printf '%s\n' "$*" >>"$SPACE_DISPLAY_LOG"
 fi
@@ -72,11 +75,30 @@ chmod +x "$FAKE_BIN/yabai"
 : >"$TEMP_DIR/display.log"
 HOME="$TEMP_DIR/runtime-home" PATH="$FAKE_BIN:$PATH" SPACE_DISPLAY_LOG="$TEMP_DIR/display.log" \
   "$MODULE_DIR/bin/display-move" next
-if [[ "$(cat "$TEMP_DIR/display.log")" == $'-m window --display next\n-m display --focus next\n-m window --focus 42' ]]; then
+if [[ "$(cat "$TEMP_DIR/display.log")" == $'-m window 42 --display 2\n-m display --focus 2\n-m window --focus 42' ]]; then
   pass "display move preserves move, display focus, and window focus order"
 else
   fail "display move preserves move, display focus, and window focus order" "three ordered yabai calls" "$(cat "$TEMP_DIR/display.log")"
 fi
+
+# Reverse wrap, reversed display indices, and the single-display no-op.
+: >"$TEMP_DIR/display.log"
+HOME="$TEMP_DIR/runtime-home" PATH="$FAKE_BIN:$PATH" SPACE_DISPLAY_LOG="$TEMP_DIR/display.log" \
+  "$MODULE_DIR/bin/display-move" prev
+assert_contains "$TEMP_DIR/display.log" '-m window 42 --display 2' "left movement follows arrangement despite reversed indices"
+
+for spec in '2 prev 3' '3 next 2' '1 next 3' '1 prev 2'; do
+  read -r current direction expected <<<"$spec"
+  : >"$TEMP_DIR/display.log"
+  PATH="$FAKE_BIN:$PATH" SPACE_DISPLAY_LOG="$TEMP_DIR/display.log" TEST_DISPLAY="$current" \
+    TEST_DISPLAYS='[{"index":3,"frame":{"x":1920,"y":0}},{"index":1,"frame":{"x":0,"y":0}},{"index":2,"frame":{"x":-1920,"y":0}}]' \
+    "$MODULE_DIR/bin/display-move" "$direction"
+  assert_contains "$TEMP_DIR/display.log" "-m window 42 --display $expected" "three-display arrangement: $spec"
+done
+: >"$TEMP_DIR/display.log"
+PATH="$FAKE_BIN:$PATH" SPACE_DISPLAY_LOG="$TEMP_DIR/display.log" \
+  TEST_DISPLAYS='[{"index":1,"frame":{"x":0,"y":0}}]' "$MODULE_DIR/bin/display-move" next
+assert_not_contains "$TEMP_DIR/display.log" '--display' "single-display movement is a no-op"
 
 # Space creation identifies the new UUID/index rather than assuming index order.
 cat >"$FAKE_BIN/yabai" <<'EOF'
@@ -110,14 +132,22 @@ fi
 cat >"$FAKE_BIN/skhd" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$SPACE_DISPLAY_SKHD_LOG"
-: >"$NEW_WINDOW_STATE"
+[[ "${TEST_NO_NEW_WINDOW:-0}" == 1 ]] || : >"$NEW_WINDOW_STATE"
 EOF
 cat >"$FAKE_BIN/yabai" <<'EOF'
 #!/usr/bin/env bash
 case "$*" in
+  '-m query --spaces --space') printf '%s\n' '{"index":1}' ;;
+  '-m query --windows')
+    if [[ -f "$NEW_WINDOW_STATE" ]]; then
+      printf '%s\n' '[{"id":41,"app":"Safari"},{"id":42,"app":"Safari"},{"id":99,"app":"Other"}]'
+    else
+      printf '%s\n' '[{"id":41,"app":"Safari"}]'
+    fi
+    ;;
   '-m query --windows --window')
     if [[ -f "$NEW_WINDOW_STATE" ]]; then
-      printf '%s\n' '{"id":42,"app":"Safari","scratchpad":""}'
+      printf '%s\n' '{"id":41,"app":"Safari","scratchpad":""}'
     else
       printf '%s\n' '{"id":41,"app":"Safari","scratchpad":""}'
     fi
@@ -156,6 +186,27 @@ if grep -Fxq -- '-k cmd - n' "$TEMP_DIR/skhd.log" \
 else
   fail "create-space new-window runs Command+n and moves the newly focused window" "synthetic Command+n and window 42 on space 2" "$(cat "$TEMP_DIR/skhd.log"; cat "$TEMP_DIR/new-window.log")"
 fi
+
+: >"$TEMP_DIR/new-window.log"
+rm -f "$TEMP_DIR/new-window-focused" "$TEMP_DIR/new-window-created"
+HOME="$NEW_WINDOW_HOME" PATH="$FAKE_BIN:$PATH" SPACE_DISPLAY_LOG="$TEMP_DIR/new-window.log" \
+  SPACE_DISPLAY_SKHD_LOG="$TEMP_DIR/skhd.log" SPACE_CREATED_STATE="$TEMP_DIR/new-window-created" \
+  NEW_WINDOW_STATE="$TEMP_DIR/new-window-focused" "$MODULE_DIR/bin/create-space" current-window
+assert_contains "$TEMP_DIR/new-window.log" '-m window 42 --space 1' "Command+n moves only the new window to the original space"
+assert_not_contains "$TEMP_DIR/new-window.log" '--create' "Command+n does not create a space"
+
+cat >"$FAKE_BIN/sleep" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$FAKE_BIN/sleep"
+: >"$TEMP_DIR/new-window.log"
+rm -f "$TEMP_DIR/new-window-focused" "$TEMP_DIR/new-window-created"
+HOME="$NEW_WINDOW_HOME" PATH="$FAKE_BIN:$PATH" SPACE_DISPLAY_LOG="$TEMP_DIR/new-window.log" \
+  SPACE_DISPLAY_SKHD_LOG="$TEMP_DIR/skhd.log" SPACE_CREATED_STATE="$TEMP_DIR/new-window-created" \
+  NEW_WINDOW_STATE="$TEMP_DIR/new-window-focused" TEST_NO_NEW_WINDOW=1 "$MODULE_DIR/bin/create-space" new-window
+assert_not_contains "$TEMP_DIR/new-window.log" '--space' "no new window never relocates an existing window"
+assert_not_contains "$TEMP_DIR/new-window.log" '--create' "no new window never creates an empty space"
 
 # Empty-space cleanup deletes high indices first while keeping one occupied space.
 cat >"$FAKE_BIN/yabai" <<'EOF'
@@ -254,6 +305,7 @@ done
 assert_contains "$DESTINATION/.skhdrc" 'display-move prev' "enabled profile preserves previous-display binding"
 assert_contains "$DESTINATION/.skhdrc" 'create-space auto' "enabled profile preserves Option+n"
 assert_contains "$DESTINATION/.skhdrc" 'cmd + alt - n : ~/.config/yabai/create-space new-window' "enabled profile renders Command+Option+n"
+assert_contains "$DESTINATION/.skhdrc" 'cmd - n : ~/.config/yabai/create-space current-window' "enabled profile renders Command+n"
 assert_contains "$DESTINATION/.skhdrc" 'close_empty_spaces.sh' "enabled profile preserves Option+k"
 assert_contains "$DESTINATION/.yabairc" 'yabai --load-sa' "enabled profile loads the scripting addition"
 assert_contains "$DESTINATION/.yabairc" 'space_display_load_sa event=dock_did_restart' "enabled profile reloads SA after Dock restart"
@@ -278,12 +330,13 @@ mkdir -p "$REMOVAL_SOURCE" "$REMOVAL_HOME"
 cp -R "$DOTFILES_DIR/home" "$REMOVAL_SOURCE/home"
 cp -R "$DOTFILES_DIR/modules" "$REMOVAL_SOURCE/modules"
 cp "$DOTFILES_DIR/.chezmoiroot" "$REMOVAL_SOURCE/.chezmoiroot"
+cp "$DOTFILES_DIR/"*.md "$REMOVAL_SOURCE/"
 rm -rf "$REMOVAL_SOURCE/modules/space-display"
 if chezmoi -S "$REMOVAL_SOURCE" -D "$REMOVAL_HOME" --persistent-state "$TEMP_DIR/removal-state.db" \
-  --override-data '{"modules":{"spaceDisplay":{"enabled":false}}}' apply --exclude=scripts,externals --force >/dev/null 2>&1; then
+  --override-data '{"modules":{"spaceDisplay":{"enabled":false}}}' apply --exclude=scripts,externals --force >"$TEMP_DIR/removal.log" 2>&1; then
   pass "parent renders after the disabled module folder is removed"
 else
-  fail "parent renders after the disabled module folder is removed" "successful render" "render failed"
+  fail "parent renders after the disabled module folder is removed" "successful render" "$(cat "$TEMP_DIR/removal.log")"
 fi
 assert_absent "$REMOVAL_HOME/.config/yabai/create-space" "physical removal leaves no create helper"
 assert_contains "$REMOVAL_HOME/.yabairc" 'BORDER_WIDTH=4.0' "physical removal preserves appearance"

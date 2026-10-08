@@ -308,7 +308,7 @@ Installed below `~/.config/yabai/`:
 | [`float-prefs`](modules/window-layout/bin/float-prefs) | Toggle float for the focused window and remember it per app/title via yabai `manage=off` rules. |
 | [`tile-pip-window`](modules/appearance-pip/bin/tile-pip-window) | Turn macOS Picture-in-Picture windows into normal managed yabai tiles. |
 | [`create-space`](modules/space-display/bin/create-space) | Create and focus a space, optionally moving a focused non-scratchpad window. |
-| [`display-move`](modules/space-display/bin/display-move) | Move the focused window to the previous or next display and preserve focus. |
+| [`display-move`](modules/space-display/bin/display-move) | Move the focused window through physical display order with wraparound and preserve focus. |
 | [`close_empty_spaces.sh`](modules/space-display/bin/close-empty-spaces) | Destroy empty yabai spaces while retaining at least one space. |
 
 Dormant project data is preserved at `~/.config/yabai/projects.json`; no global shortcut or focus signal updates it.
@@ -333,6 +333,7 @@ operations to these shortcuts:
 | Hyper | Reserved and intentionally unbound; ProjectDeck/project-context shortcuts are dormant. |
 | `Ctrl+Alt+n` | Move the current window to a new labeled space. |
 | `Alt+n` | Create and focus a new space, moving the focused non-scratchpad window there only when another non-scratchpad window remains on the current space. |
+| `Cmd+n` | Run the native app action; place its new window on the originally focused space. |
 | `Cmd+Alt+n` | Run the active app's normal `Cmd+n`, then move the new window to a newly created space. |
 | `Alt+k` | Close empty spaces. |
 | `Alt+Backtick`, `Alt+1..4` | Focus Ghostty, the default browser, the configured editor, Teams, or Slack. Repeat to MRU-cycle that app's non-scratchpad windows only. |

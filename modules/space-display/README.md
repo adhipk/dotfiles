@@ -7,10 +7,16 @@ space bookmarks, and yabai repair/setup commands.
 ## Active behavior
 
 - `Option+Shift+[` / `Option+Shift+]` moves the focused window to the previous
-  or next display and follows it without losing the original window ID.
+  or next display in physical left-to-right order (top-to-bottom for stacked
+  displays), wrapping at either end and following the same window.
 - `Option+n` creates and focuses a space, moving the focused non-scratchpad
   window only when another normal window remains. `Control+Option+n` forces
   that move when a normal window is focused.
+- `Command+n` runs the native app action and moves its newly created normal
+  window to the space focused when pressed. `Command+Option+n` moves that new
+  window to a new space on the original display. Both identify new window IDs
+  rather than treating a focus change as creation. If no window appears, no
+  existing window is moved and no space is created.
 - `Option+k` removes empty spaces from highest index to lowest, but refuses to
   remove every space and rechecks the remaining count before each deletion.
 - On yabai load, the scripting addition is attempted and a labeled Dock-restart

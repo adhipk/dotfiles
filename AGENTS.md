@@ -25,6 +25,8 @@ Your job is to maintain my dotfile configurations, this includes keyboard shortc
 
 ## Key Bindings (skhd)
 - `alt + n` creates a new space and focuses it; when the current space has more than one non-scratchpad window, it moves the focused non-scratchpad window there.
+- `cmd + n` preserves the app action and places its new normal window on the space focused when pressed.
+- `alt + shift + [` / `]` moves windows through physical display order with wraparound.
 - `cmd + alt + n` first runs the active app's normal `cmd + n`, then moves the new window to a newly created space.
 - `alt + backtick` focuses normal Ghostty windows; scratchpads are excluded from the app MRU list.
 - `alt + 1..4` focuses browser, editor, Teams, or Slack. Entering an app restores

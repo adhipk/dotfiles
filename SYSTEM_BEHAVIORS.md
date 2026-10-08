@@ -203,7 +203,8 @@ Invoked by:
 
 System behaviors:
 - `yabai -m space --create`; identifies the new space by UUID diff (polls up to 1 s).
-- `new-window` mode: **injects a synthetic keystroke** `skhd -k "cmd - n"` to open the focused app's default new window, then waits for focus change.
+- `new-window` mode: **injects a synthetic keystroke** `skhd -k "cmd - n"` to open the focused app's default new window, then identifies an unseen normal window from the original app (up to 3 s plus query time); focus changes alone do not qualify. Space creation occurs on the original display.
+- `current-window` mode (Cmd+n) uses the same native action/new-window detection and moves the new window to the originally focused space. No new window means no move or space creation.
 - Moves the focused non-scratchpad window to the new space (`yabai -m window <id> --space`), focuses display/space/window, labels the space with the moved window's app name (`yabai -m space --label "$app"`).
 - Runs `~/.config/yabai/close_empty_spaces.sh` afterwards when a window was moved (destroys empty spaces).
 
@@ -220,7 +221,7 @@ Invoked by:
 - skhd `alt+shift-[` → `display-move prev`; `alt+shift-]` → `display-move next`
 
 System behaviors:
-- `yabai -m window --display prev|next` (moves focused window across displays), `yabai -m display --focus`, then re-focuses the original window id.
+- Selects a numeric target from live display coordinates, ordered by x then y, with wraparound; a single display is a no-op. `yabai -m window <id> --display <target>` moves the captured window, `yabai -m display --focus`, then re-focuses the original window id.
 - No files, notifications, or processes.
 
 Configuration inputs:
