@@ -210,6 +210,15 @@ fi
 
 # Keep the isolated server alive with a command session. The hook must skip it.
 mkdir -p "$TEMP_DIR/home"
+# tmux starts normal panes as login shells. macOS /etc/profile runs
+# path_helper, which promotes /usr/local/bin ahead of inherited fake tools on
+# Intel runners. Restore fixture precedence in this isolated user's profile;
+# otherwise Neovim can launch the installed editor rather than our marker.
+printf 'export PATH=%q:"$PATH"\n' "$FAKE_BIN" > "$TEMP_DIR/home/.bash_profile"
+assert_equals \
+    "login shells resolve the Neovim fixture after macOS PATH normalization" \
+    "$FAKE_BIN/nvim" \
+    "$(HOME="$TEMP_DIR/home" PATH="$FAKE_BIN:$PATH" /bin/bash -l -c 'command -v nvim')"
 HOME="$TEMP_DIR/home" \
     PATH="$FAKE_BIN:$PATH" \
     TMUX_FIXTURE_CALLS_DIR="$TOOL_CALLS_DIR" \
