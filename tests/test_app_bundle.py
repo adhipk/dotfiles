@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise the distributed CLI and packages in a new store without changing this Mac."""
 from pathlib import Path
+import argparse
 import json
 import plistlib
 import shutil
@@ -8,7 +9,9 @@ import subprocess
 import tempfile
 import time
 ROOT=Path(__file__).resolve().parent.parent
-APP=ROOT/'dist/Dotfiles.app'
+parser=argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--dist',type=Path,default=ROOT/'dist')
+APP=parser.parse_args().dist.resolve()/'Dotfiles.app'
 CLI=APP/'Contents/MacOS/dotfiles-utility'
 CATALOG=APP/'Contents/Resources/Utilities'
 info=plistlib.loads((APP/'Contents/Info.plist').read_bytes())
