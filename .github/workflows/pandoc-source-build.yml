@@ -9,6 +9,7 @@ on:
       - scripts/capture-pandoc-closure.py
       - scripts/inventory-pandoc-runtime-source.py
       - scripts/package-pandoc-source-build.py
+      - scripts/verify-pandoc-source-binary.py
       - release/vendor/pandoc-source/own-build-inputs.json
       - tests/test_pandoc_build_closure.py
   workflow_dispatch:
@@ -52,6 +53,8 @@ jobs:
         env:
           BUILD_EXECUTION_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: python3 scripts/build-pandoc-from-source.py --toolchain "$RUNNER_TEMP/pandoc-tools/toolchain.json" --work "$RUNNER_TEMP/pandoc-build" --output "$RUNNER_TEMP/pandoc-artifacts" --jobs 2 --run-url "$BUILD_EXECUTION_URL"
+      - name: Verify standalone binary in a clean environment
+        run: python3 scripts/verify-pandoc-source-binary.py --artifact "$RUNNER_TEMP/pandoc-artifacts"
       - name: Package captured corresponding-source materials for review
         run: python3 scripts/package-pandoc-source-build.py --artifact "$RUNNER_TEMP/pandoc-artifacts"
       - uses: actions/upload-artifact@v4

@@ -24,10 +24,12 @@ def package(artifact):
     if tools.sha256(artifact/'pandoc-source.tar.gz')!=pins['pandocSourceSHA256'] or tools.sha256(artifact/'ghc-source.tar.xz')!=pins['ghcSourceSHA256']:raise ValueError('Pinned root/compiler source archive differs')
     if not (artifact/'runtime-source-inventory.json').exists():
         subprocess.run(['python3',str(ROOT/'scripts/inventory-pandoc-runtime-source.py'),'--ghc-source',str(artifact/'ghc-source.tar.xz'),'--closure',str(artifact/'closure'),'--output',str(artifact/'runtime-source-inventory.json')],check=True)
-    for script in ['prepare-pandoc-toolchain.py','capture-pandoc-closure.py','build-pandoc-from-source.py','inventory-pandoc-runtime-source.py','package-pandoc-source-build.py']:
+    for script in ['prepare-pandoc-toolchain.py','capture-pandoc-closure.py','build-pandoc-from-source.py','inventory-pandoc-runtime-source.py','package-pandoc-source-build.py','verify-pandoc-source-binary.py']:
         existing=artifact/script
         if existing.exists() and existing.read_bytes()!=(ROOT/'scripts'/script).read_bytes():raise ValueError('Builder recipe snapshot differs; retain old recipe and reconstruct before adoption: '+script)
         if not existing.exists():shutil.copy2(ROOT/'scripts'/script,existing)
+    validation=json.loads((artifact/'standalone-validation.json').read_text())
+    if validation.get('rawBinarySHA256')!=metadata['binarySHA256'] or validation.get('htmlToGFM')!='passed' or validation.get('isolatedEnvironment')!='passed':raise ValueError('Standalone clean-environment binary validation required')
     closure=json.loads((artifact/'closure/closure.json').read_text())
     for name,checksum in closure['files'].items():
         if tools.sha256(artifact/'closure'/name)!=checksum:raise ValueError('Captured closure file checksum differs')
