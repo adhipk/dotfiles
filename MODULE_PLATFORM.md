@@ -1,5 +1,14 @@
 # Dotfiles module platform
 
+> Public 1.0 direction: the native macOS app with executable extensions in
+> [RELEASE_READINESS.md](RELEASE_READINESS.md) and the shared-library contract in
+> [EXTENSION_STDLIB_AUDIT.md](EXTENSION_STDLIB_AUDIT.md) supersede this document's
+> proposed Textual-only UI and repository-bound packaging. The material below
+> records the earlier design; its ownership and conflict-handling principles
+> remain useful during migration. The development implementation and its limits
+> are documented in [NATIVE_APP.md](NATIVE_APP.md) and
+> [EXTENSION_AUTHORING.md](EXTENSION_AUTHORING.md).
+
 The dotfiles repository should behave as one extension platform, not as a
 collection of utilities that each learn how to edit shared system files.
 

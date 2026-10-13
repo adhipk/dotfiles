@@ -16,3 +16,11 @@ zshrc.secrets
 
 # Chrome extension repositories are declared as chezmoi externals.
 /extensions/
+
+# Native release artifacts and extension example build output
+/dist/
+examples/hello-utility/.build/
+examples/hello-utility/.swiftpm/
+/test-results/
+__pycache__/
+*.pyc

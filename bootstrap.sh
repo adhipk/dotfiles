@@ -7,6 +7,15 @@
 set -euo pipefail
 
 DOTFILES_DIR="${DOTFILES_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+if [[ "${1:-}" == "--consumer" ]]; then
+  shift
+  exec python3 "$DOTFILES_DIR/scripts/consumer-setup.py" "$@"
+fi
+# The public app path builds only the native wrapper; personal setup remains explicit.
+if [[ "${1:-}" == "--app" ]]; then
+  shift
+  exec python3 "$DOTFILES_DIR/scripts/build-app.py" "$@"
+fi
 BREWFILE="$DOTFILES_DIR/Brewfile"
 export DOTFILES_DIR
 
@@ -80,7 +89,9 @@ fi
 echo "Applying chezmoi source state..."
 "$DOTFILES_DIR/install.sh"
 
-install_browser_use_cli
+if [[ "${DOTFILES_CONSUMER_PROFILE:-0}" != "1" ]]; then
+  install_browser_use_cli
+fi
 warm_dotfiles_manager_ui
 
 start_desktop_service yabai
@@ -92,9 +103,6 @@ echo "  1. Grant Accessibility to yabai, skhd, and Ghostty; approve Karabiner's 
 echo "  2. Complete yabai's SIP setup, then run: setup-yabai-sa"
 echo "     https://github.com/asmvik/yabai/wiki/Disabling-System-Integrity-Protection"
 echo "  3. Sign in to the Codex app and CLI."
-echo "  4. Install and configure Hermes, then create its dotfiles profile:"
-echo "     curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash"
-echo "     hermes profile create dotfiles --clone-from default --no-alias"
-echo "     dotfiles-manager configure"
-echo "  5. Open this directory's canonical task list: todo"
-echo "  6. Review personal commands: man-me"
+echo "  4. Open this directory's canonical task list: todo"
+echo "  5. Review personal commands: man-me"
+echo "  6. Build the optional native utility app: make build-app"

@@ -46,6 +46,9 @@ help:
 	@echo "  make watch             - Auto-apply source-state changes"
 	@echo "  make build-projectdeck - Build the ProjectDeck picker binary"
 	@echo "  make build-whichkey    - Build the interactive shortcut guide"
+	@echo "  make build-app        - Build the standalone native app (development signed)"
+	@echo "  make test-native      - Test native host and executable-extension SDK"
+	@echo "  make release-check    - Run all contracts, build, and verify the app bundle"
 	@echo "  make shortcuts-update  - Regenerate shortcut JSON and Markdown from desired skhd state"
 	@echo "  make shortcuts-check   - Verify checked shortcut artifacts without writing"
 	@echo "  make reload            - Reload configurations"
@@ -182,3 +185,29 @@ clean:
 .PHONY: test-markdown-clipboard
 test-markdown-clipboard:
 	@./tests/test_markdown_clipboard.sh
+
+.PHONY: build-app test-native release-check
+build-app:
+	@python3 scripts/build-app.py
+
+test-native:
+	@swift test --package-path modules/dotfiles-control-center
+
+release-check: test shortcuts-check
+	@python3 scripts/build-app.py
+	@python3 tests/test_app_bundle.py
+
+.PHONY: test-release-gates release-candidate-check release-verify
+test-release-gates:
+	@python3 tests/test_release_gate.py
+
+release-candidate-check:
+	@python3 scripts/verify-release.py --candidate
+
+release-verify:
+	@test -n "$(ACCEPTANCE)" -a -n "$(SOURCE_MATERIALS)" -a -n "$(ARM64_DIST)" -a -n "$(INTEL_DIST)" || { echo 'Set ACCEPTANCE, SOURCE_MATERIALS, ARM64_DIST, and INTEL_DIST to artifact paths'; exit 1; }
+	@python3 scripts/verify-release.py --dist "$(ARM64_DIST)" --dist "$(INTEL_DIST)" --acceptance "$(ACCEPTANCE)" --source-materials "$(SOURCE_MATERIALS)"
+
+.PHONY: source-materials
+source-materials:
+	@python3 scripts/assemble-pandoc-source.py

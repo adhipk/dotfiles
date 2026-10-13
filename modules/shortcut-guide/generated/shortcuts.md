@@ -4,8 +4,8 @@
 
 This catalog is derived from the desired skhd state rendered by `chezmoi -S ROOT cat "$HOME/.skhdrc"`. Shortcut definitions remain in their skhd source fragments and are not duplicated in module manifests.
 
-- Shortcuts: 70
-- Rendered source SHA-256: `028a78d6b243c76b270dfab51dbf53603ec3a6f6e2a73577209825ab14487d11`
+- Shortcuts: 71
+- Rendered source SHA-256: `bf0ec5cb2d1e8b42363d84eb75ee8f8efad7d78a466e1180d2bca197098ed481`
 
 ## Apps & Focus
 
@@ -82,6 +82,7 @@ This catalog is derived from the desired skhd state rendered by `chezmoi -S ROOT
 | Shortcut | Action | Details | Owner |
 | --- | --- | --- | --- |
 | ⌃ ⌥ N | Move window to a new Space | Create a Space, move the focused window there, and focus it. | [space-display](../../space-display/README.md) |
+| ⌘ N | Keep native new windows on the space where Cmd+N was pressed | Defined in App Focus. | [space-display](../../space-display/README.md) |
 | ⌥ K | Close empty Spaces | Remove empty Spaces while keeping at least one available. | [space-display](../../space-display/README.md) |
 | ⌥ N | Create a new Space | Create and focus a Space; move the focused non-scratchpad window when it is safe. | [space-display](../../space-display/README.md) |
 | ⌥ ⌘ N | Open window on a new Space | Run the app’s Command+N action, then move its new window to a new Space. | [space-display](../../space-display/README.md) |

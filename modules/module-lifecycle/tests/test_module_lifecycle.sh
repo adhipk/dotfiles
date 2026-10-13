@@ -264,6 +264,14 @@ make_mock_chezmoi() {
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$CHEZMOI_LOG"
 printf 'chezmoi\n' >>"$DOTFILES_TEST_HOOK_LOG"
+# Real Chezmoi rejects rollback files inside its data directory.
+for argument in "$@"; do
+  if [[ -d "$argument/home/.chezmoidata" ]]; then
+    for backup in "$argument"/home/.chezmoidata/*.backup.*; do
+      [[ ! -e "$backup" ]] || exit 92
+    done
+  fi
+done
 if [[ "${CHEZMOI_FAIL_FIRST:-0}" == "1" && ! -e "$CHEZMOI_FAIL_MARKER" ]]; then
   : >"$CHEZMOI_FAIL_MARKER"
   exit 42

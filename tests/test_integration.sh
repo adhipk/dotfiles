@@ -119,7 +119,7 @@ fi
 
 echo ""
 echo "Testing git repository..."
-if [ -d "$DOTFILES_DIR/.git" ]; then
+if git -C "$DOTFILES_DIR" rev-parse --show-toplevel >/dev/null 2>&1; then
     echo "  ✓ Dotfiles is a git repository"
     ((PASSED++))
 

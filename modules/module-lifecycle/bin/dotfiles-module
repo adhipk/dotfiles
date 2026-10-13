@@ -422,7 +422,8 @@ execute_module() (
         die "module teardown failed before configuration changed"
     fi
 
-    backup=$(mktemp "${DATA_FILE}.backup.XXXXXX")
+    # Chezmoi parses every file under .chezmoidata; keep rollback backups outside it.
+    backup=$(mktemp "${TMPDIR:-/tmp}/dotfiles-module-backup.XXXXXX")
     temp=$(mktemp "${DATA_FILE}.tmp.XXXXXX")
     cp -p "$DATA_FILE" "$backup"
     if ! atomic_set_enabled "$data_key" "$target_enabled" "$temp"; then

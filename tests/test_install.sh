@@ -168,6 +168,17 @@ cat > "$FAKE_BIN/dotfiles-deps" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$PIN_ARGS_FILE"
 EOF
+cat > "$FAKE_BIN/uv" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == 'tool dir --bin' ]]; then
+    printf '%s/bin\n' "$HOME"
+fi
+EOF
+cat > "$FAKE_BIN/browser-use" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$FAKE_BIN/uv" "$FAKE_BIN/browser-use"
 chmod +x "$FAKE_BIN/chezmoi" "$FAKE_BIN/brew" "$FAKE_BIN/tmux" "$FAKE_BIN/yabai" "$FAKE_BIN/skhd" "$FAKE_BIN/pkill" "$FAKE_BIN/dotfiles-deps"
 
 echo ""
@@ -277,9 +288,8 @@ assert_executable "$COLD_HOME/.config/skhd/show_keys.sh" "clean apply installs t
 assert_executable "$COLD_HOME/bin/dotfiles-manager" "clean apply installs the dotfiles manager"
 assert_executable "$COLD_HOME/bin/dotfiles-manager-ui" "clean apply installs the Textual control panel"
 assert_contains "$COLD_HOME/bin/dotfiles-manager-ui.lock" 'name = "textual"' "clean apply installs the pinned Textual dependency lock"
-assert_contains "$COLD_HOME/.config/dotfiles-manager/hermes-skin.yaml" '^name: dotfiles-manager$' "clean apply installs the dotfiles manager Hermes skin"
-assert_contains "$COLD_HOME/.config/dotfiles-manager/hermes-skin.yaml" '^banner_logo:' "clean apply installs custom Hermes startup artwork"
-assert_contains "$COLD_HOME/.config/dotfiles/preferences.toml" 'hermes_skin = "dotfiles-manager"' "clean apply renders the selected Hermes skin"
+assert_missing "$COLD_HOME/.config/dotfiles-manager/hermes-skin.yaml" "clean apply omits the retired Hermes skin"
+assert_not_contains "$COLD_HOME/.config/dotfiles/preferences.toml" 'hermes_skin' "clean apply omits the retired Hermes setting"
 assert_contains "$COLD_HOME/.config/dotfiles-manager/theme.example.tcss" 'Personal overrides for dotfiles-manager-ui' "clean apply installs the editable manager theme example"
 assert_contains "$COLD_HOME/.skhdrc" 'fn - 0x2B : ~/bin/dotfiles-manager open' "clean apply routes Fn+Comma to the control panel"
 assert_contains "$COLD_HOME/.config/agent-timer/config.toml" '^auto_start = false$' "clean apply disables automatic agent timing by default"

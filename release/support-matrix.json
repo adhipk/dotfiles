@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "minimumMacOS": "13.0",
+  "architectures": [
+    "arm64",
+    "x86_64"
+  ],
+  "requiredUtilities": [
+    "dotfiles.app-focus",
+    "dotfiles.default-apps",
+    "dotfiles.markdown-clipboard",
+    "dotfiles.notifications",
+    "dotfiles.scratchpads",
+    "dotfiles.timer",
+    "dotfiles.todo",
+    "dotfiles.tts",
+    "dotfiles.unescape",
+    "example.hello"
+  ],
+  "requiredDesktopChecks": [
+    "gatekeeper-download",
+    "first-launch",
+    "dependency-setup",
+    "permissions-denied-retry",
+    "shortcuts-conflicts",
+    "login-start-stop",
+    "service-crash-recovery",
+    "interrupted-update",
+    "upgrade",
+    "rollback",
+    "uninstall-preserves-user-data",
+    "consumer-plan-review",
+    "consumer-clean-install",
+    "consumer-install-resume",
+    "consumer-update",
+    "consumer-rollback",
+    "machine-preferences-preserved",
+    "consumer-uninstall"
+  ],
+  "requiredLicenseChecks": [
+    "apache-license",
+    "third-party-notices",
+    "gpl-corresponding-source"
+  ],
+  "consumerProfile": "consumer-desktop",
+  "requiredModules": [
+    "agent-timer",
+    "app-focus",
+    "appearance-pip",
+    "dependencies",
+    "dotfiles-control-center",
+    "dotfiles-manager",
+    "gh-create-repo",
+    "kit-tts",
+    "macos-default-apps",
+    "markdown-clipboard",
+    "module-lifecycle",
+    "notifications",
+    "qutebrowser",
+    "scratchpads",
+    "settings",
+    "shortcut-guide",
+    "space-display",
+    "system-uninstall",
+    "terminal-window-types",
+    "tmux-sessions",
+    "tmux-yazi",
+    "todo",
+    "unescape-cli",
+    "window-layout"
+  ],
+  "excludedModules": {
+    "hermes-agent": "Disabled in checked-in desktop defaults; dormant optional integration, outside consumer desktop profile.",
+    "hyperspace": "Disabled in checked-in desktop defaults; dormant optional integration, outside consumer desktop profile.",
+    "projects": "Disabled in checked-in desktop defaults; dormant optional integration, outside consumer desktop profile."
+  }
+}
