@@ -3,6 +3,10 @@
 dump_timer_fixture() {
     local file="$1" pid lock_path owner path field
     printf '  fixture diagnostics: shell=%s env-bash=%s jq=%s\n' "$BASH_VERSION" "$(command -v bash)" "$(command -v jq)"
+    if [[ -s "${TIMER_FIXTURE_ERROR_LOG:-}" ]]; then
+        printf '  recent simulated subprocess error locations (without commands):\n'
+        tail -n 20 "$TIMER_FIXTURE_ERROR_LOG"
+    fi
     if [[ ! -f "$file" ]]; then printf '  fixture state missing: %s\n' "${file##*/}"; return; fi
     jq '{id,status,checkpointCount,startedAt,warningAt,deadlineAt,workerLaunchStatus,lastCheckpointDeliveryStatus,lastCheckpointDeliveryMode,lastCheckpointSideReportStatus,worker,sideReport:(.sideReport | if . == null then null else {id,status,startedAt,completedAt,exitCode,workerPid,workerStartedAt,workerPgid,timeoutSeconds} end)}' "$file"
     while IFS= read -r pid; do

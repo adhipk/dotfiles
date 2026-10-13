@@ -27,6 +27,8 @@ cleanup() {
     rm -rf "$TEMP_DIR"
 }
 trap cleanup EXIT
+export TIMER_FIXTURE_ERROR_LOG="$TEMP_DIR/subprocess-errors.log"
+export BASH_ENV="$TEST_DIR/fixtures/error-trace.sh"
 
 pass() {
     printf '  ✓ %s\n' "$1"

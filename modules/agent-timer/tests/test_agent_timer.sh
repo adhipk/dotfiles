@@ -16,6 +16,8 @@ cleanup() {
     rm -rf "$TEMP_DIR"
 }
 trap cleanup EXIT
+export TIMER_FIXTURE_ERROR_LOG="$TEMP_DIR/subprocess-errors.log"
+export BASH_ENV="$TEST_DIR/fixtures/error-trace.sh"
 
 pass() {
     printf '  ✓ %s\n' "$1"
@@ -553,6 +555,7 @@ wait "$second_tick_pid"; second_tick_status=$?
 if [[ "$first_tick_status:$second_tick_status" != "0:0" ]]; then
     printf '  concurrent completion stderr:\n'; cat "$TEMP_DIR/concurrent-completion.stderr"
     printf '  concurrent tick stderr:\n'; cat "$TEMP_DIR/concurrent-tick.stderr"
+    dump_timer_fixture "$concurrent_state"
 fi
 assert_eq "0:0" "$first_tick_status:$second_tick_status" "report completion and contending cron tick succeed"
 if wait_for_state_value "$AGENT_TIMER_STATE_DIR/concurrent-cron.json" '.sideReport.status // ""' completed; then pass "concurrent checkpoint report completes"; else fail "concurrent checkpoint report completes"; fi
@@ -567,7 +570,7 @@ export FAKE_CODEX_FAIL=1
 : >"$FAKE_NOTIFIER_LOG"
 AGENT_TIMER_NOW=6000 "$TIMER" start --seconds 30 --warning-seconds 5 --target %9 --id delivery-failure --turn-id failure-turn --json >/dev/null
 AGENT_TIMER_NOW=6030 "$TIMER" tick
-if wait_for_state_value "$AGENT_TIMER_STATE_DIR/delivery-failure.json" '.sideReport.status // ""' failed; then pass "failed detached report is recorded"; else fail "failed detached report is recorded"; fi
+if wait_for_state_value "$AGENT_TIMER_STATE_DIR/delivery-failure.json" '.sideReport.status // ""' failed; then pass "failed detached report is recorded"; else fail "failed detached report is recorded"; dump_timer_fixture "$AGENT_TIMER_STATE_DIR/delivery-failure.json"; fi
 assert_eq "running:6060:1:sent" "$(jq -r '[.status,.deadlineAt,.checkpointCount,.lastCheckpointDeliveryStatus] | map(tostring) | join(":")' "$AGENT_TIMER_STATE_DIR/delivery-failure.json")" "failed report never rolls back native delivery or the next block"
 if wait_for_file_pattern "$FAKE_NOTIFIER_LOG" 'Agent checkpoint report failed'; then pass "detached report failure is surfaced natively"; else fail "detached report failure is surfaced natively"; fi
 unset FAKE_CODEX_FAIL
