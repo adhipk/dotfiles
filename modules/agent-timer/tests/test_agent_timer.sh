@@ -4,6 +4,7 @@ TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 MODULE_DIR="$(dirname "$TEST_DIR")"
 TIMER="$MODULE_DIR/bin/agent-timer"
 FIXTURES="$TEST_DIR/fixtures"
+source "$FIXTURES/diagnostics.sh"
 TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/agent-timer-test.XXXXXX")"
 WORKER_PID=""
 
@@ -143,6 +144,7 @@ mkdir -p "$AGENT_TIMER_SOUND_DIR"
 
 printf '================================\n'
 printf 'Agent Timer Tests\n'
+printf 'Interpreter: %s; env bash: %s; jq: %s\n' "$BASH_VERSION" "$(command -v bash)" "$(command -v jq)"
 printf '================================\n'
 
 printf '\nTesting validation and immutable deadlines...\n'
@@ -286,7 +288,7 @@ stop_report_prompt="$(jq -cn --arg cwd "$HOOK_CWD" '{hook_event_name:"UserPrompt
 stop_report_event="$(jq -cn --arg cwd "$HOOK_CWD" '{hook_event_name:"Stop",session_id:"stop-report",turn_id:"stop-report-turn",cwd:$cwd}')"
 TMUX_PANE=%9 AGENT_TIMER_NOW=1350 "$TIMER" hook <<<"$stop_report_prompt" >/dev/null
 AGENT_TIMER_NOW=1360 "$TIMER" tick
-if wait_for_file_content "$FAKE_CODEX_CHILD_PID_FILE"; then pass "Stop fixture exposes a detached Codex descendant"; else fail "Stop fixture exposes a detached Codex descendant"; fi
+if wait_for_file_content "$FAKE_CODEX_CHILD_PID_FILE"; then pass "Stop fixture exposes a detached Codex descendant"; else fail "Stop fixture exposes a detached Codex descendant"; dump_timer_fixture "$AGENT_TIMER_STATE_DIR/codex-stop-report.json"; fi
 stop_report_worker_pid="$(jq -r '.sideReport.workerPid' "$AGENT_TIMER_STATE_DIR/codex-stop-report.json")"
 stop_report_child_pid="$(cat "$FAKE_CODEX_CHILD_PID_FILE")"
 TMUX_PANE=%9 AGENT_TIMER_NOW=1361 "$TIMER" hook <<<"$stop_report_event" >/dev/null
@@ -297,11 +299,11 @@ export AGENT_TIMER_STATE_DIR="$TEMP_DIR/shutdown-report-state"
 export FAKE_CODEX_CHILD_PID_FILE="$TEMP_DIR/shutdown-report-child.pid"
 AGENT_TIMER_NOW=1370 "$TIMER" start --seconds 10 --warning-seconds 2 --target %9 --id shutdown-report --turn-id shutdown-turn --json >/dev/null
 AGENT_TIMER_NOW=1380 "$TIMER" tick
-if wait_for_file_content "$FAKE_CODEX_CHILD_PID_FILE"; then pass "shutdown fixture exposes a detached Codex descendant"; else fail "shutdown fixture exposes a detached Codex descendant"; fi
+if wait_for_file_content "$FAKE_CODEX_CHILD_PID_FILE"; then pass "shutdown fixture exposes a detached Codex descendant"; else fail "shutdown fixture exposes a detached Codex descendant"; dump_timer_fixture "$AGENT_TIMER_STATE_DIR/shutdown-report.json"; fi
 shutdown_report_worker_pid="$(jq -r '.sideReport.workerPid' "$AGENT_TIMER_STATE_DIR/shutdown-report.json")"
-shutdown_report_child_pid="$(cat "$FAKE_CODEX_CHILD_PID_FILE")"
+shutdown_report_child_pid="$(cat "$FAKE_CODEX_CHILD_PID_FILE" 2>/dev/null || true)"
 AGENT_TIMER_NOW=1381 "$TIMER" shutdown --reason test-shutdown >/dev/null
-if wait_for_process_exit "$shutdown_report_worker_pid" && wait_for_process_exit "$shutdown_report_child_pid"; then pass "shutdown terminates the fingerprinted report tree"; else fail "shutdown terminates the fingerprinted report tree"; fi
+if [[ "$shutdown_report_worker_pid" =~ ^[0-9]+$ && "$shutdown_report_child_pid" =~ ^[0-9]+$ ]] && wait_for_process_exit "$shutdown_report_worker_pid" && wait_for_process_exit "$shutdown_report_child_pid"; then pass "shutdown terminates the fingerprinted report tree"; else fail "shutdown terminates the fingerprinted report tree"; fi
 assert_eq "disabled:canceled" "$(jq -r '[.status,.sideReport.status] | join(":")' "$AGENT_TIMER_STATE_DIR/shutdown-report.json")" "shutdown records report cancellation without a completion race"
 "$TIMER" enable >/dev/null
 unset AGENT_TIMER_AUTO_START TASK_TIMELIMIT_SECS FAKE_CODEX_CHILD_PID_FILE
@@ -508,29 +510,56 @@ chmod +x "$TEMP_DIR/concurrent-jq"
 export DOTFILES_LIB_DIR="$TEMP_DIR/concurrent-lib"
 export AGENT_TIMER_JQ_BIN="$TEMP_DIR/concurrent-jq"
 : >"$FAKE_TMUX_LOG"
+# Exercise the actual completion critical section directly. Launcher startup
+# and descendant cancellation have separate integration coverage above.
+concurrent_saved_ps_command="$FAKE_PS_COMMAND"
+export FAKE_PS_COMMAND="claude"
 AGENT_TIMER_NOW=7000 "$TIMER" start --seconds 30 --warning-seconds 5 --target %9 --id concurrent-cron --turn-id concurrent-turn --json >/dev/null
-AGENT_TIMER_NOW=7030 "$TIMER" tick &
+AGENT_TIMER_NOW=7030 "$TIMER" tick
+concurrent_state="$AGENT_TIMER_STATE_DIR/concurrent-cron.json"
+concurrent_token="$(jq -r '.token' "$concurrent_state")"
+concurrent_report="$AGENT_TIMER_STATE_DIR/concurrent-cron.checkpoint-fixture.md"
+printf 'detached checkpoint report\n' >"$concurrent_report"
+jq --arg token "$concurrent_token" --arg reportPath "$concurrent_report" \
+    '.sideReport={id:($token+"-1"),status:"running",reportPath:$reportPath}' "$concurrent_state" >"$TEMP_DIR/concurrent-state-next"
+mv "$TEMP_DIR/concurrent-state-next" "$concurrent_state"
+# Load the production function definitions without dispatching main().
+# The harness uses the unchanged source, not a copied implementation.
+assert_eq 'main "$@"' "$(tail -n 1 "$TIMER")" "completion harness locates the runtime command dispatcher"
+sed '$d' "$TIMER" >"$TEMP_DIR/timer-function-harness"
+AGENT_TIMER_NOW=7030 bash -c 'source "$1"; SELF="$2"; complete_codex_side_report "$3" "$4" "$5" 0 "$6"' \
+    bash "$TEMP_DIR/timer-function-harness" "$TIMER" "$concurrent_state" "$concurrent_token" "$concurrent_token-1" "$concurrent_report" \
+    >"$TEMP_DIR/concurrent-completion.stdout" 2>"$TEMP_DIR/concurrent-completion.stderr" &
 first_tick_pid=$!
 if wait_for_file_content "$TIMER_REPORT_LOCKED"; then
     pass "report completion holds the state lock at its write barrier"
 else
     fail "report completion reaches its write barrier"
+    dump_timer_fixture "$concurrent_state"
+    cat "$TEMP_DIR/concurrent-completion.stderr"
 fi
-AGENT_TIMER_NOW=7060 TIMER_PROBE_TICK_LOCK=1 "$TIMER" tick &
+AGENT_TIMER_NOW=7060 TIMER_PROBE_TICK_LOCK=1 "$TIMER" tick >"$TEMP_DIR/concurrent-tick.stdout" 2>"$TEMP_DIR/concurrent-tick.stderr" &
 second_tick_pid=$!
 if wait_for_file_content "$TIMER_TICK_CONTENDING"; then
     pass "next cron tick contends with report completion"
 else
     fail "next cron tick reaches the locked report state"
+    dump_timer_fixture "$concurrent_state"
+    cat "$TEMP_DIR/concurrent-tick.stderr"
 fi
 : >"$TIMER_REPORT_RELEASE"
 wait "$first_tick_pid"; first_tick_status=$?
 wait "$second_tick_pid"; second_tick_status=$?
-assert_eq "0:0" "$first_tick_status:$second_tick_status" "both overlapping cron ticks complete successfully"
+if [[ "$first_tick_status:$second_tick_status" != "0:0" ]]; then
+    printf '  concurrent completion stderr:\n'; cat "$TEMP_DIR/concurrent-completion.stderr"
+    printf '  concurrent tick stderr:\n'; cat "$TEMP_DIR/concurrent-tick.stderr"
+fi
+assert_eq "0:0" "$first_tick_status:$second_tick_status" "report completion and contending cron tick succeed"
 if wait_for_state_value "$AGENT_TIMER_STATE_DIR/concurrent-cron.json" '.sideReport.status // ""' completed; then pass "concurrent checkpoint report completes"; else fail "concurrent checkpoint report completes"; fi
 assert_eq "2:7090:sent:0" "$(jq -r '[.checkpointCount,.deadlineAt,.lastCheckpointDeliveryStatus] | map(tostring) | join(":")' "$AGENT_TIMER_STATE_DIR/concurrent-cron.json"):$(wc -l <"$FAKE_TMUX_LOG" | tr -d ' ')" "report completion cannot overwrite the next block or inject input"
 unset AGENT_TIMER_JQ_BIN TIMER_PROBE_TICK_LOCK
 export DOTFILES_LIB_DIR="$TIMER_SOURCE_LIB"
+export FAKE_PS_COMMAND="$concurrent_saved_ps_command"
 
 printf '\nTesting detached report failure after re-arm...\n'
 export AGENT_TIMER_STATE_DIR="$TEMP_DIR/delivery-failure-state"
@@ -558,6 +587,7 @@ assert_eq "0" "$(wc -l <"$FAKE_TMUX_LOG" | tr -d ' ')" "one worker checkpoints w
 assert_eq "running" "$(jq -r '.status' "$AGENT_TIMER_STATE_DIR/worker.json")" "the worker keeps the timer active after checkpoint delivery"
 same_worker="$(AGENT_TIMER_WORKER_POLL_SECONDS=1 "$TIMER" start --seconds 99 --target %9 --id worker --turn-id worker-turn --json)"
 assert_eq "$WORKER_PID" "$(jq -r '.worker.pid' <<<"$same_worker")" "same-turn hooks never create a duplicate recurring worker"
+if [[ "$WORKER_PID" != "$(jq -r '.worker.pid' <<<"$same_worker")" ]]; then dump_timer_fixture "$AGENT_TIMER_STATE_DIR/worker.json"; fi
 "$TIMER" cancel --id worker >/dev/null
 if wait_for_process_exit "$WORKER_PID"; then
     pass "cancel terminates the recurring worker"

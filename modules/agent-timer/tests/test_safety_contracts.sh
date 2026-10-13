@@ -5,6 +5,7 @@ MODULE_DIR="$(dirname "$TEST_DIR")"
 REPO_DIR="$(cd "$MODULE_DIR/../.." && pwd)"
 TIMER="$MODULE_DIR/bin/agent-timer"
 FIXTURES="$TEST_DIR/safety-fixtures"
+source "$TEST_DIR/fixtures/diagnostics.sh"
 TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/agent-timer-safety.XXXXXX")"
 REAL_PS="$(command -v ps)"
 export DOTFILES_LIB_DIR="$REPO_DIR/home/dot_local/lib/dotfiles"
@@ -320,8 +321,13 @@ if [[ "$(jq -r '.deadlineAt' <<<"$recurring_after")" -gt "$recurring_first_deadl
 else
     fail "checkpoint installs a later next-block deadline" "first=$recurring_first_deadline next=$(jq -r '.deadlineAt' <<<"$recurring_after")"
 fi
-if ! "$TIMER" cancel --id worker-recurrence >"$TEMP_DIR/worker-recurrence.cancel.out" 2>"$TEMP_DIR/worker-recurrence.cancel.err"; then
+if "$TIMER" cancel --id worker-recurrence >"$TEMP_DIR/worker-recurrence.cancel.out" 2>"$TEMP_DIR/worker-recurrence.cancel.err"; then
+    pass "cancel command accepts the tmux-owned recurring worker"
+else
+    cancel_command_status=$?
     fail "cancel command accepts the tmux-owned recurring worker" "$(cat "$TEMP_DIR/worker-recurrence.cancel.err")"
+    printf '  cancel exit=%s stdout=' "$cancel_command_status"; cat "$TEMP_DIR/worker-recurrence.cancel.out"
+    dump_timer_fixture "$AGENT_TIMER_STATE_DIR/worker-recurrence.json"
 fi
 if wait_for_exit "$recurring_worker_pid"; then
     pass "cancel still terminates the tmux-owned recurring worker"
