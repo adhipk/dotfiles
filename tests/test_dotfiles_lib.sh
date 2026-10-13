@@ -126,6 +126,54 @@ assert_equals "timed-out contention leaves the live lock intact" "$$" "$(cat "$L
 dotfiles_lock_release "$LOCK_DIR"
 assert_equals "release removes the owned lock directory" "missing" "$(test -d "$LOCK_DIR" && printf present || printf missing)"
 
+# A strict-shell contender must treat a failed mkdir as a retryable predicate.
+# The FIFO forces an actual collision and owner release without timing sleeps.
+STRICT_BIN="$TEMP_ROOT/strict-bin"
+STRICT_SIGNAL="$TEMP_ROOT/contention.fifo"
+STRICT_MARKER="$TEMP_ROOT/contention-observed"
+mkdir -p "$STRICT_BIN" "$LOCK_DIR"
+mkfifo "$STRICT_SIGNAL"
+printf '%s\n' "$$" >"$LOCK_DIR/pid"
+cat >"$STRICT_BIN/mkdir" <<'EOF'
+#!/bin/bash
+if [[ "${1:-}" == "$STRICT_LOCK" && -d "$STRICT_LOCK" ]]; then
+  printf 'collision\n' >"$STRICT_MARKER"
+  printf 'release\n' >"$STRICT_SIGNAL"
+  exit 1
+fi
+exec "$STRICT_REAL_MKDIR" "$@"
+EOF
+chmod +x "$STRICT_BIN/mkdir"
+cat >"$TEMP_ROOT/strict-contender.sh" <<'EOF'
+#!/bin/bash
+set -eEuo pipefail
+source "$1/core.sh"
+source "$1/locks.sh"
+dotfiles_lock_acquire "$STRICT_LOCK" 2000 0.005
+[[ "$(cat "$STRICT_LOCK/pid")" == "$$" ]]
+printf 'acquired\n' >"$STRICT_RESULT"
+dotfiles_lock_release "$STRICT_LOCK"
+EOF
+(
+  IFS= read -r event <"$STRICT_SIGNAL"
+  rm "$LOCK_DIR/pid"
+  rmdir "$LOCK_DIR"
+  exit 7
+) &
+STRICT_OWNER=$!
+STRICT_STATUS=0
+PATH="$STRICT_BIN:$PATH" STRICT_LOCK="$LOCK_DIR" STRICT_MARKER="$STRICT_MARKER" \
+  STRICT_SIGNAL="$STRICT_SIGNAL" STRICT_REAL_MKDIR="$(command -v mkdir)" STRICT_RESULT="$TEMP_ROOT/strict-result" \
+  "${BASH:-/bin/bash}" "$TEMP_ROOT/strict-contender.sh" "$LIB_DIR" >"$TEMP_ROOT/strict.out" 2>"$TEMP_ROOT/strict.err" || STRICT_STATUS=$?
+if [[ "$STRICT_STATUS" != 0 ]]; then
+  kill "$STRICT_OWNER" 2>/dev/null || true
+  cat "$TEMP_ROOT/strict.err"
+fi
+wait "$STRICT_OWNER" 2>/dev/null || true
+assert_status "strict Bash acquisition survives contention and asynchronous owner exit" "0" "$STRICT_STATUS"
+assert_equals "strict acquisition exercised a failed mkdir before retrying" "collision" "$(cat "$STRICT_MARKER" 2>/dev/null || true)"
+assert_equals "strict retry acquired and released its own lock" "acquired:missing" "$(cat "$TEMP_ROOT/strict-result" 2>/dev/null || true):$(test -d "$LOCK_DIR" && printf present || printf missing)"
+
 mkdir -p "$LOCK_DIR"
 printf '%s\n' 99999999 > "$LOCK_DIR/pid"
 if dotfiles_lock_acquire "$LOCK_DIR"; then
