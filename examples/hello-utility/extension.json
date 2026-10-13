@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "example.swift-hello",
+  "name": "Swift Hello",
+  "version": "0.1.0",
+  "summary": "A standalone executable using the ExtensionKit standard library.",
+  "settings": [{"key": "name", "title": "Name", "kind": "string", "defaultValue": "world"}],
+  "commands": [{"id": "hello", "title": "Say hello", "invocation": {"executable": "bin/hello"}}]
+}

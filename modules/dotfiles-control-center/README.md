@@ -1,5 +1,12 @@
 # Dotfiles Control Center
 
+The package now also builds the standalone **Dotfiles** app, `dotfiles-utility`
+CLI, and `ExtensionKit` library. Its Utilities view imports executable packages,
+edits settings, records shortcuts, and controls owned launchd services. See
+[Native app](../../NATIVE_APP.md) and [Extension authoring](../../EXTENSION_AUTHORING.md).
+The legacy views described below appear only when an existing dotfiles backend
+is available; they are not prerequisites for the standalone app.
+
 `dotfiles-control-center` is a native SwiftUI/AppKit client for the repository's
 public JSON command interfaces. It delegates all authority to
 `dotfiles-module`, `dotfiles-deps`, and `dotfiles-uninstall`; the app never

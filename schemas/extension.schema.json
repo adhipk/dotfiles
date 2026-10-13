@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Dotfiles executable utility manifest, API 1",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "name",
+    "version",
+    "summary",
+    "commands"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "minimumHostVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9.-]{0,95}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 149
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[a-zA-Z0-9.-]+)?$"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "homepage": {
+      "type": "string"
+    },
+    "commands": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "$ref": "#/$defs/command"
+      }
+    },
+    "services": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "$ref": "#/$defs/service"
+      }
+    },
+    "settings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/setting"
+      }
+    }
+  },
+  "$defs": {
+    "invocation": {
+      "type": "object",
+      "oneOf": [
+        {
+          "required": [
+            "executable"
+          ],
+          "not": {
+            "required": [
+              "tool"
+            ]
+          }
+        },
+        {
+          "required": [
+            "tool"
+          ],
+          "not": {
+            "required": [
+              "executable"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "executable": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Executable file relative to package; no symlinks or traversal."
+        },
+        "tool": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_][a-zA-Z0-9_.+-]*$"
+        },
+        "arguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "timeoutSeconds": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 3600,
+          "default": 30
+        },
+        "workingDirectory": {
+          "type": "string"
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "propertyNames": {
+            "pattern": "^[A-Z_][A-Z0-9_]*$"
+          }
+        }
+      }
+    },
+    "command": {
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "invocation"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.-]{0,95}$"
+        },
+        "title": {
+          "type": "string"
+        },
+        "invocation": {
+          "$ref": "#/$defs/invocation"
+        },
+        "input": {
+          "type": "boolean"
+        },
+        "confirmation": {
+          "type": "string"
+        }
+      }
+    },
+    "service": {
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "invocation"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.-]{0,95}$"
+        },
+        "title": {
+          "type": "string"
+        },
+        "invocation": {
+          "$ref": "#/$defs/invocation"
+        },
+        "health": {
+          "$ref": "#/$defs/invocation"
+        }
+      }
+    },
+    "setting": {
+      "type": "object",
+      "required": [
+        "key",
+        "title",
+        "kind",
+        "defaultValue"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.-]{0,95}$"
+        },
+        "title": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "string",
+            "boolean",
+            "integer",
+            "choice",
+            "directory"
+          ]
+        },
+        "defaultValue": {
+          "type": "string"
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "choice"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "choices"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

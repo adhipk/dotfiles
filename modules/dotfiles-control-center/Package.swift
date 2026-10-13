@@ -8,14 +8,22 @@ let package = Package(
         .macOS(.v13),
     ],
     products: [
+        .library(name: "ExtensionKit", targets: ["ExtensionKit"]),
+        .executable(name: "dotfiles-utility", targets: ["UtilityCLI"]),
+        .executable(name: "dotfiles-service-runner", targets: ["ServiceRunner"]),
         .executable(
             name: "dotfiles-control-center",
             targets: ["DotfilesControlCenter"]
         ),
     ],
     targets: [
+        .target(name: "ExtensionKit"),
+        .executableTarget(name: "UtilityCLI", dependencies: ["ExtensionKit"]),
+        .executableTarget(name: "ServiceRunner", dependencies: ["ExtensionKit"]),
+        .testTarget(name: "ExtensionKitTests", dependencies: ["ExtensionKit"]),
         .executableTarget(
-            name: "DotfilesControlCenter"
+            name: "DotfilesControlCenter",
+            dependencies: ["ExtensionKit"]
         ),
         .testTarget(
             name: "DotfilesControlCenterTests",

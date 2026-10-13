@@ -2,23 +2,29 @@ import SwiftUI
 
 struct RootView: View {
     @ObservedObject var model: AppModel
+    @ObservedObject var utilities: UtilityModel
+    private var hasDotfiles: Bool { FileManager.default.isExecutableFile(atPath: model.client.paths.module.path) }
 
     var body: some View {
         VStack(spacing: 0) {
             TabView {
+                UtilitiesView(model: utilities)
+                    .tabItem { Label("Utilities", systemImage: "command") }
+                if hasDotfiles {
                 ModulesView(model: model)
                     .tabItem { Label("Modules", systemImage: "shippingbox") }
                 DependenciesView(model: model)
                     .tabItem { Label("Dependencies", systemImage: "puzzlepiece.extension") }
                 SystemUninstallView(model: model)
                     .tabItem { Label("System", systemImage: "externaldrive.badge.xmark") }
+                }
             }
 
             Divider()
-            statusBar
+            if hasDotfiles { statusBar }
         }
         .task {
-            await model.loadInitialState()
+            if hasDotfiles { await model.loadInitialState() }
         }
     }
 

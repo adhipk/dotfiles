@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "dotfiles.tts",
+  "name": "Text to Speech",
+  "version": "1.0.0",
+  "summary": "Speak text using the separately installed Kit utility.",
+  "commands": [
+    {
+      "id": "speak",
+      "title": "Speak input",
+      "invocation": {
+        "tool": "kit",
+        "arguments": []
+      },
+      "input": true
+    }
+  ]
+}
