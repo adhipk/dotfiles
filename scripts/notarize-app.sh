@@ -10,6 +10,17 @@ cp "$root/dist/build.json" "$temporary/build.json"
 version="$(cat "$root/VERSION")"
 cp "$root/dist/Dotfiles-$version.zip" "$temporary/"
 cp "$root/dist/Dotfiles-$version.zip.sha256" "$temporary/"
+python3 - "$root/dist" "$temporary" <<'PY_SOURCE'
+import json,shutil,sys
+from pathlib import Path
+source=Path(sys.argv[1]);destination=Path(sys.argv[2])
+metadata=json.loads((destination/'build.json').read_text())
+for dependency in metadata.get('dependencies',[]):
+    if dependency.get('producer')=='dotfiles-pinned-source-build':
+        name=dependency.get('sourceMaterialsArchive','')
+        if name!=f"pandoc-own-source-{metadata['architecture']}.zip":raise SystemExit('Unexpected source sidecar filename')
+        shutil.copy2(source/name,destination/name)
+PY_SOURCE
 python3 "$root/scripts/verify-release.py" --candidate --dist "$temporary"
 version="$(cat "$root/VERSION")"
 archive="$temporary/Dotfiles-$version.zip"

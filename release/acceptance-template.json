@@ -468,5 +468,19 @@
         }
       }
     }
-  ]
+  ],
+  "sourceReviews": {
+    "arm64": {
+      "status": "pending",
+      "evidence": "",
+      "rawBinarySHA256": "",
+      "sourceMaterialsSHA256": ""
+    },
+    "x86_64": {
+      "status": "pending",
+      "evidence": "",
+      "rawBinarySHA256": "",
+      "sourceMaterialsSHA256": ""
+    }
+  }
 }

@@ -103,8 +103,15 @@ def validate_archive_binding(app, metadata, matrix):
     require(len(archived_dependencies) == 1 and archived_dependencies[0].get('name') == 'pandoc', 'Expected exactly pinned Pandoc dependency')
     dep = archived_dependencies[0]; architecture = metadata['architecture']; version = pins['PANDOC_VERSION']
     require(dep.get('version') == version and dep.get('architecture') == architecture, 'Bundled dependency version/architecture differs from pins')
-    require(dep.get('archiveSHA256') == pins['PANDOC_SHA256'][architecture], 'Bundled dependency source archive pin differs')
-    require(dep.get('binaryURL') == f'https://github.com/jgm/pandoc/releases/download/{version}/pandoc-{version}-{architecture}-macOS.zip' and dep.get('source') == f'https://github.com/jgm/pandoc/tree/{version}' and dep.get('license') == 'GPL-2.0-or-later', 'Dependency source/license binding differs')
+    producer = dep.get('producer', 'upstream-official-binary')
+    require(producer in ['upstream-official-binary', 'dotfiles-pinned-source-build'], 'Unknown dependency producer')
+    if producer == 'upstream-official-binary':
+        require(dep.get('archiveSHA256') == pins['PANDOC_SHA256'][architecture], 'Bundled dependency source archive pin differs')
+        require(dep.get('binaryURL') == f'https://github.com/jgm/pandoc/releases/download/{version}/pandoc-{version}-{architecture}-macOS.zip' and dep.get('source') == f'https://github.com/jgm/pandoc/tree/{version}' and dep.get('license') == 'GPL-2.0-or-later', 'Dependency source/license binding differs')
+    else:
+        own_pins = json.loads((ROOT / 'release/vendor/pandoc-source/own-build-inputs.json').read_text())
+        require(dep.get('sourceCommit') == own_pins['pandocCommit'] and dep.get('license') == 'GPL-2.0-or-later', 'Own source identity/license differs')
+        require(re.fullmatch(r'[0-9a-f]{64}', dep.get('rawBinarySHA256', '')) and re.fullmatch(r'[0-9a-f]{64}', dep.get('sourceMaterialsSHA256', '')), 'Own binary/source digest bindings required')
     package = resources / 'Utilities/dotfiles.markdown-clipboard.dotutility'
     require(dep.get('bundledSHA256') == hashlib.sha256((package / 'bin/pandoc').read_bytes()).hexdigest(), 'Signed bundled dependency digest differs')
     source_notices = ROOT / 'release/vendor/pandoc'
@@ -147,6 +154,90 @@ def validate_source_materials(provenance, materials):
             require(set(binding.get('sourcePackages', [])) == names, 'Binary source package closure differs from assembled sources')
 
 
+OWN_RECIPES = ['prepare-pandoc-toolchain.py','capture-pandoc-closure.py','build-pandoc-from-source.py','inventory-pandoc-runtime-source.py','package-pandoc-source-build.py','verify-pandoc-source-binary.py']
+
+
+def validate_own_source_materials(dependency, materials, architecture):
+    require(hashlib.sha256(materials.read_bytes()).hexdigest() == dependency['sourceMaterialsSHA256'], 'Own source material archive checksum differs')
+    pins = json.loads((ROOT / 'release/vendor/pandoc-source/own-build-inputs.json').read_text())
+    with zipfile.ZipFile(materials) as source:
+        require(len(source.namelist()) == len(set(source.namelist())), 'Duplicate own source ZIP entries are forbidden')
+        record = json.loads(source.read('materials/source-materials.json')); files = record.get('files', {})
+        require(record.get('producer') == 'dotfiles-pinned-source-build' and record.get('architecture') == architecture, 'Own source producer/architecture differs')
+        require(record.get('captureStatus') == dependency.get('captureStatus') == 'source-captured-review-required' and record.get('buildExecutionURL') == dependency.get('buildExecutionURL'), 'Own build execution/review state binding differs')
+        require(record.get('sourceCommit') == pins['pandocCommit'] and record.get('pandocVersion') == pins['pandocVersion'] and record.get('binarySHA256') == dependency['rawBinarySHA256'], 'Own source/binary identity binding differs')
+        require(all(record.get(key) == pins[key] == dependency.get(key) for key in ['ghcVersion','cabalVersion','indexState']), 'Own source toolchain/index differs')
+        require(set(source.namelist()) == {'materials/' + name for name in files} | {'materials/source-materials.json'}, 'Own source ZIP inventory differs')
+        for name, checksum in files.items():
+            require(not name.startswith('/') and '..' not in Path(name).parts, 'Unsafe own source path')
+            require(hashlib.sha256(source.read('materials/' + name)).hexdigest() == checksum, 'Own source file checksum differs: ' + name)
+        require(files.get('pandoc-source.tar.gz') == pins['pandocSourceSHA256'] and files.get('ghc-source.tar.xz') == pins['ghcSourceSHA256'], 'Own root/compiler source archive pins differ')
+        require(json.loads(source.read('materials/own-build-inputs.json')) == pins, 'Own build input record differs from current pins')
+        toolchain = json.loads(source.read('materials/toolchain.json'))
+        require(toolchain.get('inputs') == pins['toolchains'][architecture] == dependency.get('toolchain'), 'Own compiler bindist inputs differ')
+        for recipe in OWN_RECIPES:
+            checksum = hashlib.sha256((ROOT / 'scripts' / recipe).read_bytes()).hexdigest()
+            require(files.get(recipe) == checksum and dependency.get('recipeSHA256', {}).get(recipe) == checksum, 'Own builder recipe differs: ' + recipe)
+        require(dependency.get('recipeSHA256', {}).get('own-build-inputs.json') == files.get('own-build-inputs.json'), 'Own input recipe digest differs')
+        closure = json.loads(source.read('materials/closure/closure.json'))
+        require(record.get('resolvedSourceClosure') == closure.get('resolvedSourceClosure') and record.get('preExistingGHCUnits') == closure.get('preExistingGHCUnits'), 'Own closure source manifest differs')
+        plan = json.loads(source.read('materials/captured-repository-plan.json'))
+        require(closure.get('planSHA256') == hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest(), 'Captured source closure differs from original secure plan')
+        expected = {}; boot = set(); local = set()
+        for unit in plan['install-plan']:
+            identity = (unit['pkg-name'], unit['pkg-version'])
+            if unit['type'] == 'pre-existing': boot.add(identity)
+            elif unit.get('pkg-src', {}).get('type') == 'local': local.add(unit['pkg-name'])
+            else:
+                require(unit.get('pkg-src', {}).get('type') == 'repo-tar', 'Unbound non-Hackage source in original plan')
+                expected[identity] = (unit.get('pkg-src-sha256'), unit.get('pkg-cabal-sha256'))
+        require(local <= {'pandoc','pandoc-cli','pandoc-lua-engine','pandoc-server'} and 'pandoc-cli' in local, 'Unexpected local source package in original plan')
+        packages = closure['resolvedSourceClosure']
+        require({(p['name'],p['version']) for p in packages} == set(expected), 'Own source closure omits planned dependencies')
+        for package in packages:
+            identity = (package['name'],package['version']); hashes = expected[identity]
+            require(files.get('closure/' + package['archive']) == package['sha256'] == hashes[0], 'Planned source archive missing/unbound: ' + package['id'])
+            require(files.get('closure/' + package['cabalRevisionFile']) == package['selectedCabalSHA256'] and (hashes[1] is None or hashes[1] == package['selectedCabalSHA256']), 'Selected Cabal revision differs: ' + package['id'])
+            require(package.get('license') and all('closure/' + path in files for path in package.get('licenseFiles', [])), 'Own package license evidence missing: ' + package['id'])
+        require({(u['name'],u['version']) for u in closure['preExistingGHCUnits']} == boot, 'GHC boot source inventory differs from plan')
+        inventory = json.loads(source.read('materials/runtime-source-inventory.json'))
+        require(set(inventory['ghc']['bootLibraries']) == {name for name,version in boot}, 'GHC source coverage does not include every observed boot unit')
+        embedded = inventory['ghc']['embeddedGMPAndLibffiSources']
+        require(any('gmp-' in item['path'] for item in embedded) and any('libffi-' in item['path'] for item in embedded), 'GHC bundled GMP/libffi source evidence missing')
+        validation = json.loads(source.read('materials/standalone-validation.json'))
+        require(validation.get('rawBinarySHA256') == dependency['rawBinarySHA256'] and validation.get('htmlToGFM') == validation.get('isolatedEnvironment') == 'passed', 'Own standalone binary validation missing')
+        require(all(name in files for name in ['plan.json','cabal.project.freeze','captured-repository.freeze','local-source-map.json','ghc-info.txt','ghc-pkg-global.txt']), 'Own reconstruction plan/freeze/settings missing')
+        require(record.get('macOSSDK') == '15.5' and record.get('xcodeVersion') == 'Xcode 16.4\nBuild version 16F6', 'Own platform SDK/toolchain differs')
+    return record
+
+
+SOURCE_BUILD_REPOSITORY = 'adhipk/dotfiles'
+
+
+def verify_source_build_ci(url, architecture, dependency):
+    match = re.fullmatch(r'https://github\.com/([^/]+)/([^/]+)/actions/runs/(\d+)', url)
+    require(match is not None, 'Remote own source build run URL required for publication')
+    owner, repository, run_id = match.groups()
+    require(f'{owner}/{repository}' == SOURCE_BUILD_REPOSITORY, 'Own source build must come from the candidate project repository')
+    endpoint = f'repos/{owner}/{repository}/actions/runs/{run_id}'
+    record = json.loads(run('gh','api',endpoint))
+    require(record.get('status') == 'completed' and record.get('conclusion') == 'success' and record.get('path') == '.github/workflows/pandoc-source-build.yml', 'Successful own source build workflow required')
+    pages = json.loads(run('gh','api','--paginate','--slurp',endpoint + '/jobs?per_page=100'))
+    successful = {job['name'] for page in pages for job in page.get('jobs',[]) if job.get('conclusion') == 'success'}
+    require(successful >= {'Own Pandoc source build (arm64)','Own Pandoc source build (x86_64)'}, 'Both native source build jobs required')
+    artifact_name = f"Pandoc-own-build-{architecture}-{record['head_sha']}"
+    with tempfile.TemporaryDirectory(prefix='pandoc-source-ci-binding-') as temporary:
+        run('gh','run','download',run_id,'--repo',f'{owner}/{repository}','--name',artifact_name,'--dir',temporary)
+        captures = list(Path(temporary).rglob('own-build.json'))
+        require(len(captures) == 1, 'Exactly one own source build capture required in remote artifact')
+        captured = json.loads(captures[0].read_text()); artifact = captures[0].parent
+        require(captured.get('architecture') == architecture and captured.get('producer') == 'dotfiles-pinned-source-build', 'Remote source artifact producer/architecture differs')
+        require(captured.get('binarySHA256') == dependency['rawBinarySHA256'] and captured.get('sourceMaterialsSHA256') == dependency['sourceMaterialsSHA256'], 'Reviewed raw/source hashes differ from immutable remote source artifact')
+        require(hashlib.sha256((artifact/'pandoc').read_bytes()).hexdigest() == dependency['rawBinarySHA256'], 'Remote raw binary bytes differ from reviewed capture')
+        name = f'pandoc-own-source-{architecture}.zip'
+        require(captured.get('sourceMaterialsArchive') == name and hashlib.sha256((artifact/name).read_bytes()).hexdigest() == dependency['sourceMaterialsSHA256'], 'Remote source distribution bytes differ from reviewed capture')
+
+
 def verify_artifact(dist, args, matrix):
     dist = dist.resolve()
     metadata = json.loads((dist / 'build.json').read_text())
@@ -174,6 +265,17 @@ def verify_artifact(dist, args, matrix):
         for binary in ['Contents/MacOS/dotfiles-control-center', 'Contents/MacOS/dotfiles-utility', 'Contents/MacOS/dotfiles-service-runner', 'Contents/Resources/Utilities/dotfiles.markdown-clipboard.dotutility/bin/pandoc', 'Contents/Resources/Utilities/dotfiles.markdown-clipboard.dotutility/bin/markdown-clipboard']:
             require(metadata['architecture'] in run('lipo', '-archs', app / binary).split(), f'Archived {binary} architecture differs from metadata')
         validate_archive_binding(app, metadata, matrix)
+        dependency = metadata['dependencies'][0]
+        own_source_record = None
+        if dependency.get('producer') == 'dotfiles-pinned-source-build':
+            material_name = dependency.get('sourceMaterialsArchive')
+            require(material_name == f"pandoc-own-source-{metadata['architecture']}.zip", 'Unexpected own source archive filename')
+            own_material = dist / material_name
+            if args.source_materials:
+                matches = [path for path in args.source_materials if hashlib.sha256(path.read_bytes()).hexdigest() == dependency['sourceMaterialsSHA256']]
+                require(len(matches) == 1, 'Exactly matching own source material ZIP required')
+                own_material = matches[0]
+            own_source_record = validate_own_source_materials(dependency, own_material, metadata['architecture'])
         resources = app / 'Contents/Resources'
         require(json.loads((resources / 'support-matrix.json').read_text()) == matrix, 'Archived support matrix differs')
         ids = {json.loads(p.read_text())['id'] for p in (resources / 'Utilities').glob('*/extension.json')}
@@ -183,8 +285,9 @@ def verify_artifact(dist, args, matrix):
             require((resources / document).read_bytes() == (ROOT / document).read_bytes(), f'Archived {document} differs from source')
         if not args.candidate:
             require(re.fullmatch(r'\d+\.\d+\.\d+', metadata['version']), 'Stable publication requires a stable VERSION')
-            source_provenance = json.loads((ROOT / 'release/vendor/pandoc-source/provenance.json').read_text())
-            validate_source_materials(source_provenance, args.source_materials)
+            if own_source_record is None:
+                source_provenance = json.loads((ROOT / 'release/vendor/pandoc-source/provenance.json').read_text())
+                validate_source_materials(source_provenance, (args.source_materials or [None])[0])
             require(metadata.get('notarized') is True, 'Recorded notarization required')
             receipt = json.loads((dist / 'notarization.json').read_text())
             require(receipt.get('status') == 'Accepted' and receipt.get('id'), 'Apple Accepted notarization receipt required')
@@ -194,6 +297,11 @@ def verify_artifact(dist, args, matrix):
             require(args.acceptance is not None, 'Clean-device acceptance JSON required for publication')
             acceptance = json.loads(args.acceptance.read_text())
             validate_acceptance(acceptance, matrix, metadata, metadata['architecture'])
+            if own_source_record is not None:
+                review = acceptance.get('sourceReviews', {}).get(metadata['architecture'])
+                evidence(review, 'Own complete source/foreign-runtime/license review')
+                require(review.get('rawBinarySHA256') == dependency['rawBinarySHA256'] and review.get('sourceMaterialsSHA256') == dependency['sourceMaterialsSHA256'], 'Own source review is for different artifacts')
+                verify_source_build_ci(own_source_record['buildExecutionURL'], metadata['architecture'], dependency)
             verify_remote_ci(acceptance['ci'], metadata['sourceCommit'])
     return metadata['architecture']
 
@@ -202,7 +310,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--dist', type=Path, action='append', help='Repeat for each required architecture')
     parser.add_argument('--acceptance', type=Path)
-    parser.add_argument('--source-materials', type=Path, help='Complete checksum-bound corresponding-source distribution ZIP')
+    parser.add_argument('--source-materials', type=Path, action='append', help='Complete checksum-bound corresponding-source distribution ZIP')
     parser.add_argument('--candidate', action='store_true', help='Verify clean signed candidate before notarization; does not authorize publication')
     args = parser.parse_args()
     matrix = json.loads((ROOT / 'release/support-matrix.json').read_text())

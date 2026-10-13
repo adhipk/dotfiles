@@ -22,16 +22,14 @@ Supply secrets through GitHub settings, never through repository files or PR tex
 The workflow imports the certificate into a temporary keychain, masks its generated
 password, notarizes each architecture, and removes the keychain afterward. It
 uploads candidate artifacts and does not publish a release. Supply the full
-validated source commit and the source-build artifact input described by the
-workflow; both CI tiers must have passed for that exact candidate commit.
+validated source commit and `pandoc_source_run_id`, the successful both-architecture source-build run whose immutable artifact was reviewed; both CI tiers must have passed for that exact candidate commit.
 
 ## Local candidate
 
 Import the certificate into Keychain and create a notarytool Keychain profile.
 Pass its name through `DOTFILES_NOTARY_PROFILE`; the script uses that existing
 profile and does not store credentials in source. Build with
-`python3 scripts/build-app.py --sign 'Developer ID Application: …'` and the
-reviewed Pandoc source artifact, then run `make release-candidate-check` before
+`python3 scripts/build-app.py --sign 'Developer ID Application: …' --pandoc-artifact /path/to/reviewed/artifact`, then run `make release-candidate-check` before
 `bash scripts/notarize-app.sh`.
 
 Signing does not replace desktop acceptance. Complete [ACCEPTANCE.md](ACCEPTANCE.md)

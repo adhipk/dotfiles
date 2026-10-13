@@ -200,13 +200,16 @@ release-check: test shortcuts-check
 .PHONY: test-release-gates release-candidate-check release-verify
 test-release-gates:
 	@python3 tests/test_release_gate.py
+	@python3 tests/test_own_source_release_gate.py
+	@python3 tests/test_pandoc_build_closure.py
+	@python3 tests/test_pandoc_artifact_bundle.py
 
 release-candidate-check:
 	@python3 scripts/verify-release.py --candidate
 
 release-verify:
-	@test -n "$(ACCEPTANCE)" -a -n "$(SOURCE_MATERIALS)" -a -n "$(ARM64_DIST)" -a -n "$(INTEL_DIST)" || { echo 'Set ACCEPTANCE, SOURCE_MATERIALS, ARM64_DIST, and INTEL_DIST to artifact paths'; exit 1; }
-	@python3 scripts/verify-release.py --dist "$(ARM64_DIST)" --dist "$(INTEL_DIST)" --acceptance "$(ACCEPTANCE)" --source-materials "$(SOURCE_MATERIALS)"
+	@test -n "$(ACCEPTANCE)" -a -n "$(ARM64_DIST)" -a -n "$(INTEL_DIST)" || { echo 'Set ACCEPTANCE, ARM64_DIST, and INTEL_DIST; own source ZIPs are read from each artifact directory'; exit 1; }
+	@python3 scripts/verify-release.py --dist "$(ARM64_DIST)" --dist "$(INTEL_DIST)" --acceptance "$(ACCEPTANCE)" $(if $(SOURCE_MATERIALS),--source-materials "$(SOURCE_MATERIALS)",) $(if $(ARM64_SOURCE_MATERIALS),--source-materials "$(ARM64_SOURCE_MATERIALS)",) $(if $(INTEL_SOURCE_MATERIALS),--source-materials "$(INTEL_SOURCE_MATERIALS)",)
 
 .PHONY: source-materials
 source-materials:

@@ -169,3 +169,5 @@ The explicit release script `scripts/notarize-app.sh` uses an existing Keychain
 profile named by `DOTFILES_NOTARY_PROFILE`, staples the result, and regenerates
 the archive/checksum. Credentials are never stored in the repository. Neither
 notarization nor publication happens during `make build-app` or bootstrap.
+
+[release/SIGNING.md](release/SIGNING.md) lists the protected signing secrets, local Keychain setup, and explicit candidate inputs; credentials can be provided after implementation review.
