@@ -1,28 +1,15 @@
 #!/usr/bin/env bash
 # man-me: name=dotfiles-manager
-# man-me: category=Agents
-# man-me: usage=dotfiles-manager open|ui|agent [ARGS...]|configure|theme edit|tmux ensure|tmux attach|tmux select ROLE|tmux session|rules|debug
-# man-me: description=Open and operate the human-first dotfiles control panel and its optional agent.
-# man-me: tags=dotfiles manager hermes agent tmux scratchpad ui
+# man-me: category=Desktop
+# man-me: usage=dotfiles-manager open|ui|theme edit|tmux ensure|tmux attach|tmux select ROLE|tmux session|rules|debug
+# man-me: description=Open and operate the human-first dotfiles control panel.
+# man-me: tags=dotfiles manager tmux scratchpad ui
 
 set -euo pipefail
 
-profile="${DOTFILES_MANAGER_PROFILE:-dotfiles}"
 root="${DOTFILES_MANAGER_ROOT:-$HOME/dotfiles}"
 session="${DOTFILES_MANAGER_TMUX_SESSION:-dotfiles-manager}"
-prefs_lib="${DOTFILES_MANAGER_PREFS_LIB:-$HOME/.local/lib/dotfiles/prefs.sh}"
-if [[ -r "$prefs_lib" ]]; then
-  # shellcheck source=/dev/null
-  source "$prefs_lib"
-fi
-skin_name="${DOTFILES_MANAGER_SKIN_NAME:-}"
-if [[ -z "$skin_name" ]] && declare -F dotfiles_pref >/dev/null 2>&1; then
-  skin_name="$(dotfiles_pref hermes_skin dotfiles-manager)"
-fi
-skin_name="${skin_name:-dotfiles-manager}"
-skin_source="${DOTFILES_MANAGER_SKIN_SOURCE:-$HOME/.config/dotfiles-manager/hermes-skin.yaml}"
 scratchpad_label="${DOTFILES_MANAGER_SCRATCHPAD_LABEL:-dotfiles_manager}"
-hermes_bin="${DOTFILES_MANAGER_HERMES_BIN:-}"
 scratchpads_bin="${DOTFILES_MANAGER_SCRATCHPADS_BIN:-$HOME/bin/scratchpads}"
 manager_command="${DOTFILES_MANAGER_COMMAND:-$HOME/bin/dotfiles-manager}"
 ui_bin="${DOTFILES_MANAGER_UI_BIN:-$HOME/bin/dotfiles-manager-ui}"
@@ -34,91 +21,15 @@ usage() {
 Usage:
   dotfiles-manager open
   dotfiles-manager ui
-  dotfiles-manager agent [HERMES ARGUMENTS...]
-  dotfiles-manager configure
   dotfiles-manager theme path
   dotfiles-manager theme edit
   dotfiles-manager tmux ensure
   dotfiles-manager tmux attach
-  dotfiles-manager tmux select terminal|agent|settings
+  dotfiles-manager tmux select terminal|settings
   dotfiles-manager tmux session
   dotfiles-manager rules
   dotfiles-manager debug
 EOF
-}
-
-resolve_hermes() {
-  if [[ -z "$hermes_bin" ]]; then
-    hermes_bin="$(command -v hermes 2>/dev/null || true)"
-  fi
-  if [[ -z "$hermes_bin" || ! -x "$hermes_bin" ]]; then
-    printf '%s\n' 'dotfiles-manager: Hermes is not installed; see https://hermes-agent.nousresearch.com/docs/getting-started/quickstart' >&2
-    return 127
-  fi
-}
-
-profile_home() {
-  if [[ -n "${DOTFILES_MANAGER_PROFILE_HOME:-}" ]]; then
-    printf '%s\n' "$DOTFILES_MANAGER_PROFILE_HOME"
-  else
-    printf '%s/.hermes/profiles/%s\n' "$HOME" "$profile"
-  fi
-}
-
-validate_profile() {
-  resolve_hermes
-  if ! "$hermes_bin" profile show "$profile" >/dev/null 2>&1; then
-    printf 'dotfiles-manager: profile %q is missing; create it with:\n' "$profile" >&2
-    printf '  hermes profile create %q --clone-from default --no-alias\n' "$profile" >&2
-    return 69
-  fi
-}
-
-install_skin_link() {
-  local target_dir
-  local target
-
-  [[ -r "$skin_source" ]] || {
-    printf 'dotfiles-manager: managed skin is missing: %s\n' "$skin_source" >&2
-    return 66
-  }
-
-  target_dir="$(profile_home)/skins"
-  target="$target_dir/$skin_name.yaml"
-  mkdir -p "$target_dir"
-
-  if [[ -e "$target" && ! -L "$target" ]]; then
-    if cmp -s "$skin_source" "$target"; then
-      return 0
-    fi
-    printf 'dotfiles-manager: refusing to replace unmanaged skin: %s\n' "$target" >&2
-    return 73
-  fi
-
-  ln -sfn "$skin_source" "$target"
-}
-
-configure_profile() {
-  local active_skin
-
-  validate_profile
-  install_skin_link
-  active_skin="$("$hermes_bin" -p "$profile" config get display.skin 2>/dev/null || true)"
-  if [[ "$active_skin" != "$skin_name" ]]; then
-    "$hermes_bin" -p "$profile" config set display.skin "$skin_name" >/dev/null
-  fi
-}
-
-run_agent() {
-  local todo_dir
-
-  configure_profile
-  todo_dir="${DOTFILES_MANAGER_TODO_DIR:-$(profile_home)/tasks}"
-  if (($# == 0)); then
-    set -- --tui
-  fi
-  export AGENT_TODO_DIR="$todo_dir"
-  exec "$hermes_bin" -p "$profile" "$@"
 }
 
 run_ui() {
@@ -132,10 +43,10 @@ run_ui() {
 style_tmux_session() {
   local navigation
 
-  # Keep one quiet, stable navigation row across the shell, agent, and Textual
+  # Keep one quiet, stable navigation row across the shell and Textual
   # surfaces. The role markers are window metadata, so renamed windows and
   # restarted processes do not change the controls.
-  navigation=' #{?#{==:#{@dotfiles_manager_role},terminal},●,·} Ctrl+` Terminal   #{?#{==:#{@dotfiles_manager_role},agent},●,·} Ctrl+1 Agent   #{?#{==:#{@dotfiles_manager_role},settings},●,·} Ctrl+2 Settings '
+  navigation=' #{?#{==:#{@dotfiles_manager_role},terminal},●,·} Ctrl+` Terminal   #{?#{==:#{@dotfiles_manager_role},settings},●,·} Ctrl+2 Settings '
   tmux set-option -t "$session" @dotfiles_tmux_surface control-panel
   tmux set-option -t "$session" status on
   tmux set-option -t "$session" status-position bottom
@@ -152,7 +63,6 @@ style_tmux_session() {
 ensure_tmux_session() {
   local terminal_window=""
   local control_window=""
-  local agent_window=""
   local window_id
   local window_name
   local role
@@ -180,9 +90,6 @@ ensure_tmux_session() {
     if [[ "$role" == settings || "$role" == control ]] || { [[ -z "$control_window" ]] && [[ "$window_name" == settings ]]; }; then
       control_window="$window_id"
     fi
-    if [[ "$role" == agent ]] || { [[ -z "$agent_window" ]] && [[ "$window_name" == agent ]]; }; then
-      agent_window="$window_id"
-    fi
   done < <(tmux list-windows -t "=$session:" -F '#{window_id} #{window_name} #{@dotfiles_manager_role}' 2>/dev/null)
 
   if [[ -z "$control_window" ]]; then
@@ -200,29 +107,8 @@ ensure_tmux_session() {
   tmux set-option -w -t "$terminal_window" @dotfiles_window_type terminal
   tmux set-option -w -t "$terminal_window" @dotfiles_manager_role terminal
 
-  if [[ -n "$agent_window" ]]; then
-    tmux rename-window -t "$agent_window" agent
-    tmux set-option -w -t "$agent_window" @dotfiles_window_type codex
-    tmux set-option -w -t "$agent_window" @dotfiles_manager_role agent
-  fi
-
   style_tmux_session
   tmux select-window -t "$control_window"
-}
-
-ensure_agent_window() {
-  local agent_window
-
-  agent_window=$(tmux list-windows -t "=$session:" -F '#{window_id} #{@dotfiles_manager_role}' 2>/dev/null \
-    | awk '$2 == "agent" { print $1; exit }')
-  if [[ -z "$agent_window" ]]; then
-    agent_window="$(tmux new-window -d -P -F '#{window_id}' \
-      -t "=$session:" -c "$root" -n agent "$manager_command" agent)"
-  fi
-  tmux rename-window -t "$agent_window" agent
-  tmux set-option -w -t "$agent_window" @dotfiles_window_type codex
-  tmux set-option -w -t "$agent_window" @dotfiles_manager_role agent
-  printf '%s\n' "$agent_window"
 }
 
 select_manager_window() {
@@ -238,9 +124,6 @@ select_manager_window() {
     settings)
       target=$(tmux list-windows -t "=$session:" -F '#{window_id} #{@dotfiles_manager_role}' \
         | awk '$2 == "settings" { print $1; exit }')
-      ;;
-    agent)
-      target=$(ensure_agent_window)
       ;;
     *)
       printf 'dotfiles-manager: unknown manager role: %s\n' "$role" >&2
@@ -296,9 +179,6 @@ print_rules() {
 
 debug_state() {
   printf 'root=%s\n' "$root"
-  printf 'profile=%s\n' "$profile"
-  printf 'profile_home=%s\n' "$(profile_home)"
-  printf 'skin_source=%s\n' "$skin_source"
   printf 'ui_bin=%s\n' "$ui_bin"
   printf 'theme=%s\n' "$theme_path"
   printf 'session=%s\n' "$session"
@@ -312,13 +192,6 @@ main() {
       ;;
     ui)
       run_ui
-      ;;
-    agent)
-      shift
-      run_agent "$@"
-      ;;
-    configure)
-      configure_profile
       ;;
     theme)
       case "${2:-}" in

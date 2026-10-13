@@ -44,17 +44,6 @@ settings:
     bridges:
       - home/dot_config/dotfiles/preferences.toml.tmpl
     reload: []
-  - key: hermes.skin
-    description: Hermes color theme and startup splash artwork
-    dataPath: preferences.hermes.skin
-    file: home/.chezmoidata/20-preferences.yaml
-    type: string
-    values:
-      enum: [dotfiles-manager, slate, mono, default, ares, poseidon, sisyphus, charizard, daylight, warm-lightmode]
-    bridges:
-      - home/dot_config/dotfiles/preferences.toml.tmpl
-      - home/.chezmoiscripts/run_onchange_after_dotfiles-manager-hermes.sh.tmpl
-    reload: []
   - key: terminal.app
     description: Terminal app used by app-focus and the alt-backtick hotkey
     dataPath: preferences.terminalApp

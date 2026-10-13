@@ -6,9 +6,7 @@
 preferences:
   terminalEditor: nvim # $EDITOR and the nvim tmux window command
   guiEditor: VSCodium # macOS app focused by the @editor slot
-  assistant: codex # pluggable agent CLI run by the codex tmux window type (the dotfiles control panel runs its own hermes-dotfiles profile separately)
-  hermes:
-    skin: dotfiles-manager # Hermes theme and startup artwork
+  assistant: codex # agent CLI run by the codex tmux window type
   terminalApp: Ghostty # app-focus terminal and alt-backtick target
   appSlots: # alt-1..4 focus targets; @browser/@editor are runtime tokens
     slot1: "@browser"

@@ -5,11 +5,9 @@ stable `hermes-dotfiles` assistant command. It does not install or update
 Hermes and does not manage credentials, sessions, memories, Kanban data, or
 gateway services.
 
-The checked-in assistant preference points the stable tmux `codex` window type
-at `hermes-dotfiles`. The launcher selects the dedicated `dotfiles` Hermes
-profile and opens the modern TUI when called without arguments. Other arguments
-pass through unchanged, so `hermes-dotfiles config get model` operates on the
-same profile.
+The adapter is disabled by default; the configured assistant is Codex. The
+control panel has no Hermes integration. Disabling the adapter preserves the
+upstream installation, profile, sessions, and private task store.
 
 ## Initial profile setup
 

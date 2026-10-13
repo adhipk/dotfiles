@@ -142,7 +142,7 @@ assert_executable "$DESTINATION/bin/tmux-session-template" "enabled profile inst
 assert_executable "$DESTINATION/bin/tmux-window-program" "enabled profile installs the live program label resolver"
 assert_contains "$DESTINATION/.tmux.conf" 'after-new-session[50]' "enabled profile renders automatic session setup"
 assert_contains "$DESTINATION/.tmux.conf" 'Cycle Tuxedo windows' "enabled profile renders typed cycling"
-assert_contains "$DESTINATION/.tmux.conf" 'dotfiles-manager tmux select agent' "enabled profile routes Ctrl+1 inside the control panel"
+assert_contains "$DESTINATION/.tmux.conf" 'dotfiles-manager tmux select settings' "enabled profile routes Ctrl+1 inside the control panel"
 assert_contains "$DESTINATION/.tmux.conf" 'dotfiles-manager tmux select settings' "enabled profile routes Ctrl+2 inside the control panel"
 assert_contains "$DESTINATION/.tmux.conf" 'New Tuxedo window' "enabled profile renders typed creation"
 assert_contains "$DESTINATION/.tmux.conf" 'set-option -gu allow-passthrough' "enabled profile clears legacy graphics passthrough"
@@ -213,6 +213,7 @@ mkdir -p "$REMOVAL_SOURCE" "$REMOVAL_HOME"
 cp -R "$DOTFILES_DIR/home" "$REMOVAL_SOURCE/home"
 cp -R "$DOTFILES_DIR/modules" "$REMOVAL_SOURCE/modules"
 cp "$DOTFILES_DIR/.chezmoiroot" "$REMOVAL_SOURCE/.chezmoiroot"
+cp "$DOTFILES_DIR/"*.md "$REMOVAL_SOURCE/"
 rm -rf "$REMOVAL_SOURCE/modules/terminal-window-types"
 
 if chezmoi \

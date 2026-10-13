@@ -17,7 +17,7 @@ import asyncio
 import json
 import os
 import subprocess
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -363,7 +363,6 @@ class DotfilesManagerApp(App[None]):
     BINDINGS = [
         Binding("/", "focus_search", "Search"),
         Binding("enter", "edit_selected", "Open"),
-        Binding("a", "open_agent", "Agent"),
         Binding("r", "refresh", "Refresh"),
         Binding("q", "quit", "Quit"),
     ]
@@ -602,11 +601,9 @@ class DotfilesManagerApp(App[None]):
     def __init__(
         self,
         backend: SettingsBackend | Any | None = None,
-        agent_runner: Callable[[], Any] | None = None,
     ) -> None:
         super().__init__()
         self.backend = backend or SettingsBackend()
-        self.agent_runner = agent_runner or self._run_agent_command
         self.settings: list[Setting] = []
         self.visible_settings: list[Setting] = []
         self.records: list[dict[str, Any]] = []
@@ -1043,25 +1040,6 @@ class DotfilesManagerApp(App[None]):
             title="Shortcut applied",
         )
 
-    def _run_agent_command(self) -> None:
-        manager = os.environ.get(
-            "DOTFILES_MANAGER_COMMAND", str(Path.home() / "bin" / "dotfiles-manager")
-        )
-        result = subprocess.run(
-            [manager, "tmux", "select", "agent"], text=True, capture_output=True, check=False
-        )
-        if result.returncode != 0:
-            raise BackendError(result.stderr.strip() or "could not open the agent")
-
-    def action_open_agent(self) -> None:
-        self.run_worker(self._open_agent(), exclusive=True, group="agent")
-
-    async def _open_agent(self) -> None:
-        try:
-            await asyncio.to_thread(self.agent_runner)
-        except Exception as error:
-            self.notify(str(error), title="Could not open agent", severity="error", timeout=8)
-
     def action_refresh(self) -> None:
         if self.view == "settings":
             self.run_worker(self._load_settings(), exclusive=True, group="settings")
@@ -1073,7 +1051,7 @@ class DotfilesManagerApp(App[None]):
 
 class FakeBackend:
     def __init__(self) -> None:
-        self.values = {"assistant": "hermes-dotfiles", "theme.tmuxFlavor": "mocha"}
+        self.values = {"assistant": "codex", "theme.tmuxFlavor": "mocha"}
         self.calls = {
             view: 0 for view in ("utilities", "shortcuts", "modules", "dependencies", "system")
         }
@@ -1088,7 +1066,7 @@ class FakeBackend:
                 value=self.values["assistant"],
                 type="string",
                 description="Agent CLI used by the stable assistant window.",
-                allowed_values=("hermes-dotfiles", "codex"),
+                allowed_values=("codex", "claude"),
                 free_text=True,
                 data_path="preferences.assistant",
                 source_file="home/.chezmoidata/20-preferences.yaml",
@@ -1194,8 +1172,7 @@ class FakeBackend:
 
 async def run_self_test() -> None:
     backend = FakeBackend()
-    agent_calls: list[str] = []
-    app = DotfilesManagerApp(backend=backend, agent_runner=lambda: agent_calls.append("agent"))
+    app = DotfilesManagerApp(backend=backend)
     async with app.run_test(size=(120, 36)) as pilot:
         await pilot.pause()
         table = app.query_one("#settings", DataTable)
@@ -1216,9 +1193,7 @@ async def run_self_test() -> None:
         await pilot.click("#apply")
         await pilot.pause()
         assert backend.values["theme.tmuxFlavor"] == "latte"
-        await pilot.press("a")
-        await pilot.pause()
-        assert agent_calls == ["agent"]
+        assert all(binding.key != "a" for binding in app.BINDINGS)
         await app._prefetch_views()
         assert backend.calls == {
             "utilities": 1,

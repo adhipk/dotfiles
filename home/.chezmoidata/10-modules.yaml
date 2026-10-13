@@ -48,7 +48,7 @@ modules:
       - claude
       - opencode
   hermesAgent:
-    enabled: true
+    enabled: false
   dotfilesManager:
     enabled: true
   tmuxSessions:
