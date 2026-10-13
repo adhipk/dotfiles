@@ -44,6 +44,35 @@ assert_contains "$MODULE_DIR/bin/dotfiles-control-center" 'DOTFILES_CONTROL_CENT
 assert_contains "$MODULE_DIR/bin/dotfiles-control-center" 'DOTFILES_DIR/modules/dotfiles-control-center' "installed launcher resolves the package through its embedded source root"
 assert_contains "$MODULE_DIR/bin/dotfiles-control-center" 'swift run' "launcher delegates build and launch to SwiftPM"
 
+# A source launch must make the service worker available before launching the app.
+LAUNCH_FIXTURE="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-launch-test.XXXXXX")"
+mkdir -p "$LAUNCH_FIXTURE/bin"
+cat > "$LAUNCH_FIXTURE/bin/swift" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1" == build ]]; then
+  [[ "$*" == *'--product dotfiles-service-runner' ]] || exit 31
+  printf ready > "$DOTFILES_TEST_WORKER_MARKER"
+elif [[ "$1" == run ]]; then
+  [[ -s "$DOTFILES_TEST_WORKER_MARKER" ]] || exit 32
+  printf '%s\n' "$DOTFILES_CONTROL_CENTER_CWD" "$@" > "$DOTFILES_TEST_LAUNCH_ARGS"
+else
+  exit 33
+fi
+EOF
+chmod +x "$LAUNCH_FIXTURE/bin/swift"
+if PATH="$LAUNCH_FIXTURE/bin:/usr/bin:/bin" \
+    DOTFILES_DIR="$(dirname "$(dirname "$MODULE_DIR")")" \
+    DOTFILES_TEST_WORKER_MARKER="$LAUNCH_FIXTURE/worker" \
+    DOTFILES_TEST_LAUNCH_ARGS="$LAUNCH_FIXTURE/args" \
+    "$MODULE_DIR/bin/dotfiles-control-center" 'literal argument with spaces'; then
+  pass "source launcher builds its service worker before starting the app"
+  assert_contains "$LAUNCH_FIXTURE/args" "$(pwd -P)" "source launch retains caller cwd"
+  assert_contains "$LAUNCH_FIXTURE/args" 'literal argument with spaces' "source launch preserves literal arguments"
+else
+  fail "source launcher builds its service worker before starting the app" "worker or arguments unavailable"
+fi
+rm -rf "$LAUNCH_FIXTURE"
+
 if yq -e '
   .apiVersion == "dotfiles/v1" and
   .id == "dotfiles-control-center" and

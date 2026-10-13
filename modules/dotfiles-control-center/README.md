@@ -45,7 +45,7 @@ Run focused validation with:
 ```sh
 swift test --package-path modules/dotfiles-control-center
 swift build --package-path modules/dotfiles-control-center --configuration release
-bash modules/dotfiles-control-center/tests/test_module.sh
+bash modules/dotfiles-control-center/Tests/test_module.sh
 ```
 
 The parent repository must provide the conditional chezmoi bridge at
