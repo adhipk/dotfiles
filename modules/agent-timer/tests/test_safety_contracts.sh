@@ -7,6 +7,7 @@ TIMER="$MODULE_DIR/bin/agent-timer"
 FIXTURES="$TEST_DIR/safety-fixtures"
 TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/agent-timer-safety.XXXXXX")"
 REAL_PS="$(command -v ps)"
+export DOTFILES_LIB_DIR="$REPO_DIR/home/dot_local/lib/dotfiles"
 
 PASSED=0
 FAILED=0

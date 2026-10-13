@@ -87,6 +87,7 @@ wait_for_file_pattern() {
     return 1
 }
 
+export DOTFILES_LIB_DIR="$MODULE_DIR/../../home/dot_local/lib/dotfiles"
 export AGENT_TIMER_STATE_DIR="$TEMP_DIR/state"
 export AGENT_TIMER_CONFIG_FILE="$TEMP_DIR/missing-config.toml"
 export AGENT_TIMER_TMUX_BIN="$FIXTURES/tmux"
@@ -443,10 +444,93 @@ export AGENT_TIMER_NO_WORKER=1
 AGENT_TIMER_NOW=5000 "$TIMER" start --seconds 30 --warning-seconds 5 --target %9 --id cron-recovery --turn-id cron-turn --json >/dev/null
 AGENT_TIMER_NOW=5030 "$TIMER" tick
 assert_eq "1:5060:none" "$(jq -r '[.checkpointCount,.deadlineAt,(.worker.pid // "none")] | map(tostring) | join(":")' "$AGENT_TIMER_STATE_DIR/cron-recovery.json")" "cron recovery re-arms a block without creating a worker"
-AGENT_TIMER_NOW=5060 "$TIMER" tick
-assert_eq "2:5090:0" "$(jq -r '[.checkpointCount,.deadlineAt] | map(tostring) | join(":")' "$AGENT_TIMER_STATE_DIR/cron-recovery.json"):$(wc -l <"$FAKE_TMUX_LOG" | tr -d ' ')" "successive cron ticks continue without terminal injection"
+AGENT_TIMER_NOW=5060 "$TIMER" tick >"$TEMP_DIR/cron-second-tick.stdout" 2>"$TEMP_DIR/cron-second-tick.stderr"
+second_cron_tick_status=$?
+second_cron_tick_state="$(jq -r '[.checkpointCount,.deadlineAt] | map(tostring) | join(":")' "$AGENT_TIMER_STATE_DIR/cron-recovery.json" 2>/dev/null || printf missing)"
+second_cron_tick_key_count="$(wc -l <"$FAKE_TMUX_LOG" | tr -d ' ')"
+if [[ "$second_cron_tick_status" != 0 || "$second_cron_tick_state:$second_cron_tick_key_count" != "2:5090:0" ]]; then
+    printf '  cron fixture diagnostics: exit=%s state=%s tmux-key-count=%s\n' "$second_cron_tick_status" "$second_cron_tick_state" "$second_cron_tick_key_count"
+    printf '  second tick stdout:\n'; cat "$TEMP_DIR/cron-second-tick.stdout"
+    printf '  second tick stderr:\n'; cat "$TEMP_DIR/cron-second-tick.stderr"
+    if [[ -f "$AGENT_TIMER_STATE_DIR/cron-recovery.json" ]]; then
+        jq '{id,status,checkpointCount,startedAt,warningAt,deadlineAt,lastCheckpointAt,lastCheckpointDeliveryStatus,lastCheckpointDeliveryMode,lastCheckpointSideReportStatus,worker,sideReport:(.sideReport | if . == null then null else {id,status,startedAt,completedAt,exitCode,workerPid,workerStartedAt,workerPgid,timeoutSeconds} end)}' "$AGENT_TIMER_STATE_DIR/cron-recovery.json"
+    else
+        printf '  cron fixture state file missing\n'
+    fi
+    for cron_lock in "$AGENT_TIMER_STATE_DIR"/*.lock; do
+        [[ -d "$cron_lock" ]] || continue
+        printf '  fixture lock=%s owner=' "${cron_lock##*/}"
+        if [[ -r "$cron_lock/pid" ]]; then
+            cron_lock_owner="$(cat "$cron_lock/pid")"
+            printf '%s alive=' "$cron_lock_owner"
+            if [[ "$cron_lock_owner" =~ ^[0-9]+$ ]] && kill -0 "$cron_lock_owner" 2>/dev/null; then printf 'yes\n'; else printf 'no\n'; fi
+        else
+            printf 'missing\n'
+        fi
+    done
+fi
+assert_eq "0" "$second_cron_tick_status" "successive cron tick exits successfully"
+assert_eq "2:5090:0" "$second_cron_tick_state:$second_cron_tick_key_count" "successive cron ticks continue without terminal injection"
 if wait_for_state_value "$AGENT_TIMER_STATE_DIR/cron-recovery.json" '.sideReport.status // ""' completed; then pass "successive report completes"; else fail "successive report completes"; fi
 assert_eq "1:1" "$(find "$AGENT_TIMER_STATE_DIR" -maxdepth 1 -name 'cron-recovery.checkpoint-*.md' | wc -l | tr -d ' '):$(find "$AGENT_TIMER_STATE_DIR" -maxdepth 1 -name 'cron-recovery.checkpoint-*.log' | wc -l | tr -d ' ')" "recurring checkpoints retain only the latest report and log"
+
+printf '\nTesting concurrent report completion and cron re-arm...\n'
+export AGENT_TIMER_STATE_DIR="$TEMP_DIR/concurrent-cron-state"
+export REAL_TIMER_JQ="$(command -v jq)"
+export TIMER_REPORT_LOCKED="$TEMP_DIR/report-completion-locked"
+export TIMER_REPORT_RELEASE="$TEMP_DIR/report-completion-release"
+export TIMER_TICK_CONTENDING="$TEMP_DIR/tick-contending"
+export TIMER_SOURCE_LIB="$MODULE_DIR/../../home/dot_local/lib/dotfiles"
+mkdir -p "$TEMP_DIR/concurrent-lib"
+ln -s "$TIMER_SOURCE_LIB/core.sh" "$TEMP_DIR/concurrent-lib/core.sh"
+ln -s "$TIMER_SOURCE_LIB/state.sh" "$TEMP_DIR/concurrent-lib/state.sh"
+cat >"$TEMP_DIR/concurrent-lib/locks.sh" <<'EOF'
+source "$TIMER_SOURCE_LIB/locks.sh"
+eval "$(declare -f dotfiles_lock_acquire | sed '1s/dotfiles_lock_acquire/timer_real_lock_acquire/')"
+dotfiles_lock_acquire() {
+    if [[ "${TIMER_PROBE_TICK_LOCK:-0}" == 1 && -e "$TIMER_REPORT_LOCKED" && ! -e "$TIMER_REPORT_RELEASE" && -d "$1" ]]; then
+        printf 'contending\n' >"$TIMER_TICK_CONTENDING"
+    fi
+    timer_real_lock_acquire "$@"
+}
+EOF
+cat >"$TEMP_DIR/concurrent-jq" <<'EOF'
+#!/bin/bash
+for argument in "$@"; do
+    if [[ "$argument" == *'.sideReport.status=$status'* ]]; then
+        printf 'locked\n' >"$TIMER_REPORT_LOCKED"
+        while [[ ! -e "$TIMER_REPORT_RELEASE" ]]; do sleep 0.02; done
+    fi
+done
+exec "$REAL_TIMER_JQ" "$@"
+EOF
+chmod +x "$TEMP_DIR/concurrent-jq"
+export DOTFILES_LIB_DIR="$TEMP_DIR/concurrent-lib"
+export AGENT_TIMER_JQ_BIN="$TEMP_DIR/concurrent-jq"
+: >"$FAKE_TMUX_LOG"
+AGENT_TIMER_NOW=7000 "$TIMER" start --seconds 30 --warning-seconds 5 --target %9 --id concurrent-cron --turn-id concurrent-turn --json >/dev/null
+AGENT_TIMER_NOW=7030 "$TIMER" tick &
+first_tick_pid=$!
+if wait_for_file_content "$TIMER_REPORT_LOCKED"; then
+    pass "report completion holds the state lock at its write barrier"
+else
+    fail "report completion reaches its write barrier"
+fi
+AGENT_TIMER_NOW=7060 TIMER_PROBE_TICK_LOCK=1 "$TIMER" tick &
+second_tick_pid=$!
+if wait_for_file_content "$TIMER_TICK_CONTENDING"; then
+    pass "next cron tick contends with report completion"
+else
+    fail "next cron tick reaches the locked report state"
+fi
+: >"$TIMER_REPORT_RELEASE"
+wait "$first_tick_pid"; first_tick_status=$?
+wait "$second_tick_pid"; second_tick_status=$?
+assert_eq "0:0" "$first_tick_status:$second_tick_status" "both overlapping cron ticks complete successfully"
+if wait_for_state_value "$AGENT_TIMER_STATE_DIR/concurrent-cron.json" '.sideReport.status // ""' completed; then pass "concurrent checkpoint report completes"; else fail "concurrent checkpoint report completes"; fi
+assert_eq "2:7090:sent:0" "$(jq -r '[.checkpointCount,.deadlineAt,.lastCheckpointDeliveryStatus] | map(tostring) | join(":")' "$AGENT_TIMER_STATE_DIR/concurrent-cron.json"):$(wc -l <"$FAKE_TMUX_LOG" | tr -d ' ')" "report completion cannot overwrite the next block or inject input"
+unset AGENT_TIMER_JQ_BIN TIMER_PROBE_TICK_LOCK
+export DOTFILES_LIB_DIR="$TIMER_SOURCE_LIB"
 
 printf '\nTesting detached report failure after re-arm...\n'
 export AGENT_TIMER_STATE_DIR="$TEMP_DIR/delivery-failure-state"
