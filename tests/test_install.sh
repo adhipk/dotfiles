@@ -140,7 +140,20 @@ for declared_dependency in jq yq; do
     ln -s "$dependency_path" "$FAKE_BIN/$declared_dependency"
 done
 printf '#!/usr/bin/env bash\nprintf \"%%s\\\\n\" \"$*\" >> \"$CHEZMOI_ARGS_FILE\"\n' > "$FAKE_BIN/chezmoi"
-printf '#!/usr/bin/env bash\nexit 0\n' > "$FAKE_BIN/brew"
+cat > "$FAKE_BIN/brew" <<'EOF'
+#!/usr/bin/env bash
+case "${1:-}" in
+    trust)
+        [[ "$*" == 'trust --formula asmvik/formulae/yabai asmvik/formulae/skhd felixkratz/formulae/borders' ]] || exit 43
+        printf '%s\n' "$*" > "$HOME/brew-trust-test"
+        ;;
+    bundle)
+        # Simulate clean Homebrew rejecting the desktop formulae until granted.
+        [[ -s "$HOME/brew-trust-test" ]] || exit 44
+        ;;
+esac
+exit 0
+EOF
 cat > "$FAKE_BIN/tmux" <<'EOF'
 #!/usr/bin/env bash
 case "${1:-}" in
@@ -225,6 +238,7 @@ else
     echo "  ✗ bootstrap.sh failed"
     ((FAILED++))
 fi
+assert_contains "$TEMP_HOME/brew-trust-test" "^trust --formula " "bootstrap grants desktop formula trust before the Brewfile is installed"
 assert_contains "$ARGS_FILE" "^-S $DOTFILES_DIR apply$" "bootstrap applies the chezmoi source state"
 assert_contains "$TMUX_ARGS_FILE" "^source-file $TEMP_HOME/.tmux.conf$" "bootstrap reloads a running tmux server"
 assert_contains "$PKILL_ARGS_FILE" "^-USR2 -f /Ghostty" "bootstrap reloads every running Ghostty process with SIGUSR2"
