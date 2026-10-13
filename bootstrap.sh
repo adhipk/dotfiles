@@ -79,6 +79,13 @@ activate_homebrew_path
 
 if [ -f "$BREWFILE" ]; then
   echo "Installing dependencies from Brewfile..."
+  # Current Homebrew requires individual grants for third-party formulae.
+  # Older versions have no trust command and retain their existing behavior.
+  if brew help trust >/dev/null 2>&1; then
+    brew tap asmvik/formulae
+    brew tap FelixKratz/formulae
+    brew trust --formula asmvik/formulae/yabai asmvik/formulae/skhd felixkratz/formulae/borders
+  fi
   brew bundle --file "$BREWFILE"
   activate_homebrew_path
 else

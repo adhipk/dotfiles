@@ -39,6 +39,7 @@ jobs:
       - name: Install test tools
         run: |
           brew tap asmvik/formulae
+          brew trust --formula asmvik/formulae/yabai asmvik/formulae/skhd
           brew install chezmoi jq yq tmux neovim fzf zoxide sesh yazi pandoc python ripgrep uv bun yabai skhd
       - name: Provision pinned test-only plugin fixtures
         run: python3 scripts/prepare-test-plugins.py

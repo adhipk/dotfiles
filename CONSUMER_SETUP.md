@@ -15,7 +15,9 @@ From a downloaded source checkout on macOS, first review the installation plan:
 
 Preparation makes a separate source tree for inspection and does not install
 software or change your account. The profile installs public utility repositories
-over HTTPS at their checked-in commit pins. It omits personal browser/editor
+over HTTPS at their checked-in commit pins. Setup grants Homebrew trust only to
+the yabai, skhd and borders formulae declared in the plan; it does not trust whole
+third-party taps. It omits personal browser/editor
 extensions, private Raycast integration, and personal agent guidance. Default
 app slots use Finder and Notes instead of work applications. The assistant tmux
 slot opens a shell until agents are explicitly selected.

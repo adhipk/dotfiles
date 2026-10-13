@@ -41,6 +41,7 @@ def plan(agents=False, work_apps=False):
                             'terminal window types','Yazi','shortcut guide','settings control panel',
                             'notifications','explicit timer','Markdown clipboard','tasks',
                             'text to speech','unescape','GitHub repository creation','default apps','qutebrowser'],
+            'formulaTrust':['asmvik/formulae/yabai','asmvik/formulae/skhd','felixkratz/formulae/borders'],
             'permissions':['Accessibility: yabai, skhd, Ghostty',
                            'Karabiner: DriverKit extension and Input Monitoring',
                            'Space scripting: optional SIP setup followed by setup-yabai-sa'],
