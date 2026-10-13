@@ -11,7 +11,7 @@ bind-key -n -N "Duplicate current window" S-F4 run-shell "$HOME/bin/tmux-session
 bind-key -n -N "Rename current window" S-F5 command-prompt -p "Rename window:" -I '#{?#{||:#{==:#{@dotfiles_window_type},codex},#{==:#W,codex}},#T,#W}' { rename-window "%%" }
 
 # Control cycles matching window types. The dotfiles control-panel session
-# reuses the same keys for its three persistent roles, so it never needs a
+# reuses the same keys for its terminal and settings roles, so it never needs a
 # prefix or hidden-window knowledge.
 bind-key -n -N "Cycle terminal windows" C-0 run-shell "$HOME/bin/tmux-session-template cycle '#{session_id}' terminal '#{window_id}'"
 # The typed-cycle target IDs are single-quoted at the shell level: tmux
@@ -19,7 +19,7 @@ bind-key -n -N "Cycle terminal windows" C-0 run-shell "$HOME/bin/tmux-session-te
 # swallowed by run-shell's `sh -c` as a positional parameter and the cycle
 # command silently receives shifted arguments (broken Ctrl+1/Cmd+1).
 bind-key -n -N "Open terminal surface" 'C-`' if-shell -F '#{==:#{@dotfiles_tmux_surface},control-panel}' 'run-shell "$HOME/bin/dotfiles-manager tmux select terminal"' "run-shell \"\$HOME/bin/tmux-session-template cycle '#{session_id}' terminal '#{window_id}'\""
-bind-key -n -N "Cycle Codex windows" C-1 if-shell -F '#{==:#{@dotfiles_tmux_surface},control-panel}' 'run-shell "$HOME/bin/dotfiles-manager tmux select agent"' "run-shell \"\$HOME/bin/tmux-session-template cycle '#{session_id}' codex '#{window_id}'\""
+bind-key -n -N "Cycle Codex windows" C-1 if-shell -F '#{==:#{@dotfiles_tmux_surface},control-panel}' 'run-shell "$HOME/bin/dotfiles-manager tmux select settings"' "run-shell \"\$HOME/bin/tmux-session-template cycle '#{session_id}' codex '#{window_id}'\""
 bind-key -n -N "Cycle Neovim windows" C-2 if-shell -F '#{==:#{@dotfiles_tmux_surface},control-panel}' 'run-shell "$HOME/bin/dotfiles-manager tmux select settings"' "run-shell \"\$HOME/bin/tmux-session-template cycle '#{session_id}' nvim '#{window_id}'\""
 bind-key -n -N "Cycle Tuxedo windows" C-3 run-shell "$HOME/bin/tmux-session-template cycle '#{session_id}' tuxedo '#{window_id}'"
 bind-key -n -N "New terminal window" C-S-0 run-shell "$HOME/bin/tmux-session-template new '#{session_id}' terminal '#{pane_id}'"

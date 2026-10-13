@@ -1,0 +1,486 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "REPLACE_WITH_40_CHARACTER_COMMIT",
+  "version": "1.0.0",
+  "ci": {
+    "sourceCommit": "REPLACE_WITH_40_CHARACTER_COMMIT",
+    "status": "pending",
+    "runURL": "",
+    "requiredChecks": [
+      "Native app and extension contracts",
+      "Existing integration contracts"
+    ]
+  },
+  "licenses": {
+    "apache-license": {
+      "status": "pending",
+      "evidence": ""
+    },
+    "third-party-notices": {
+      "status": "pending",
+      "evidence": ""
+    },
+    "gpl-corresponding-source": {
+      "status": "pending",
+      "evidence": ""
+    }
+  },
+  "devices": [
+    {
+      "architecture": "arm64",
+      "macOS": "",
+      "cleanDevice": false,
+      "tester": "",
+      "artifactSHA256": "",
+      "desktopChecks": {
+        "gatekeeper-download": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "first-launch": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dependency-setup": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "permissions-denied-retry": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "shortcuts-conflicts": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "login-start-stop": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "service-crash-recovery": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "interrupted-update": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "upgrade": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "rollback": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "uninstall-preserves-user-data": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "consumer-plan-review": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "consumer-clean-install": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "consumer-install-resume": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "consumer-update": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "consumer-rollback": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "machine-preferences-preserved": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "consumer-uninstall": {
+          "status": "pending",
+          "evidence": ""
+        }
+      },
+      "utilities": {
+        "dotfiles.app-focus": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dotfiles.default-apps": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dotfiles.markdown-clipboard": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dotfiles.notifications": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dotfiles.scratchpads": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dotfiles.timer": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dotfiles.todo": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dotfiles.tts": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dotfiles.unescape": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "example.hello": {
+          "status": "pending",
+          "evidence": ""
+        }
+      },
+      "modules": {
+        "agent-timer": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "app-focus": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "appearance-pip": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dependencies": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dotfiles-control-center": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dotfiles-manager": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "gh-create-repo": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "kit-tts": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "macos-default-apps": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "markdown-clipboard": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "module-lifecycle": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "notifications": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "qutebrowser": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "scratchpads": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "settings": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "shortcut-guide": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "space-display": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "system-uninstall": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "terminal-window-types": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "tmux-sessions": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "tmux-yazi": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "todo": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "unescape-cli": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "window-layout": {
+          "status": "pending",
+          "evidence": ""
+        }
+      }
+    },
+    {
+      "architecture": "x86_64",
+      "macOS": "",
+      "cleanDevice": false,
+      "tester": "",
+      "artifactSHA256": "",
+      "desktopChecks": {
+        "gatekeeper-download": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "first-launch": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dependency-setup": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "permissions-denied-retry": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "shortcuts-conflicts": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "login-start-stop": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "service-crash-recovery": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "interrupted-update": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "upgrade": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "rollback": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "uninstall-preserves-user-data": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "consumer-plan-review": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "consumer-clean-install": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "consumer-install-resume": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "consumer-update": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "consumer-rollback": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "machine-preferences-preserved": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "consumer-uninstall": {
+          "status": "pending",
+          "evidence": ""
+        }
+      },
+      "utilities": {
+        "dotfiles.app-focus": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dotfiles.default-apps": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dotfiles.markdown-clipboard": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dotfiles.notifications": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dotfiles.scratchpads": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dotfiles.timer": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dotfiles.todo": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dotfiles.tts": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dotfiles.unescape": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "example.hello": {
+          "status": "pending",
+          "evidence": ""
+        }
+      },
+      "modules": {
+        "agent-timer": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "app-focus": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "appearance-pip": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dependencies": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dotfiles-control-center": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "dotfiles-manager": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "gh-create-repo": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "kit-tts": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "macos-default-apps": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "markdown-clipboard": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "module-lifecycle": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "notifications": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "qutebrowser": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "scratchpads": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "settings": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "shortcut-guide": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "space-display": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "system-uninstall": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "terminal-window-types": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "tmux-sessions": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "tmux-yazi": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "todo": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "unescape-cli": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "window-layout": {
+          "status": "pending",
+          "evidence": ""
+        }
+      }
+    }
+  ],
+  "sourceReviews": {
+    "arm64": {
+      "status": "pending",
+      "evidence": "",
+      "rawBinarySHA256": "",
+      "sourceMaterialsSHA256": ""
+    },
+    "x86_64": {
+      "status": "pending",
+      "evidence": "",
+      "rawBinarySHA256": "",
+      "sourceMaterialsSHA256": ""
+    }
+  }
+}

@@ -2,6 +2,18 @@
 
 Personal macOS setup managed with [chezmoi](https://www.chezmoi.io/).
 
+The public 1.0 effort now includes a standalone native macOS utility wrapper.
+Build the development prerelease with `make build-app` or `./bootstrap.sh --app`.
+It manages executable utility packages, settings, shortcuts, and launchd services
+without applying this personal setup. See [Native app](NATIVE_APP.md),
+[Extension authoring](EXTENSION_AUTHORING.md), and [release readiness](RELEASE_READINESS.md).
+For all desktop and terminal utilities, review `./bootstrap --consumer --plan`
+and [Consumer setup](CONSUMER_SETUP.md). The consumer profile uses public HTTPS
+utility sources; agents and work applications are opt-in. Original project code
+uses [Apache-2.0](LICENSE); third-party terms remain in
+[distribution notices](THIRD_PARTY_NOTICES.md).
+The commands under Setup below still install the author's personal environment.
+
 ## Layout
 
 `.chezmoiroot` points chezmoi at `home/`, which declares the desired state of

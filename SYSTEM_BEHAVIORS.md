@@ -719,37 +719,65 @@ Configuration inputs:
 - Hardcoded worth exposing: confirmation phrases; lock timeout 10000ms; preserved prefixes (`projects`, source repo, state home); `~/bin/agent-timer` path.
 
 ## dotfiles-manager
-Source: `modules/dotfiles-manager/bin/dotfiles-manager` (bash, 357 lines), rendered via `home/bin/executable_dotfiles-manager.tmpl` (gated on `modules.dotfilesManager.enabled`).
-Invoked by: user CLI / skhd hotkey (`open`); `dotfiles-manager-ui` (`tmux select agent`); tmux windows it creates re-invoke it (`ui`, `agent`).
+Source: `modules/dotfiles-manager/bin/dotfiles-manager` (bash), rendered via `home/bin/executable_dotfiles-manager.tmpl` (gated on `modules.dotfilesManager.enabled`).
+Invoked by: user CLI / skhd hotkey (`open`); tmux navigation (`tmux select terminal|settings`); its settings window re-invokes it (`ui`).
 System behaviors:
-- **tmux session management**: creates/curates a dedicated tmux session (default `dotfiles-manager`) with `settings` (runs `dotfiles-manager ui`), `terminal`, and optional `agent` windows; sets many session/window options (status bar styling, `@dotfiles_manager_role` markers); `switch-client`/`attach`.
-- **Hermes profile mutation** (`configure`/`agent`): symlinks the managed skin `~/.config/dotfiles-manager/hermes-skin.yaml` into `~/.hermes/profiles/<profile>/skins/<skin>.yaml` (refuses to replace unmanaged non-symlink files); runs `hermes -p <profile> config get/set display.skin`; `exec hermes -p <profile> [--tui|args]` (spawns the Hermes agent — which itself may do anything).
+- **tmux session management**: creates/curates a dedicated tmux session (default `dotfiles-manager`) with `settings` (runs `dotfiles-manager ui`), and `terminal` windows; sets many session/window options (status bar styling, `@dotfiles_manager_role` markers); `switch-client`/`attach`.
 - `open`: delegates to `~/bin/scratchpads open command <label> codex $root "<manager> tmux attach"` (yabai scratchpad window spawn via Ghostty).
 - `theme edit`: creates `~/.config/dotfiles-manager/theme.tcss` (copied from theme.example.tcss if present) and `exec`s `$VISUAL`/`$EDITOR`/nvim on it.
 - `rules`: prints (does not run) yabai rule add/remove commands for the scratchpad.
 - No chezmoi, no Homebrew, no sudo, no git, no direct network.
 Configuration inputs:
-- Env: `DOTFILES_MANAGER_{PROFILE,ROOT,TMUX_SESSION,PREFS_LIB,SKIN_NAME,SKIN_SOURCE,SCRATCHPAD_LABEL,HERMES_BIN,SCRATCHPADS_BIN,COMMAND,UI_BIN,THEME,THEME_EXAMPLE,PROFILE_HOME}`, `VISUAL`/`EDITOR`, `TMUX`.
-- Files: `~/.local/lib/dotfiles/prefs.sh` (reads `dotfiles_pref hermes_skin`), `~/.config/dotfiles-manager/hermes-skin.yaml`, `theme.tcss`/`theme.example.tcss`.
-- Hardcoded worth exposing: defaults `profile=dotfiles`, `root=$HOME/dotfiles`, session name, scratchpad label `dotfiles_manager`, Catppuccin status-bar colors, scratchpad grid `10:10:1:1:8:8`.
+- Env: `DOTFILES_MANAGER_{ROOT,TMUX_SESSION,SCRATCHPAD_LABEL,SCRATCHPADS_BIN,COMMAND,UI_BIN,THEME,THEME_EXAMPLE}`, `VISUAL`/`EDITOR`, `TMUX`.
+- Files: `theme.tcss`/`theme.example.tcss`. The panel has only Terminal and Settings surfaces and does not configure or launch Hermes.
+- Hardcoded worth exposing: default `root=$HOME/dotfiles`, session name, scratchpad label `dotfiles_manager`, Catppuccin status-bar colors, scratchpad grid `10:10:1:1:8:8`.
 
 ## dotfiles-manager-ui
 Source: `modules/dotfiles-manager/bin/dotfiles-manager-ui` (Python/Textual, 862 lines; shebang `#!/usr/bin/env -S uv run --script` with PEP 723 inline metadata: `textual==8.2.8`, python>=3.11, uv `exclude-newer` 2026-07-01), rendered via `home/bin/executable_dotfiles-manager-ui.tmpl`; a companion uv lock is rendered from `home/bin/dotfiles-manager-ui.lock.tmpl` ← `modules/dotfiles-manager/bin/dotfiles-manager-ui.lock`.
 Invoked by: `dotfiles-manager ui` (inside the manager tmux session); direct CLI; `--self-test` for CI.
 System behaviors:
 - **uv script bootstrap**: first run may hit the network to resolve/download textual + deps into uv's cache (lockfile pins versions).
-- Spawns subprocesses of the other utilities: `dotfiles-settings list/set --json` (with `DOTFILES_DIR` injected, cwd=$root), `dotfiles-module status --json`, `dotfiles-deps status --json`, `dotfiles-uninstall plan --json`, and `dotfiles-manager tmux select agent` (on the `a` binding). All mutation flows go through `dotfiles-settings set`, which does chezmoi apply + service reloads (see above).
+- Spawns subprocesses of the other utilities: `dotfiles-settings list/set --json` (with `DOTFILES_DIR` injected, cwd=$root), `dotfiles-module status --json`, `dotfiles-deps status --json`, `dotfiles-uninstall plan --json`. All mutation flows go through `dotfiles-settings set`, which does chezmoi apply + service reloads (see above).
 - Reads `modules/shortcut-guide/generated/shortcuts.json` for the Shortcuts view.
 - No direct file writes, sudo, git, or Homebrew.
 Configuration inputs:
-- Env: `DOTFILES_MANAGER_SETTINGS_BIN` (default `~/bin/dotfiles-settings`), `DOTFILES_MANAGER_ROOT` (default `~/dotfiles`), `DOTFILES_MANAGER_MODULE_BIN`, `DOTFILES_MANAGER_DEPS_BIN`, `DOTFILES_MANAGER_UNINSTALL_BIN`, `DOTFILES_MANAGER_SHORTCUTS`, `DOTFILES_MANAGER_THEME` (`~/.config/dotfiles-manager/theme.tcss` CSS override), `DOTFILES_MANAGER_COMMAND`.
+- Env: `DOTFILES_MANAGER_SETTINGS_BIN` (default `~/bin/dotfiles-settings`), `DOTFILES_MANAGER_ROOT` (default `~/dotfiles`), `DOTFILES_MANAGER_MODULE_BIN`, `DOTFILES_MANAGER_DEPS_BIN`, `DOTFILES_MANAGER_UNINSTALL_BIN`, `DOTFILES_MANAGER_SHORTCUTS`, `DOTFILES_MANAGER_THEME` (`~/.config/dotfiles-manager/theme.tcss` CSS override).
 - Hardcoded worth exposing: embedded Catppuccin CSS; responsive breakpoints (100/68 cols); notify timeout 8s; textual pin `8.2.8`.
 
-## dotfiles-control-center
+## Dotfiles native utility host
+Source: `modules/dotfiles-control-center/Sources/ExtensionKit`, `Sources/UtilityCLI`,
+and the SwiftUI Utilities view. Build: `scripts/build-app.py`, also exposed as
+`make build-app` and `bootstrap.sh --app`.
+
+- Stores imported executable packages, registry/settings/shortcuts, and utility
+  data under `~/Library/Application Support/Dotfiles/Utilities`; registry writes
+  are locked and atomic. Newly imported utilities are disabled. Removal keeps
+  the utility data directory.
+- Runs declared executable paths or resolved external tools with literal argv,
+  optional stdin, controlled environment, timeout, cancellation, and output limits.
+  Utility processes run with the user's permissions; packages are trusted code.
+- Registers enabled noninteractive action shortcuts with macOS while the app runs.
+  It does not rewrite or migrate the existing skhd configuration.
+- Writes deterministic owned `dev.dotfiles.utility.<hash>.plist` LaunchAgents;
+  explicit start/restart uses `launchctl bootstrap`, stop uses `bootout`. Services
+  run at login and can continue after the app quits. Disable/removal stops them.
+  A bundled launchd-owned supervisor retries crashes up to three times with
+  2/4/8-second backoff and retains 1 MiB active plus 1 MiB backup per channel.
+  App/CLI lifecycle mutations and action execution share a lease and durable
+  recovery journal; interrupted updates restore prior settings and services.
+- Uses `SMAppService.mainApp` only when the user changes Open at login.
+- Builds/codesigns a generated `.app` and ZIP without applying personal config.
+  Developer ID signing and notarization are explicit release operations.
+
+See [NATIVE_APP.md](NATIVE_APP.md) for paths, update/rollback boundaries, prerequisites,
+and uninstall instructions; [EXTENSION_AUTHORING.md](EXTENSION_AUTHORING.md) defines
+the environment and extension hooks. Third-party commands retain their own effects.
+
+## dotfiles-control-center source launcher
 Source: `modules/dotfiles-control-center/bin/dotfiles-control-center` (bash launcher, 20 lines) fronting a Swift package in the same module; rendered via `home/bin/executable_dotfiles-control-center.tmpl` (gated on `modules.dotfilesControlCenter.enabled`, exports `DOTFILES_DIR`).
 Invoked by: user CLI / hotkeys.
 System behaviors:
-- `exec /usr/bin/env swift run --package-path $MODULE_DIR --configuration release dotfiles-control-center "$@"` — **compiles the Swift package on first run/after changes** (SwiftPM writes build artifacts under `<module>/.build`; may resolve/fetch SwiftPM dependencies over the network if Package.swift declares any) and then runs the TUI binary.
+- `exec /usr/bin/env swift run --package-path $MODULE_DIR --configuration release dotfiles-control-center "$@"` — **compiles the Swift package on first run/after changes** (SwiftPM writes build artifacts under `<module>/.build`; may resolve/fetch SwiftPM dependencies over the network if Package.swift declares any) and then runs the native app.
 - Exports `DOTFILES_CONTROL_CENTER_CWD` (caller's cwd) to the Swift process. Behaviors of the compiled app itself are out of scope of this launcher (separate Swift source audit).
 Configuration inputs:
 - Env: `DOTFILES_DIR` (module dir resolution), `DOTFILES_CONTROL_CENTER_CWD` (set by launcher).

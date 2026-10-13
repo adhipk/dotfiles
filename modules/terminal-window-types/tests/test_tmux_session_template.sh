@@ -14,6 +14,7 @@ PROJECT_DIR="$TEMP_DIR/project"
 TYPE_DIR="$PROJECT_DIR/current-pane"
 TMUX_CONFIG="$TEMP_DIR/tmux.conf"
 TUXEDO_CALLS_FILE="$TEMP_DIR/tuxedo-calls"
+TOOL_CALLS_DIR="$TEMP_DIR/tool-calls"
 
 PASSED=0
 FAILED=0
@@ -120,22 +121,66 @@ wait_for_tuxedo_calls() {
     return 1
 }
 
-mkdir -p "$FAKE_BIN" "$PROJECT_DIR" "$TYPE_DIR"
+fixture_record() {
+    local window="$1" pane attempt
+    pane=$(tmux_test display-message -p -t "$window" '#{pane_id}')
+    for attempt in {1..200}; do
+        if [[ -f "$TOOL_CALLS_DIR/$pane" ]]; then
+            cat "$TOOL_CALLS_DIR/$pane"
+            return 0
+        fi
+        sleep 0.02
+    done
+    printf 'fixture did not start in %s (pane %s, cached command %s)\n' "$window" "$pane" \
+        "$(tmux_test display-message -p -t "$window" '#{pane_current_command}')" >&2
+    tmux_test capture-pane -p -t "$pane" >&2
+    return 1
+}
+
+fixture_tool() {
+    fixture_record "$1" | head -n 1
+}
+
+assert_fixture_started() {
+    local window="$1" tool="$2" directory="$3" name="$4" record pane
+    record=$(fixture_record "$window")
+    pane=$(tmux_test display-message -p -t "$window" '#{pane_dead}')
+    assert_equals "$name" "$(printf '%s\n' "$tool" "$directory" 0)" "$record"
+    assert_equals "$name keeps its process alive" "0" "$pane"
+}
+
+wait_for_pane_directory() {
+    local pane="$1" directory="$2" attempt actual
+    for attempt in {1..200}; do
+        actual=$(tmux_test display-message -p -t "$pane" '#{pane_current_path}')
+        [[ "$actual" == "$directory" ]] && return 0
+        sleep 0.02
+    done
+    fail "source shell changes to its requested directory" "$directory" "$actual"
+    tmux_test capture-pane -p -t "$pane" >&2
+    return 1
+}
+
+mkdir -p "$FAKE_BIN" "$PROJECT_DIR" "$TYPE_DIR" "$TOOL_CALLS_DIR"
 
 cat > "$FAKE_BIN/codex" <<'EOF'
 #!/usr/bin/env bash
+set -eu
+marker="$TMUX_FIXTURE_CALLS_DIR/$TMUX_PANE"
+printf '%s\n' "$(basename "$0")" "$PWD" "$#" "$@" > "$marker.tmp"
+mv "$marker.tmp" "$marker"
 exec sleep 300
 EOF
 cp "$FAKE_BIN/codex" "$FAKE_BIN/hermes"
-cat > "$FAKE_BIN/nvim" <<'EOF'
-#!/usr/bin/env bash
-exec sleep 300
-EOF
+cp "$FAKE_BIN/codex" "$FAKE_BIN/nvim"
 TUXEDO_CALLS_FILE_QUOTED=$(printf '%q' "$TUXEDO_CALLS_FILE")
 cp "$TODO_FIXTURE" "$FAKE_BIN/todo"
 cat > "$FAKE_BIN/tuxedo" <<EOF
 #!/usr/bin/env bash
 printf '%s|%s|%s|%s\n' "\$PWD" "\$TODO_DIR" "\$TODO_FILE" "\$DONE_FILE" >> $TUXEDO_CALLS_FILE_QUOTED
+marker="\$TMUX_FIXTURE_CALLS_DIR/\$TMUX_PANE"
+printf '%s\n' tuxedo "\$PWD" "\$#" "\$@" > "\$marker.tmp"
+mv "\$marker.tmp" "\$marker"
 exec sleep 300
 EOF
 chmod +x "$FAKE_BIN/codex" "$FAKE_BIN/hermes" "$FAKE_BIN/nvim" "$FAKE_BIN/todo" "$FAKE_BIN/tuxedo"
@@ -165,14 +210,25 @@ fi
 
 # Keep the isolated server alive with a command session. The hook must skip it.
 mkdir -p "$TEMP_DIR/home"
+# tmux starts normal panes as login shells. macOS /etc/profile runs
+# path_helper, which promotes /usr/local/bin ahead of inherited fake tools on
+# Intel runners. Restore fixture precedence in this isolated user's profile;
+# otherwise Neovim can launch the installed editor rather than our marker.
+printf 'export PATH=%q:"$PATH"\n' "$FAKE_BIN" > "$TEMP_DIR/home/.bash_profile"
+assert_equals \
+    "login shells resolve the Neovim fixture after macOS PATH normalization" \
+    "$FAKE_BIN/nvim" \
+    "$(HOME="$TEMP_DIR/home" PATH="$FAKE_BIN:$PATH" /bin/bash -l -c 'command -v nvim')"
 HOME="$TEMP_DIR/home" \
     PATH="$FAKE_BIN:$PATH" \
+    TMUX_FIXTURE_CALLS_DIR="$TOOL_CALLS_DIR" \
     TODO_DIR="$TEMP_DIR/wrong" \
     TODO_FILE="$TEMP_DIR/wrong/todo.txt" \
     DONE_FILE="$TEMP_DIR/wrong/done.txt" \
     tmux -L "$SOCKET_NAME" -f "$TMUX_CONFIG" \
     new-session -d -s bootstrap "sleep 300"
 tmux_test set-environment -g PATH "$FAKE_BIN:$PATH"
+tmux_test set-environment -g TMUX_FIXTURE_CALLS_DIR "$TOOL_CALLS_DIR"
 
 echo ""
 echo "Testing the automatic template..."
@@ -212,12 +268,15 @@ assert_equals \
     "$(head -n 1 "$TUXEDO_CALLS_FILE" 2>/dev/null || true)"
 assert_equals \
     "Codex, Neovim, and the todo wrapper run in their windows" \
-    $'sleep\nsleep\nsleep' \
+    $'codex\nnvim\ntuxedo' \
     "$(
-        tmux_test list-panes -t '=ordinary:codex' -F '#{pane_current_command}'
-        tmux_test list-panes -t '=ordinary:nvim' -F '#{pane_current_command}'
-        tmux_test list-panes -t '=ordinary:tuxedo' -F '#{pane_current_command}'
+        fixture_tool '=ordinary:codex'
+        fixture_tool '=ordinary:nvim'
+        fixture_tool '=ordinary:tuxedo'
     )"
+assert_fixture_started '=ordinary:codex' codex "$CANONICAL_PROJECT_DIR" "automatic Codex executable, cwd and argv"
+assert_fixture_started '=ordinary:nvim' nvim "$CANONICAL_PROJECT_DIR" "automatic Neovim executable, cwd and argv"
+assert_fixture_started '=ordinary:tuxedo' tuxedo "$CANONICAL_PROJECT_DIR" "automatic todo wrapper executable, cwd and argv"
 echo ""
 echo "Testing typed window creation and cycling..."
 tmux_test set-environment -t ordinary PATH "$FAKE_BIN:$PATH"
@@ -227,14 +286,15 @@ tmux_test set-option -t ordinary default-command \
 TERMINAL_PANE=$(tmux_test list-panes -t '=ordinary:0' -F '#{pane_id}' | head -n 1)
 tmux_test send-keys -l -t "$TERMINAL_PANE" "cd -- '$TYPE_DIR'"
 tmux_test send-keys -t "$TERMINAL_PANE" C-m
-sleep 0.1
 CANONICAL_TYPE_DIR=$(cd "$TYPE_DIR" && pwd -P)
+wait_for_pane_directory "$TERMINAL_PANE" "$CANONICAL_TYPE_DIR"
 CANONICAL_CODEX_ID=$(window_id_at_index ordinary 1)
 CANONICAL_NVIM_ID=$(window_id_at_index ordinary 2)
 CANONICAL_TUXEDO_ID=$(window_id_at_index ordinary 3)
 TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
     "$TEMPLATE_HELPER" new ordinary codex "$TERMINAL_PANE"
 NEW_CODEX_ID=$(active_window_id ordinary)
+assert_fixture_started "$NEW_CODEX_ID" codex "$CANONICAL_TYPE_DIR" "NEW_CODEX_ID executable, cwd and argv"
 assert_equals \
     "new Codex creates and selects one duplicate in the source pane directory" \
     "5|codex|codex|$CANONICAL_TYPE_DIR|$NEW_CODEX_ID" \
@@ -248,10 +308,10 @@ assert_equals \
 sleep 0.1
 assert_equals \
     "new Codex starts only in the captured duplicate window" \
-    $'sleep\nsleep' \
+    $'codex\ncodex' \
     "$(
-        tmux_test display-message -p -t "$CANONICAL_CODEX_ID" '#{pane_current_command}'
-        tmux_test display-message -p -t "$NEW_CODEX_ID" '#{pane_current_command}'
+        fixture_tool "$CANONICAL_CODEX_ID"
+        fixture_tool "$NEW_CODEX_ID"
     )"
 
 tmux_test select-pane -t "$NEW_CODEX_ID" -T codex-pane-title
@@ -320,14 +380,15 @@ assert_equals \
 TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
     "$TEMPLATE_HELPER" new ordinary nvim "$TERMINAL_PANE"
 NEW_NVIM_ID=$(active_window_id ordinary)
+assert_fixture_started "$NEW_NVIM_ID" nvim "$CANONICAL_TYPE_DIR" "NEW_NVIM_ID executable, cwd and argv"
 sleep 0.1
 assert_equals \
     "new Neovim creates a typed editor and selects it" \
-    "nvim|nvim|sleep|$NEW_NVIM_ID" \
+    "nvim|nvim|nvim|$NEW_NVIM_ID" \
     "$(
         printf '%s|' "$(window_type "$NEW_NVIM_ID")"
         printf '%s|' "$(tmux_test display-message -p -t "$NEW_NVIM_ID" '#{window_name}')"
-        printf '%s|' "$(tmux_test display-message -p -t "$NEW_NVIM_ID" '#{pane_current_command}')"
+        printf '%s|' "$(fixture_tool "$NEW_NVIM_ID")"
         active_window_id ordinary
     )"
 TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
@@ -340,15 +401,16 @@ assert_equals \
 TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
     "$TEMPLATE_HELPER" new ordinary tuxedo "$TERMINAL_PANE"
 NEW_TUXEDO_ID=$(active_window_id ordinary)
+assert_fixture_started "$NEW_TUXEDO_ID" tuxedo "$CANONICAL_TYPE_DIR" "NEW_TUXEDO_ID executable, cwd and argv"
 sleep 0.1
 assert_equals \
     "new Tuxedo creates a typed task window through the todo wrapper" \
-    "tuxedo|tuxedo|$CANONICAL_TYPE_DIR|sleep|$NEW_TUXEDO_ID" \
+    "tuxedo|tuxedo|$CANONICAL_TYPE_DIR|tuxedo|$NEW_TUXEDO_ID" \
     "$(
         printf '%s|' "$(window_type "$NEW_TUXEDO_ID")"
         printf '%s|' "$(tmux_test display-message -p -t "$NEW_TUXEDO_ID" '#{window_name}')"
         printf '%s|' "$(tmux_test display-message -p -t "$NEW_TUXEDO_ID" '#{pane_current_path}')"
-        printf '%s|' "$(tmux_test display-message -p -t "$NEW_TUXEDO_ID" '#{pane_current_command}')"
+        printf '%s|' "$(fixture_tool "$NEW_TUXEDO_ID")"
         active_window_id ordinary
     )"
 TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
@@ -374,15 +436,16 @@ NEW_CODEX_PANE=$(tmux_test list-panes -t "$NEW_CODEX_ID" -F '#{pane_id}' | head 
 TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
     "$TEMPLATE_HELPER" duplicate ordinary "$NEW_CODEX_PANE"
 DUPLICATE_CODEX_ID=$(active_window_id ordinary)
+assert_fixture_started "$DUPLICATE_CODEX_ID" codex "$CANONICAL_TYPE_DIR" "DUPLICATE_CODEX_ID executable, cwd and argv"
 sleep 0.1
 assert_equals \
     "duplicate Codex creates and selects a uniquely named typed window" \
-    "codex-2|codex|$CANONICAL_TYPE_DIR|sleep|$DUPLICATE_CODEX_ID" \
+    "codex-2|codex|$CANONICAL_TYPE_DIR|codex|$DUPLICATE_CODEX_ID" \
     "$(
         printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_CODEX_ID" '#{window_name}')"
         printf '%s|' "$(window_type "$DUPLICATE_CODEX_ID")"
         printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_CODEX_ID" '#{pane_current_path}')"
-        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_CODEX_ID" '#{pane_current_command}')"
+        printf '%s|' "$(fixture_tool "$DUPLICATE_CODEX_ID")"
         active_window_id ordinary
     )"
 
@@ -390,14 +453,15 @@ DUPLICATE_CODEX_PANE=$(tmux_test list-panes -t "$DUPLICATE_CODEX_ID" -F '#{pane_
 TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
     "$TEMPLATE_HELPER" duplicate ordinary "$DUPLICATE_CODEX_PANE"
 DUPLICATE_CODEX_THREE_ID=$(active_window_id ordinary)
+assert_fixture_started "$DUPLICATE_CODEX_THREE_ID" codex "$CANONICAL_TYPE_DIR" "DUPLICATE_CODEX_THREE_ID executable, cwd and argv"
 sleep 0.1
 assert_equals \
     "duplicating a Codex duplicate advances the visible suffix" \
-    "codex-3|codex|sleep|$DUPLICATE_CODEX_THREE_ID" \
+    "codex-3|codex|codex|$DUPLICATE_CODEX_THREE_ID" \
     "$(
         printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_CODEX_THREE_ID" '#{window_name}')"
         printf '%s|' "$(window_type "$DUPLICATE_CODEX_THREE_ID")"
-        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_CODEX_THREE_ID" '#{pane_current_command}')"
+        printf '%s|' "$(fixture_tool "$DUPLICATE_CODEX_THREE_ID")"
         active_window_id ordinary
     )"
 TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
@@ -436,15 +500,16 @@ NEW_NVIM_PANE=$(tmux_test list-panes -t "$NEW_NVIM_ID" -F '#{pane_id}' | head -n
 TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
     "$TEMPLATE_HELPER" duplicate ordinary "$NEW_NVIM_PANE"
 DUPLICATE_NVIM_ID=$(active_window_id ordinary)
+assert_fixture_started "$DUPLICATE_NVIM_ID" nvim "$CANONICAL_TYPE_DIR" "DUPLICATE_NVIM_ID executable, cwd and argv"
 sleep 0.1
 assert_equals \
     "duplicate Neovim starts the same type in the source pane directory" \
-    "nvim-2|nvim|$CANONICAL_TYPE_DIR|sleep|$DUPLICATE_NVIM_ID" \
+    "nvim-2|nvim|$CANONICAL_TYPE_DIR|nvim|$DUPLICATE_NVIM_ID" \
     "$(
         printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_NVIM_ID" '#{window_name}')"
         printf '%s|' "$(window_type "$DUPLICATE_NVIM_ID")"
         printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_NVIM_ID" '#{pane_current_path}')"
-        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_NVIM_ID" '#{pane_current_command}')"
+        printf '%s|' "$(fixture_tool "$DUPLICATE_NVIM_ID")"
         active_window_id ordinary
     )"
 
@@ -452,15 +517,16 @@ NEW_TUXEDO_PANE=$(tmux_test list-panes -t "$NEW_TUXEDO_ID" -F '#{pane_id}' | hea
 TMUX_SESSION_TEMPLATE_SOCKET="$SOCKET_NAME" \
     "$TEMPLATE_HELPER" duplicate ordinary "$NEW_TUXEDO_PANE"
 DUPLICATE_TUXEDO_ID=$(active_window_id ordinary)
+assert_fixture_started "$DUPLICATE_TUXEDO_ID" tuxedo "$CANONICAL_TYPE_DIR" "DUPLICATE_TUXEDO_ID executable, cwd and argv"
 sleep 0.1
 assert_equals \
     "duplicate Tuxedo starts the todo wrapper in the source pane directory" \
-    "tuxedo-2|tuxedo|$CANONICAL_TYPE_DIR|sleep|$DUPLICATE_TUXEDO_ID" \
+    "tuxedo-2|tuxedo|$CANONICAL_TYPE_DIR|tuxedo|$DUPLICATE_TUXEDO_ID" \
     "$(
         printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_TUXEDO_ID" '#{window_name}')"
         printf '%s|' "$(window_type "$DUPLICATE_TUXEDO_ID")"
         printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_TUXEDO_ID" '#{pane_current_path}')"
-        printf '%s|' "$(tmux_test display-message -p -t "$DUPLICATE_TUXEDO_ID" '#{pane_current_command}')"
+        printf '%s|' "$(fixture_tool "$DUPLICATE_TUXEDO_ID")"
         active_window_id ordinary
     )"
 

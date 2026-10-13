@@ -1,5 +1,5 @@
 {
-  "renderedSourceSha256": "028a78d6b243c76b270dfab51dbf53603ec3a6f6e2a73577209825ab14487d11",
+  "renderedSourceSha256": "bf0ec5cb2d1e8b42363d84eb75ee8f8efad7d78a466e1180d2bca197098ed481",
   "schemaVersion": 1,
   "shortcuts": [
     {
@@ -733,6 +733,18 @@
       "sourceSection": "Move window to new desktop",
       "stableId": "sha256:aebd1b3686b3156f8f2eadba76191243f56be4def05af633515c3dc577b6e3f8",
       "title": "Move window to a new Space"
+    },
+    {
+      "category": "Spaces & Displays",
+      "command": "~/.config/yabai/create-space current-window",
+      "detail": "Defined in App Focus.",
+      "displayKey": "⌘ N",
+      "owner": "space-display",
+      "rawKey": "cmd - n",
+      "sourceFile": "modules/space-display/targets/skhdrc.tmpl",
+      "sourceSection": "Keep native new windows on the space where Cmd+N was pressed",
+      "stableId": "sha256:01c66f1998c2504d99ba29a8be2de178b1e84d3c59501da11a9ab85e5b3c4621",
+      "title": "Keep native new windows on the space where Cmd+N was pressed"
     },
     {
       "category": "Spaces & Displays",

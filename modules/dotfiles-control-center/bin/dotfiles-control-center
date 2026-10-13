@@ -14,6 +14,8 @@ CALLER_CWD="$(pwd -P)"
 }
 
 export DOTFILES_CONTROL_CENTER_CWD="$CALLER_CWD"
+# Swift run builds only the app product; services also need its sibling worker.
+/usr/bin/env swift build --package-path "$MODULE_DIR" --configuration release --product dotfiles-service-runner
 exec /usr/bin/env swift run \
     --package-path "$MODULE_DIR" \
     --configuration release \

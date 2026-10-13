@@ -173,6 +173,7 @@ mkdir -p "$REMOVAL_SOURCE" "$REMOVAL_HOME"
 cp -R "$DOTFILES_DIR/home" "$REMOVAL_SOURCE/home"
 cp -R "$DOTFILES_DIR/modules" "$REMOVAL_SOURCE/modules"
 cp "$DOTFILES_DIR/.chezmoiroot" "$REMOVAL_SOURCE/.chezmoiroot"
+cp "$DOTFILES_DIR/MODULE_PLATFORM.md" "$REMOVAL_SOURCE/MODULE_PLATFORM.md"
 rm -rf "$REMOVAL_SOURCE/modules/tmux-sessions"
 
 if chezmoi \

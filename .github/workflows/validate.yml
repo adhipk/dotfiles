@@ -1,0 +1,55 @@
+name: Validate
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    name: Native app and extension contracts
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test release acceptance gates
+        run: make test-release-gates
+      - name: Test native host and SDK
+        run: make test-native
+      - name: Build and verify app bundle
+        run: make build-app
+      - name: Verify fresh utility store
+        run: python3 tests/test_app_bundle.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Dotfiles-development-macos
+          path: |
+            dist/*.zip
+            dist/*.sha256
+            dist/build.json
+  legacy-contracts:
+    name: Existing integration contracts
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install test tools
+        run: |
+          brew tap asmvik/formulae
+          brew trust --formula asmvik/formulae/yabai asmvik/formulae/skhd
+          brew install chezmoi jq yq tmux neovim fzf zoxide sesh yazi pandoc python ripgrep uv bun yabai skhd
+          brew install --cask ghostty
+      - name: Provision pinned test-only plugin fixtures
+        run: python3 scripts/prepare-test-plugins.py
+      - name: Run module and parent contracts
+        run: make test
+      - name: Check generated shortcuts
+        run: make shortcuts-check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-test-results
+          path: test-results/

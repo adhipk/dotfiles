@@ -80,6 +80,25 @@ render_profile() {
         apply --exclude=scripts,externals --force >/dev/null
 }
 
+validate_ghostty() {
+    local label="$1" executable output status
+    executable=$(command -v ghostty 2>/dev/null || true)
+    if [[ -z "$executable" && -x /Applications/Ghostty.app/Contents/MacOS/ghostty ]]; then
+        executable=/Applications/Ghostty.app/Contents/MacOS/ghostty
+    fi
+    if [[ -z "$executable" ]]; then
+        fail "$label" "Ghostty executable installed by the test prerequisites" "ghostty not on PATH and /Applications/Ghostty.app binary missing"
+        return
+    fi
+    output=$("$executable" +validate-config --config-file="$DESTINATION/Library/Application Support/com.mitchellh.ghostty/config" 2>&1)
+    status=$?
+    if [[ "$status" -eq 0 ]]; then
+        pass "$label"
+    else
+        fail "$label" "Ghostty validation exit 0" "exit $status: $output"
+    fi
+}
+
 echo "===================================="
 echo "Terminal Window Types Module Tests"
 echo "===================================="
@@ -142,7 +161,7 @@ assert_executable "$DESTINATION/bin/tmux-session-template" "enabled profile inst
 assert_executable "$DESTINATION/bin/tmux-window-program" "enabled profile installs the live program label resolver"
 assert_contains "$DESTINATION/.tmux.conf" 'after-new-session[50]' "enabled profile renders automatic session setup"
 assert_contains "$DESTINATION/.tmux.conf" 'Cycle Tuxedo windows' "enabled profile renders typed cycling"
-assert_contains "$DESTINATION/.tmux.conf" 'dotfiles-manager tmux select agent' "enabled profile routes Ctrl+1 inside the control panel"
+assert_contains "$DESTINATION/.tmux.conf" 'dotfiles-manager tmux select settings' "enabled profile routes Ctrl+1 inside the control panel"
 assert_contains "$DESTINATION/.tmux.conf" 'dotfiles-manager tmux select settings' "enabled profile routes Ctrl+2 inside the control panel"
 assert_contains "$DESTINATION/.tmux.conf" 'New Tuxedo window' "enabled profile renders typed creation"
 assert_contains "$DESTINATION/.tmux.conf" 'set-option -gu allow-passthrough' "enabled profile clears legacy graphics passthrough"
@@ -168,11 +187,7 @@ else
     fail "enabled command-center YAML is valid" "valid YAML" "parse error"
 fi
 
-if ghostty +validate-config --config-file="$DESTINATION/Library/Application Support/com.mitchellh.ghostty/config" >/dev/null 2>&1; then
-    pass "enabled Ghostty configuration validates"
-else
-    fail "enabled Ghostty configuration validates" "valid Ghostty configuration" "validation failed"
-fi
+validate_ghostty "enabled Ghostty configuration validates"
 
 render_profile false
 
@@ -199,11 +214,7 @@ else
     fail "disabled command-center YAML remains valid" "valid YAML" "parse error"
 fi
 
-if ghostty +validate-config --config-file="$DESTINATION/Library/Application Support/com.mitchellh.ghostty/config" >/dev/null 2>&1; then
-    pass "disabled Ghostty configuration validates"
-else
-    fail "disabled Ghostty configuration validates" "valid Ghostty configuration" "validation failed"
-fi
+validate_ghostty "disabled Ghostty configuration validates"
 
 # Model source removal after disable: a copy of the parent source must still
 # render when the feature folder is physically absent.
@@ -213,6 +224,7 @@ mkdir -p "$REMOVAL_SOURCE" "$REMOVAL_HOME"
 cp -R "$DOTFILES_DIR/home" "$REMOVAL_SOURCE/home"
 cp -R "$DOTFILES_DIR/modules" "$REMOVAL_SOURCE/modules"
 cp "$DOTFILES_DIR/.chezmoiroot" "$REMOVAL_SOURCE/.chezmoiroot"
+cp "$DOTFILES_DIR/"*.md "$REMOVAL_SOURCE/"
 rm -rf "$REMOVAL_SOURCE/modules/terminal-window-types"
 
 if chezmoi \

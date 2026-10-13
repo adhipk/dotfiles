@@ -56,8 +56,6 @@ assert_executable "$MANAGER" "module owns the manager command"
 assert_executable "$UI" "module owns the Textual control panel"
 assert_file "$UI.lock" "module pins the control panel dependencies"
 assert_file "$MODULE_DIR/assets/theme.example.tcss" "module owns the editable theme example"
-assert_file "$MODULE_DIR/assets/hermes-skin.yaml" "module owns the optional Hermes skin"
-assert_file "$MODULE_DIR/install/configure-hermes.sh.tmpl" "module owns Hermes skin reconciliation"
 assert_file "$MODULE_DIR/targets/skhdrc.tmpl" "module owns Fn+Comma"
 assert_file "$MODULE_DIR/targets/yabairc.tmpl" "module owns its scratchpad rule"
 
@@ -65,13 +63,13 @@ if yq -e '.id == "dotfiles-manager" and .dataKey == "modules.dotfilesManager"' \
     "$MODULE_DIR/module.yaml" >/dev/null 2>&1 \
   && yq -e '.requires.executables[] | select(. == "uv")' \
     "$MODULE_DIR/module.yaml" >/dev/null 2>&1 \
-  && yq -e '.optional.executables[] | select(. == "hermes")' \
+  && yq -e '.optional.executables[] | select(. == "scratchpads")' \
     "$MODULE_DIR/module.yaml" >/dev/null 2>&1 \
   && yq -e '.state.preserved[] | select(. == "~/.config/dotfiles-manager/theme.tcss")' \
     "$MODULE_DIR/module.yaml" >/dev/null 2>&1; then
   pass "manifest declares the human-first UI boundary"
 else
-  fail "manifest declares the human-first UI boundary" "uv required, Hermes optional, theme preserved" "$(cat "$MODULE_DIR/module.yaml")"
+  fail "manifest declares the human-first UI boundary" "uv required, scratchpads optional, theme preserved" "$(cat "$MODULE_DIR/module.yaml")"
 fi
 
 assert_contains "$DOTFILES_DIR/home/dot_skhdrc.tmpl" \
@@ -83,18 +81,9 @@ assert_contains "$DOTFILES_DIR/home/dot_yabairc.tmpl" \
 assert_contains "$MANAGER" 'scratchpads_bin" open command' \
   "manager depends only on the public scratchpad transport"
 assert_contains "$MANAGER" 'Ctrl+` Terminal' \
-  "manager owns one persistent three-surface navigation row"
+  "manager owns one persistent two-surface navigation row"
 assert_contains "$MANAGER" '"$manager_command" ui' \
   "manager session starts on the control panel"
-assert_contains "$MANAGER" 'dotfiles_pref hermes_skin dotfiles-manager' \
-  "manager reads the selected Hermes skin from shared preferences"
-assert_contains "$MANAGER" 'export AGENT_TODO_DIR="$todo_dir"' \
-  "manager agent process receives a profile-private todo store"
-assert_contains "$MODULE_DIR/assets/hermes-skin.yaml" 'banner_logo:' \
-  "managed Hermes skin replaces the startup logo"
-assert_contains "$MODULE_DIR/assets/hermes-skin.yaml" 'banner_hero:' \
-  "managed Hermes skin replaces the startup hero art"
-
 if bash -n "$MANAGER"; then
   pass "manager shell entrypoint parses"
 else
@@ -163,8 +152,8 @@ assert_action "set-option -t dotfiles-manager status on" \
   "manager session keeps its thin navigation row visible"
 assert_contains "$ACTIONS_FILE" 'Ctrl+` Terminal' \
   "manager status names the direct terminal control"
-assert_contains "$ACTIONS_FILE" 'Ctrl+1 Agent' \
-  "manager status names the direct agent control"
+assert_no_action_fragment 'Ctrl+1 Agent' \
+  "manager status has no agent control"
 assert_contains "$ACTIONS_FILE" 'Ctrl+2 Settings' \
   "manager status names the direct settings control"
 assert_action "select-window -t @1" \
@@ -175,13 +164,12 @@ assert_no_action_fragment "-n agent" \
 : > "$ACTIONS_FILE"
 HAS_SESSION=1
 TERMINAL_PRESENT=1
-select_manager_window agent
-assert_action "new-window -d -P -F #{window_id} -t =dotfiles-manager: -c $root -n agent /tmp/dotfiles-manager agent" \
-  "agent action creates Hermes on demand"
-assert_action "set-option -w -t @3 @dotfiles_manager_role agent" \
-  "on-demand agent carries stable manager metadata"
-assert_action "select-window -t @3" \
-  "agent action switches to its exact window ID"
+if (select_manager_window agent) >/dev/null 2>&1; then
+  fail "removed agent role is rejected" "nonzero status" "success"
+else
+  pass "removed agent role is rejected"
+fi
+assert_no_action_fragment "-n agent" "removed agent role never launches Hermes"
 
 : > "$ACTIONS_FILE"
 select_manager_window terminal

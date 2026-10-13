@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "dotfiles.todo",
+  "name": "Tasks",
+  "version": "1.0.0",
+  "summary": "Read the shared or intentionally scoped task store through the upstream wrapper.",
+  "commands": [
+    {
+      "id": "list",
+      "title": "List tasks",
+      "invocation": {
+        "tool": "todo",
+        "arguments": [
+          "ls",
+          "--json"
+        ]
+      }
+    }
+  ]
+}

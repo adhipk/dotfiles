@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "example.hello",
+  "name": "Hello Utility",
+  "version": "1.0.0",
+  "summary": "A dependency-free example of settings and shortcut wiring.",
+  "commands": [
+    {
+      "id": "hello",
+      "title": "Say hello",
+      "invocation": {
+        "tool": "printf",
+        "arguments": [
+          "%s\\n",
+          "Hello, {setting:name}!"
+        ]
+      }
+    }
+  ],
+  "settings": [
+    {
+      "key": "name",
+      "title": "Name",
+      "kind": "string",
+      "defaultValue": "world"
+    }
+  ]
+}

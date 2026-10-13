@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "dotfiles.notifications",
+  "name": "Desktop Notifications",
+  "version": "1.0.0",
+  "summary": "Connects the installed notification helper.",
+  "commands": [
+    {
+      "id": "test",
+      "title": "Send notification",
+      "invocation": {
+        "tool": "desktop-notify",
+        "arguments": [
+          "Dotfiles",
+          "{setting:message}"
+        ]
+      }
+    }
+  ],
+  "settings": [
+    {
+      "key": "message",
+      "title": "Message",
+      "kind": "string",
+      "defaultValue": "Notification delivery is working"
+    }
+  ]
+}

@@ -103,6 +103,7 @@ dotfiles_lock_acquire() {
   local poll_seconds="${3:-0.05}"
   local deadline
   local parent
+  local mkdir_status
 
   if [ -z "$lock_dir" ]; then
     _dotfiles_lock_error "dotfiles_lock_acquire requires a lock directory"
@@ -125,7 +126,14 @@ dotfiles_lock_acquire() {
   deadline=$(( $(_dotfiles_lock_now_ms) + timeout_ms ))
 
   while :; do
-    if command mkdir "$lock_dir" 2>/dev/null; then
+    # An existing directory is ordinary contention, never a fatal command.
+    # Capture it in an explicit OR-list before classifying the result so strict
+    # callers can retry even when asynchronous jobs complete at this boundary.
+    mkdir_status=0
+    # Keep this external predicate outside Bash's `command` builtin execution
+    # path. env still resolves mkdir through PATH and bypasses shell functions.
+    /usr/bin/env mkdir "$lock_dir" 2>/dev/null || mkdir_status=$?
+    if [ "$mkdir_status" -eq 0 ]; then
       if ! command chmod 700 "$lock_dir"; then
         command rmdir "$lock_dir" >/dev/null 2>&1 || true
         return 1

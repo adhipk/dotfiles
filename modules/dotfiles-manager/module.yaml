@@ -2,7 +2,7 @@ apiVersion: dotfiles/v1
 kind: Module
 id: dotfiles-manager
 version: 1.0.0
-description: Human-first Textual control panel for dotfiles settings with an optional Hermes agent.
+description: Human-first Textual control panel for dotfiles settings.
 dataKey: modules.dotfilesManager
 distribution:
   standalone: false
@@ -19,17 +19,14 @@ requires:
     - dotfiles-manager-ui
 optional:
   executables:
-    - hermes
     - scratchpads
 lifecycle:
   setup: lifecycle/setup
   teardown: lifecycle/teardown
 state:
   preserved:
-    - ~/.hermes/profiles/dotfiles
     - ~/.config/dotfiles-manager/theme.tcss
-  ephemeral:
-    - ~/.hermes/profiles/dotfiles/skins/dotfiles-manager.yaml
+  ephemeral: []
 commands:
   - name: dotfiles-manager
     source: bin/dotfiles-manager
@@ -53,20 +50,10 @@ targets:
     destination: ~/bin/dotfiles-manager-ui.lock
     bridge: home/bin/dotfiles-manager-ui.lock.tmpl
     ownership: exclusive
-  - service: config
-    source: assets/hermes-skin.yaml
-    destination: ~/.config/dotfiles-manager/hermes-skin.yaml
-    bridge: home/dot_config/dotfiles-manager/hermes-skin.yaml.tmpl
-    ownership: exclusive
   - service: config-example
     source: assets/theme.example.tcss
     destination: ~/.config/dotfiles-manager/theme.example.tcss
     bridge: home/dot_config/dotfiles-manager/theme.example.tcss.tmpl
-    ownership: exclusive
-  - service: install-hook
-    source: install/configure-hermes.sh.tmpl
-    destination: chezmoi after-apply lifecycle
-    bridge: home/.chezmoiscripts/run_onchange_after_dotfiles-manager-hermes.sh.tmpl
     ownership: exclusive
   - service: skhd
     source: targets/skhdrc.tmpl

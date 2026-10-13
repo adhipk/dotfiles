@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "dotfiles.unescape",
+  "name": "Unescape Text",
+  "version": "1.0.0",
+  "summary": "Connects the separately installed unescape-cli utility.",
+  "commands": [
+    {
+      "id": "buffer",
+      "title": "Unescape input",
+      "invocation": {
+        "tool": "unescape-buffer",
+        "arguments": []
+      },
+      "input": true
+    }
+  ]
+}

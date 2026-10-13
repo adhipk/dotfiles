@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "name": "pandoc",
+  "version": "3.12.1",
+  "sourceCommit": "e51c9c6054c8f4ec5c3209d5abe10939dfe2963e",
+  "sourceURL": "https://codeload.github.com/jgm/pandoc/tar.gz/e51c9c6054c8f4ec5c3209d5abe10939dfe2963e",
+  "sourceSHA256": "4aa4cc2d42b149ed39d861fbbb23d636a65f41c4b5ff2ca812e42dfcb502a729",
+  "checksumProvenance": "Locally computed SHA256 of the full commit-addressed GitHub source archive; not an upstream-published source checksum.",
+  "releaseURL": "https://github.com/jgm/pandoc/releases/tag/3.12.1",
+  "officialBinaryArchiveSHA256": {
+    "arm64": "c2146cf33a583f3ac93eccddf1bb662371d5cfcce1aad1c87ad860cca1435d46",
+    "x86_64": "81ed3e2cfecf096df15d407152f89a684fd65221082b919963f738e977fad3bc"
+  },
+  "recipes": [
+    "macos/make_macos_release.sh",
+    "macos/Makefile",
+    "macos/distribution.xml.in",
+    "cabal.project",
+    "stack.yaml",
+    ".github/workflows/release-candidate.yml"
+  ],
+  "packageDescriptions": [
+    "pandoc.cabal",
+    "pandoc-cli/pandoc-cli.cabal",
+    "pandoc-lua-engine/pandoc-lua-engine.cabal",
+    "pandoc-server/pandoc-server.cabal"
+  ],
+  "notices": ["COPYING.md", "COPYRIGHT", "pandoc-cli/COPYING.md", "pandoc-lua-engine/COPYING.md", "pandoc-server/COPYING.md"],
+  "completeness": "partial",
+  "missingEvidence": [
+    "Official ARM and Intel binary digests bound to exact build executions and source commits",
+    "Resolved Cabal plan/freeze and Hackage index-state/revisions used for each binary",
+    "Source archives, license inventory and checksums for the full statically linked dependency closure, including Haskell libraries and non-system C/Lua components",
+    "Exact GHC patch version, Cabal patch version, macOS SDK/toolchain and non-system build inputs",
+    "Verified rebuild/review of the assembled source and installation scripts for both binaries"
+  ]
+}

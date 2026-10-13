@@ -140,7 +140,20 @@ for declared_dependency in jq yq; do
     ln -s "$dependency_path" "$FAKE_BIN/$declared_dependency"
 done
 printf '#!/usr/bin/env bash\nprintf \"%%s\\\\n\" \"$*\" >> \"$CHEZMOI_ARGS_FILE\"\n' > "$FAKE_BIN/chezmoi"
-printf '#!/usr/bin/env bash\nexit 0\n' > "$FAKE_BIN/brew"
+cat > "$FAKE_BIN/brew" <<'EOF'
+#!/usr/bin/env bash
+case "${1:-}" in
+    trust)
+        [[ "$*" == 'trust --formula asmvik/formulae/yabai asmvik/formulae/skhd felixkratz/formulae/borders' ]] || exit 43
+        printf '%s\n' "$*" > "$HOME/brew-trust-test"
+        ;;
+    bundle)
+        # Simulate clean Homebrew rejecting the desktop formulae until granted.
+        [[ -s "$HOME/brew-trust-test" ]] || exit 44
+        ;;
+esac
+exit 0
+EOF
 cat > "$FAKE_BIN/tmux" <<'EOF'
 #!/usr/bin/env bash
 case "${1:-}" in
@@ -168,6 +181,17 @@ cat > "$FAKE_BIN/dotfiles-deps" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$PIN_ARGS_FILE"
 EOF
+cat > "$FAKE_BIN/uv" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == 'tool dir --bin' ]]; then
+    printf '%s/bin\n' "$HOME"
+fi
+EOF
+cat > "$FAKE_BIN/browser-use" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$FAKE_BIN/uv" "$FAKE_BIN/browser-use"
 chmod +x "$FAKE_BIN/chezmoi" "$FAKE_BIN/brew" "$FAKE_BIN/tmux" "$FAKE_BIN/yabai" "$FAKE_BIN/skhd" "$FAKE_BIN/pkill" "$FAKE_BIN/dotfiles-deps"
 
 echo ""
@@ -214,6 +238,7 @@ else
     echo "  ✗ bootstrap.sh failed"
     ((FAILED++))
 fi
+assert_contains "$TEMP_HOME/brew-trust-test" "^trust --formula " "bootstrap grants desktop formula trust before the Brewfile is installed"
 assert_contains "$ARGS_FILE" "^-S $DOTFILES_DIR apply$" "bootstrap applies the chezmoi source state"
 assert_contains "$TMUX_ARGS_FILE" "^source-file $TEMP_HOME/.tmux.conf$" "bootstrap reloads a running tmux server"
 assert_contains "$PKILL_ARGS_FILE" "^-USR2 -f /Ghostty" "bootstrap reloads every running Ghostty process with SIGUSR2"
@@ -277,9 +302,8 @@ assert_executable "$COLD_HOME/.config/skhd/show_keys.sh" "clean apply installs t
 assert_executable "$COLD_HOME/bin/dotfiles-manager" "clean apply installs the dotfiles manager"
 assert_executable "$COLD_HOME/bin/dotfiles-manager-ui" "clean apply installs the Textual control panel"
 assert_contains "$COLD_HOME/bin/dotfiles-manager-ui.lock" 'name = "textual"' "clean apply installs the pinned Textual dependency lock"
-assert_contains "$COLD_HOME/.config/dotfiles-manager/hermes-skin.yaml" '^name: dotfiles-manager$' "clean apply installs the dotfiles manager Hermes skin"
-assert_contains "$COLD_HOME/.config/dotfiles-manager/hermes-skin.yaml" '^banner_logo:' "clean apply installs custom Hermes startup artwork"
-assert_contains "$COLD_HOME/.config/dotfiles/preferences.toml" 'hermes_skin = "dotfiles-manager"' "clean apply renders the selected Hermes skin"
+assert_missing "$COLD_HOME/.config/dotfiles-manager/hermes-skin.yaml" "clean apply omits the retired Hermes skin"
+assert_not_contains "$COLD_HOME/.config/dotfiles/preferences.toml" 'hermes_skin' "clean apply omits the retired Hermes setting"
 assert_contains "$COLD_HOME/.config/dotfiles-manager/theme.example.tcss" 'Personal overrides for dotfiles-manager-ui' "clean apply installs the editable manager theme example"
 assert_contains "$COLD_HOME/.skhdrc" 'fn - 0x2B : ~/bin/dotfiles-manager open' "clean apply routes Fn+Comma to the control panel"
 assert_contains "$COLD_HOME/.config/agent-timer/config.toml" '^auto_start = false$' "clean apply disables automatic agent timing by default"

@@ -109,10 +109,12 @@ fi
 # Ghostty/skhd send F16-F20, which xterm-compatible terminal protocols expose
 # to tmux as Shift+F4 through Shift+F8. Parse the actual bridge declarations so
 # unsupported tmux key names fail this suite instead of failing only at reload.
-LAYER_SOURCE_OUTPUT=$(
-    grep -E '^bind-key -n -N .*S-F[4-8]' "$TMUX_CONFIG" \
-        | tmux -L "$SOCKET_NAME" source-file - 2>&1
-)
+LAYER_CONFIG="$TEMP_DIR/terminal-layer.tmux"
+grep -E '^bind-key -n -N .*S-F[4-8]' "$TMUX_CONFIG" > "$LAYER_CONFIG"
+if [[ ! -s "$LAYER_CONFIG" ]]; then
+    fail "Right Command bridge declarations exist" "nonempty rendered bindings" "no matches"
+fi
+LAYER_SOURCE_OUTPUT=$(tmux -L "$SOCKET_NAME" source-file "$LAYER_CONFIG" 2>&1)
 LAYER_SOURCE_STATUS=$?
 if [[ "$LAYER_SOURCE_STATUS" -eq 0 ]]; then
     pass "Right Command terminal bridge loads in tmux"
@@ -120,10 +122,12 @@ else
     fail "Right Command terminal bridge loads in tmux" "source exit 0" "$LAYER_SOURCE_OUTPUT"
 fi
 
-PALETTE_SOURCE_OUTPUT=$(
-    grep -E '^bind-key -N .* Space display-popup' "$TMUX_CONFIG" \
-        | tmux -L "$SOCKET_NAME" source-file - 2>&1
-)
+PALETTE_CONFIG="$TEMP_DIR/palette-binding.tmux"
+grep -E '^bind-key -N .* Space display-popup' "$TMUX_CONFIG" > "$PALETTE_CONFIG"
+if [[ ! -s "$PALETTE_CONFIG" ]]; then
+    fail "Telescope palette declaration exists" "nonempty rendered binding" "no matches"
+fi
+PALETTE_SOURCE_OUTPUT=$(tmux -L "$SOCKET_NAME" source-file "$PALETTE_CONFIG" 2>&1)
 PALETTE_SOURCE_STATUS=$?
 if [[ "$PALETTE_SOURCE_STATUS" -eq 0 ]]; then
     pass "Ctrl-a Space Telescope binding loads in tmux"
@@ -131,11 +135,19 @@ else
     fail "Ctrl-a Space Telescope binding loads in tmux" "source exit 0" "$PALETTE_SOURCE_OUTPUT"
 fi
 
-PREFIX_BINDING=$(tmux -L "$SOCKET_NAME" list-keys -T prefix Space 2>/dev/null || true)
+# tmux 3.7c routes a one-result list-keys query to a status message even
+# without an attached client, leaving stdout empty. Read the complete table,
+# retain errors, and select exact key names from the normal binding output.
+PREFIX_TABLE=$(tmux -L "$SOCKET_NAME" list-keys -T prefix 2> "$TEMP_DIR/list-keys.stderr")
+PREFIX_TABLE_STATUS=$?
+if [[ "$PREFIX_TABLE_STATUS" -ne 0 ]]; then
+    fail "live prefix key table can be read" "list-keys exit 0" "$(cat "$TEMP_DIR/list-keys.stderr")"
+fi
+PREFIX_BINDING=$(grep -E '[[:space:]]Space[[:space:]]' <<< "$PREFIX_TABLE")
 assert_contains "Ctrl-a Space opens the Telescope palette" "display-popup" "$PREFIX_BINDING"
 assert_contains "Ctrl-a Space launches the managed palette" "tmux-command-palette" "$PREFIX_BINDING"
 
-LEGACY_BINDING=$(tmux -L "$SOCKET_NAME" list-keys -T prefix F12 2>/dev/null || true)
+LEGACY_BINDING=$(grep -E '[[:space:]]F12[[:space:]]' <<< "$PREFIX_TABLE")
 assert_contains "legacy display-menu stays off Space" "display-menu" "$LEGACY_BINDING"
 
 if [[ -x "$PALETTE" ]]; then

@@ -377,7 +377,7 @@ assert_file_exists "$DOTFILES_DIR/modules/agent-timer/module.yaml" "agent timer 
 assert_file_exists "$DOTFILES_DIR/modules/hermes-agent/module.yaml" "Hermes agent adapter module is declared"
 assert_file_exists "$DOTFILES_DIR/modules/hermes-agent/bin/hermes-dotfiles" "Hermes agent module owns the profile launcher"
 assert_contains "$DOTFILES_DIR/home/bin/executable_hermes-dotfiles.tmpl" 'includeTemplate "../modules/hermes-agent/bin/hermes-dotfiles"' "Hermes launcher uses a thin module bridge"
-assert_contains "$DOTFILES_DIR/home/.chezmoidata/20-preferences.yaml" 'assistant: hermes' "Hermes is the checked-in assistant default"
+assert_contains "$DOTFILES_DIR/home/.chezmoidata/20-preferences.yaml" 'assistant: codex' "Codex is the checked-in assistant default"
 assert_file_exists "$DOTFILES_DIR/modules/dotfiles-manager/module.yaml" "dotfiles manager module is declared"
 assert_file_exists "$DOTFILES_DIR/modules/dotfiles-manager/bin/dotfiles-manager-ui" "dotfiles manager owns its Textual control panel"
 assert_file_exists "$DOTFILES_DIR/modules/dotfiles-manager/bin/dotfiles-manager-ui.lock" "dotfiles manager pins its Textual dependencies"

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "pandocVersion": "3.12.1",
+  "pandocCommit": "e51c9c6054c8f4ec5c3209d5abe10939dfe2963e",
+  "pandocSourceURL": "https://codeload.github.com/jgm/pandoc/tar.gz/e51c9c6054c8f4ec5c3209d5abe10939dfe2963e",
+  "pandocSourceSHA256": "4aa4cc2d42b149ed39d861fbbb23d636a65f41c4b5ff2ca812e42dfcb502a729",
+  "indexState": "2026-10-08T00:00:00Z",
+  "ghcVersion": "9.10.3",
+  "cabalVersion": "3.14.2.0",
+  "buildFlags": ["-fembed_data_files", "-fserver", "-flua", "-fhttp"],
+  "toolchains": {
+    "arm64": {
+      "ghcURL": "https://downloads.haskell.org/~ghc/9.10.3/ghc-9.10.3-aarch64-apple-darwin.tar.xz",
+      "ghcSHA256": "9f50ddd87be5cb994c719402778d6c7fdd341934fd4fbc0fcc3ecb40d49f860c",
+      "cabalURL": "https://downloads.haskell.org/~cabal/cabal-install-3.14.2.0/cabal-install-3.14.2.0-aarch64-darwin.tar.xz",
+      "cabalSHA256": "c599c888c4c72731a2abbbab4c8443f9e604d511d947793864a4e9d7f9dfff83"
+    },
+    "x86_64": {
+      "ghcURL": "https://downloads.haskell.org/~ghc/9.10.3/ghc-9.10.3-x86_64-apple-darwin.tar.xz",
+      "ghcSHA256": "01e4ff9530c124408db0b0f9ec7e4be35b300a6aee939c5758d1acf22d51693f",
+      "cabalURL": "https://downloads.haskell.org/~cabal/cabal-install-3.14.2.0/cabal-install-3.14.2.0-x86_64-darwin.tar.xz",
+      "cabalSHA256": "f9d0cac59deeeb1d35f72f4aa7e5cba3bfe91d838e9ce69b8bc9fc855247ce0f"
+    }
+  },
+  "ghcSourceURL": "https://downloads.haskell.org/~ghc/9.10.3/ghc-9.10.3-src.tar.xz",
+  "ghcSourceSHA256": "d266864b9e0b7b741abe8c9d6a790d7c01c21cf43a1419839119255878ebc59a"
+}

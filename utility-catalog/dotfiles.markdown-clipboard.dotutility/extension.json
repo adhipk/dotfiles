@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "dotfiles.markdown-clipboard",
+  "name": "Markdown Clipboard",
+  "version": "1.0.0",
+  "summary": "Adds HTML to new Markdown clipboard copies while preserving the original text. Includes Pandoc; clipboard access starts only when you run an action or start the watcher.",
+  "commands": [
+    {
+      "id": "once",
+      "title": "Format current clipboard",
+      "invocation": {
+        "executable": "bin/markdown-clipboard",
+        "arguments": [
+          "--once",
+          "{package}/bin/pandoc"
+        ]
+      }
+    }
+  ],
+  "services": [
+    {
+      "id": "watch",
+      "title": "Watch clipboard",
+      "invocation": {
+        "executable": "bin/markdown-clipboard",
+        "arguments": [
+          "{package}/bin/pandoc"
+        ]
+      }
+    }
+  ]
+}

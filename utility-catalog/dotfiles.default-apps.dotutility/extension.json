@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "dotfiles.default-apps",
+  "name": "Default Applications",
+  "version": "1.0.0",
+  "summary": "Inspect application handlers using the separately installed default-apps utility.",
+  "commands": [
+    {
+      "id": "list",
+      "title": "List default handlers",
+      "invocation": {
+        "tool": "default-apps",
+        "arguments": [
+          "list"
+        ]
+      }
+    }
+  ]
+}

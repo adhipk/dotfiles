@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "dotfiles.scratchpads",
+  "name": "Scratchpads",
+  "version": "1.0.0",
+  "summary": "Connects existing Ghostty/yabai scratchpads. Requires the personal desktop integration.",
+  "commands": [
+    {
+      "id": "terminal",
+      "title": "Open quick terminal",
+      "invocation": {
+        "tool": "scratchpads",
+        "arguments": [
+          "open",
+          "quick"
+        ]
+      }
+    }
+  ]
+}

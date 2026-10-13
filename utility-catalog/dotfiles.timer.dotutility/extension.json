@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "dotfiles.timer",
+  "name": "Agent Timer",
+  "version": "1.0.0",
+  "summary": "Connects the existing timer CLI. Timer arming remains explicit.",
+  "commands": [
+    {
+      "id": "status",
+      "title": "Show timer status",
+      "invocation": {
+        "tool": "agent-timer",
+        "arguments": [
+          "status",
+          "--json"
+        ]
+      }
+    }
+  ]
+}

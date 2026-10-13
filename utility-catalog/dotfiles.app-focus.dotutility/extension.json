@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "id": "dotfiles.app-focus",
+  "name": "App Focus",
+  "version": "1.0.0",
+  "summary": "Connects app switching and terminal launching through the installed hotkeys utility.",
+  "commands": [
+    {
+      "id": "terminal",
+      "title": "New terminal window",
+      "invocation": {
+        "tool": "hotkeys",
+        "arguments": [
+          "terminal",
+          "new"
+        ]
+      }
+    },
+    {
+      "id": "browser",
+      "title": "Focus browser",
+      "invocation": {
+        "tool": "hotkeys",
+        "arguments": [
+          "app-focus",
+          "1",
+          "@browser"
+        ]
+      }
+    },
+    {
+      "id": "editor",
+      "title": "Focus editor",
+      "invocation": {
+        "tool": "hotkeys",
+        "arguments": [
+          "app-focus",
+          "2",
+          "@editor"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+name: Pandoc source build
+on:
+  push:
+    branches: [release/native-1.0-dev2]
+    paths:
+      - .github/workflows/pandoc-source-build.yml
+      - scripts/prepare-pandoc-toolchain.py
+      - scripts/build-pandoc-from-source.py
+      - scripts/capture-pandoc-closure.py
+      - scripts/inventory-pandoc-runtime-source.py
+      - scripts/package-pandoc-source-build.py
+      - scripts/verify-pandoc-source-binary.py
+      - release/vendor/pandoc-source/own-build-inputs.json
+      - tests/test_pandoc_build_closure.py
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pandoc-source-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  source:
+    name: Own Pandoc source build (${{ matrix.architecture }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            architecture: arm64
+          - runner: macos-15-intel
+            architecture: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify pinned platform toolchain
+        env:
+          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
+        run: |
+          test "$(uname -m)" = "$EXPECTED_ARCHITECTURE"
+          test "$(xcrun --show-sdk-version)" = '15.5'
+          test "$(xcodebuild -version)" = $'Xcode 16.4\nBuild version 16F6'
+      - name: Source capture tests
+        run: python3 tests/test_pandoc_build_closure.py
+      - name: Provision checksum-pinned isolated GHC and Cabal
+        run: python3 scripts/prepare-pandoc-toolchain.py --prefix "$RUNNER_TEMP/pandoc-tools" --cache "$RUNNER_TEMP/tool-downloads"
+      - name: Build upstream source offline after capturing exact closure
+        env:
+          BUILD_EXECUTION_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python3 scripts/build-pandoc-from-source.py --toolchain "$RUNNER_TEMP/pandoc-tools/toolchain.json" --work "$RUNNER_TEMP/pandoc-build" --output "$RUNNER_TEMP/pandoc-artifacts" --jobs 2 --run-url "$BUILD_EXECUTION_URL"
+      - name: Verify standalone binary in a clean environment
+        run: python3 scripts/verify-pandoc-source-binary.py --artifact "$RUNNER_TEMP/pandoc-artifacts"
+      - name: Package captured corresponding-source materials for review
+        run: python3 scripts/package-pandoc-source-build.py --artifact "$RUNNER_TEMP/pandoc-artifacts"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Pandoc-own-build-${{ matrix.architecture }}-${{ github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            ${{ runner.temp }}/pandoc-artifacts/
+            ${{ runner.temp }}/pandoc-build/build.log
+            ${{ runner.temp }}/pandoc-build/pandoc-*/cabal.project.freeze
+            ${{ runner.temp }}/pandoc-build/pandoc-*/dist-newstyle/cache/plan.json
