@@ -27,6 +27,7 @@ def suites():
     result.append(('native/swift-tests',['swift','test','--package-path',str(ROOT/'modules/dotfiles-control-center')]))
     result.append(('consumer/lifecycle-contracts',['python3',str(ROOT/'tests/test_consumer_lifecycle.py')]))
     result.append(('consumer/profile-contracts',['python3',str(ROOT/'tests/test_consumer_setup.py')]))
+    result.append(('release/pandoc-artifact-bundle',['python3',str(ROOT/'tests/test_pandoc_artifact_bundle.py')]))
     result.append(('release/pandoc-build-closure',['python3',str(ROOT/'tests/test_pandoc_build_closure.py')]))
     result.append(('release/pandoc-source-materials',['python3',str(ROOT/'tests/test_pandoc_source.py')]))
     result.append(('release/acceptance-gates',['python3',str(ROOT/'tests/test_release_gate.py')]))
